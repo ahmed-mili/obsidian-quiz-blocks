@@ -54,9 +54,9 @@ function createAiHandlers(ctx) {
 	let errorMessage = "";
 
 	const TABS = [
-		{ key: "topic", label: "Sujet" },
-		{ key: "image", label: "Image" },
-		{ key: "text", label: "Texte" }
+		{ key: "topic", label: "Sujet", icon: "lightbulb" },
+		{ key: "image", label: "Image", icon: "image" },
+		{ key: "text", label: "Texte", icon: "file-text" }
 	];
 
 	const TYPES = ["Mixte", "Choix unique", "Choix multiple", "Texte libre"];
@@ -77,7 +77,12 @@ function createAiHandlers(ctx) {
 		// ── Formulaire (colonne gauche) ──
 		const formCol = layout.createDiv({ cls: "qbd-ai-form" });
 
-		formCol.createEl("h2", { cls: "qbd-ai-title", text: "Générer un quiz" });
+		// ── Page header ──
+		const titleRow = formCol.createDiv({ cls: "qbd-ai-title-row" });
+		const titleIcon = titleRow.createSpan({ cls: "qbd-ai-title-icon" });
+		obsidian.setIcon(titleIcon, "sparkles");
+		titleRow.createEl("h2", { cls: "qbd-ai-title", text: "Générer un quiz" });
+		formCol.createEl("p", { cls: "qbd-ai-subtitle", text: "Créez un quiz à partir d'un sujet, d'images ou d'un texte." });
 
 		// ── Provider & Model bar ──
 		const provider = ctx.plugin.settings.aiProvider || "anthropic";
@@ -85,7 +90,10 @@ function createAiHandlers(ctx) {
 		const models = provider === "ollama-cloud" ? OLLAMA_CLOUD_MODELS : provider === "ollama" ? OLLAMA_MODELS : ANTHROPIC_MODELS;
 		const currentModel = ctx.plugin.settings.aiModel || models[0].value;
 
-		const modelBar = formCol.createDiv({ cls: "qbd-ai-model-bar" });
+		const modelCard = formCol.createDiv({ cls: "qbd-ai-model-card" });
+		const modelHeader = modelCard.createDiv({ cls: "qbd-ai-model-header" });
+		modelHeader.createEl("span", { cls: "qbd-ai-model-label", text: "Modèle IA" });
+		const modelBar = modelCard.createDiv({ cls: "qbd-ai-model-bar" });
 
 		const providerTag = modelBar.createDiv({ cls: "qbd-ai-provider-tag" });
 		const providerIcon = providerTag.createSpan({ cls: "qbd-ai-provider-icon" });
@@ -168,14 +176,16 @@ function createAiHandlers(ctx) {
 			});
 		}
 
-			// Onglets source
+		// ── Onglets source ──
 		const tabsCard = formCol.createDiv({ cls: "qbd-ai-tabs-card" });
 		const tabBar = tabsCard.createDiv({ cls: "qbd-ai-tab-bar" });
 		for (const tab of TABS) {
 			const btn = tabBar.createEl("button", {
 				cls: `qbd-ai-tab ${currentTab === tab.key ? "qbd-ai-tab--active" : ""}`
 			});
-			btn.textContent = tab.label;
+			const tabIcon = btn.createSpan({ cls: "qbd-ai-tab-icon" });
+			obsidian.setIcon(tabIcon, tab.icon);
+			btn.createSpan({ cls: "qbd-ai-tab-label", text: tab.label });
 			btn.addEventListener("click", () => {
 				currentTab = tab.key;
 				render(container);
@@ -204,27 +214,30 @@ function createAiHandlers(ctx) {
 				placeholder: "Collez le contenu source… La sélection active est pré-remplie automatiquement.",
 				value: textValue
 			});
-			textarea.rows = 4;
+			textarea.rows = 5;
 			textarea.addEventListener("input", (e) => {
 				textValue = e.target.value;
 				updateGenerateBtn(generateBtnRef);
 			});
 		}
 
-		// Options
+		// ── Options ──
 		const optionsCard = formCol.createDiv({ cls: "qbd-ai-options" });
+		const optionsHeader = optionsCard.createDiv({ cls: "qbd-ai-options-header" });
+		optionsHeader.createEl("span", { cls: "qbd-ai-options-label", text: "Options" });
 
 		// Question count
 		const countRow = optionsCard.createDiv({ cls: "qbd-ai-option-row" });
 		countRow.createEl("span", { cls: "qbd-ai-option-label", text: "Questions" });
-		const rangeInput = countRow.createEl("input", {
+		const rangeWrap = countRow.createDiv({ cls: "qbd-ai-range-wrap" });
+		const rangeInput = rangeWrap.createEl("input", {
 			type: "range",
 			cls: "qbd-ai-range"
 		});
 		rangeInput.min = 2;
 		rangeInput.max = 20;
 		rangeInput.value = String(questionCount);
-		const countDisplay = countRow.createEl("span", { cls: "qbd-ai-option-value", text: String(questionCount) });
+		const countDisplay = rangeWrap.createEl("span", { cls: "qbd-ai-option-value", text: String(questionCount) });
 		rangeInput.addEventListener("input", (e) => {
 			questionCount = parseInt(e.target.value);
 			countDisplay.textContent = String(questionCount);
@@ -242,16 +255,16 @@ function createAiHandlers(ctx) {
 			questionType = e.target.value;
 		});
 
-		// Generate button
+		// ── Generate button ──
 		const canGen = canGenerate();
 		const generateBtn = formCol.createEl("button", {
-			cls: `qbd-ai-generate-btn ${canGen ? "qbd-ai-generate-btn--active" : ""}`,
-			text: "Générer le quiz"
+			cls: `qbd-ai-generate-btn ${canGen ? "qbd-ai-generate-btn--active" : ""}`
 		});
 		generateBtnRef = generateBtn;
 		if (!canGen) generateBtn.setAttribute("disabled", "");
 		const genIcon = generateBtn.createSpan({ cls: "qbd-btn-icon" });
 		obsidian.setIcon(genIcon, "sparkles");
+		generateBtn.createSpan({ cls: "qbd-ai-generate-btn-text", text: "Générer le quiz" });
 		generateBtn.prepend(genIcon);
 
 		generateBtn.addEventListener("click", () => {
@@ -276,8 +289,10 @@ function createAiHandlers(ctx) {
 
 	function renderImageTab(container) {
 		const dropZone = container.createDiv({ cls: "qbd-ai-drop-zone" });
-		dropZone.createEl("p", { text: "Glissez des images ici" });
-		dropZone.createEl("p", { cls: "qbd-ai-drop-hint", text: "PNG · JPG · WEBP" });
+		const dropIcon = dropZone.createDiv({ cls: "qbd-ai-drop-zone-icon" });
+		obsidian.setIcon(dropIcon, "upload");
+		dropZone.createEl("p", { cls: "qbd-ai-drop-zone-text", text: "Glissez des images ici" });
+		dropZone.createEl("p", { cls: "qbd-ai-drop-hint", text: "ou cliquez pour sélectionner · PNG · JPG · WEBP" });
 
 		const fileInput = container.createEl("input", {
 			type: "file",
@@ -325,9 +340,10 @@ function createAiHandlers(ctx) {
 
 		if (phase === "idle") {
 			const empty = container.createDiv({ cls: "qbd-ai-preview-empty" });
-			const emptyIcon = empty.createSpan({ cls: "qbd-btn-icon" });
-			obsidian.setIcon(emptyIcon, "sparkles");
-			empty.createSpan({ text: "Le quiz apparaîtra ici" });
+			const emptyIconWrap = empty.createDiv({ cls: "qbd-ai-preview-empty-icon" });
+			obsidian.setIcon(emptyIconWrap, "sparkles");
+			empty.createEl("p", { cls: "qbd-ai-preview-empty-text", text: "Le quiz apparaîtra ici" });
+			empty.createEl("p", { cls: "qbd-ai-preview-empty-hint", text: "Remplissez le formulaire et cliquez sur Générer" });
 		} else if (phase === "loading") {
 			const loader = container.createDiv({ cls: "qbd-ai-preview-loading" });
 			const iconWrap = loader.createDiv({ cls: "qbd-ai-loading-icon" });
@@ -341,13 +357,13 @@ function createAiHandlers(ctx) {
 			}
 		} else if (phase === "error") {
 			const errorEl = container.createDiv({ cls: "qbd-ai-preview-error" });
-			const errorIcon = errorEl.createSpan({ cls: "qbd-btn-icon" });
+			const errorIcon = errorEl.createDiv({ cls: "qbd-ai-error-icon" });
 			obsidian.setIcon(errorIcon, "alert-triangle");
 			errorEl.createEl("p", { cls: "qbd-ai-error-title", text: "Échec de la génération" });
 			errorEl.createEl("p", { cls: "qbd-ai-error-msg", text: errorMessage });
 
 			const retryBtn = errorEl.createEl("button", {
-				cls: "qbd-btn qbd-btn--ghost",
+				cls: "qbd-btn qbd-btn--ghost qbd-ai-error-retry",
 				text: "Réessayer"
 			});
 			retryBtn.addEventListener("click", () => {
@@ -356,7 +372,10 @@ function createAiHandlers(ctx) {
 			});
 		} else if (phase === "result") {
 			const header = container.createDiv({ cls: "qbd-ai-result-header" });
-			header.createEl("span", { cls: "qbd-ai-result-count", text: `✓ ${generatedQuestions.length} questions générées` });
+			const countWrap = header.createDiv({ cls: "qbd-ai-result-count-wrap" });
+			const checkIcon = countWrap.createSpan({ cls: "qbd-ai-result-check" });
+			obsidian.setIcon(checkIcon, "check-circle");
+			countWrap.createSpan({ cls: "qbd-ai-result-count", text: `${generatedQuestions.length} questions générées` });
 
 			const restartBtn = header.createEl("button", { cls: "qbd-btn qbd-btn--ghost", text: "↺ Recommencer" });
 			restartBtn.addEventListener("click", () => {
@@ -368,9 +387,10 @@ function createAiHandlers(ctx) {
 				render(container.parentElement.parentElement);
 			});
 
+			const resultList = container.createDiv({ cls: "qbd-ai-result-list" });
 			for (let i = 0; i < generatedQuestions.length; i++) {
 				const q = generatedQuestions[i];
-				const item = container.createDiv({ cls: "qbd-ai-result-item" });
+				const item = resultList.createDiv({ cls: "qbd-ai-result-item" });
 				const num = item.createDiv({ cls: "qbd-ai-result-num" });
 				num.textContent = String(i + 1);
 				item.createSpan({ cls: "qbd-ai-result-text", text: q.title || q.prompt || `Question ${i + 1}` });
@@ -383,12 +403,18 @@ function createAiHandlers(ctx) {
 				cls: "qbd-btn qbd-btn--primary",
 				text: "Insérer dans la note"
 			});
+			const insertIcon = insertBtn.createSpan({ cls: "qbd-btn-icon" });
+			obsidian.setIcon(insertIcon, "plus");
+			insertBtn.prepend(insertIcon);
 			insertBtn.addEventListener("click", () => insertIntoNote());
 
 			const editBtn = actions.createEl("button", {
 				cls: "qbd-btn qbd-btn--ghost",
 				text: "Ouvrir dans l'éditeur"
 			});
+			const editIcon = editBtn.createSpan({ cls: "qbd-btn-icon" });
+			obsidian.setIcon(editIcon, "pencil");
+			editBtn.prepend(editIcon);
 			editBtn.addEventListener("click", () => openInEditor());
 		}
 	}

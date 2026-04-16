@@ -6,7 +6,7 @@
 	display: flex;
 	align-items: center;
 	justify-content: space-between;
-	margin-bottom: 20px;
+	margin-bottom: 24px;
 }
 
 .qbd-home-header-left {
@@ -14,15 +14,15 @@
 }
 
 .qbd-home-title {
-	font-size: 18px;
-	font-weight: 700;
+	font-size: 20px;
+	font-weight: 800;
 	color: var(--text-normal);
 	margin: 0 0 3px;
-	letter-spacing: -0.02em;
+	letter-spacing: -0.03em;
 }
 
 .qbd-home-subtitle {
-	font-size: 12px;
+	font-size: 13px;
 	color: var(--text-muted);
 	margin: 0;
 	display: flex;
@@ -44,12 +44,12 @@
 	display: grid;
 	grid-template-columns: repeat(3, 1fr);
 	gap: 10px;
-	margin-bottom: 24px;
+	margin-bottom: 28px;
 }
 
 /* ── Sections ── */
 .qbd-home-section {
-	margin-bottom: 20px;
+	margin-bottom: 24px;
 }
 
 .qbd-home-section-header {
@@ -60,11 +60,11 @@
 }
 
 .qbd-home-section-title {
-	font-size: 11px;
+	font-size: 10px;
 	font-weight: 600;
-	color: var(--text-muted);
+	color: var(--text-faint);
 	text-transform: uppercase;
-	letter-spacing: 0.07em;
+	letter-spacing: 0.08em;
 	margin: 0;
 }
 

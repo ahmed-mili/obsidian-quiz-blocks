@@ -8,7 +8,7 @@
 	align-items: center;
 	justify-content: center;
 	gap: 6px;
-	padding: 7px 14px;
+	padding: 8px 16px;
 	border-radius: var(--radius-m, 8px);
 	font-size: 12px;
 	font-weight: 500;
@@ -26,12 +26,12 @@
 .qbd-btn--primary {
 	background: var(--interactive-accent);
 	color: var(--text-on-accent);
-	box-shadow: 0 1px 8px color-mix(in srgb, var(--interactive-accent) 30%, transparent);
+	box-shadow: 0 1px 10px color-mix(in srgb, var(--interactive-accent) 30%, transparent);
 }
 
 .qbd-btn--primary:hover {
 	background: var(--interactive-accent-hover);
-	box-shadow: 0 2px 14px color-mix(in srgb, var(--interactive-accent) 40%, transparent);
+	box-shadow: 0 2px 16px color-mix(in srgb, var(--interactive-accent) 40%, transparent);
 }
 
 .qbd-btn--ghost {
@@ -43,6 +43,7 @@
 .qbd-btn--ghost:hover {
 	background: var(--background-modifier-hover, rgba(255,255,255,0.04));
 	border-color: var(--background-modifier-border-hover);
+	color: var(--text-normal);
 }
 
 .qbd-btn--subtle {
@@ -79,31 +80,32 @@
 	background: var(--background-secondary);
 	border: 1px solid var(--background-modifier-border);
 	border-radius: var(--radius-l, 12px);
-	padding: 14px 16px 12px;
-	transition: border-color 0.15s ease;
+	padding: 16px 18px 14px;
+	transition: border-color 0.15s ease, box-shadow 0.2s ease;
 }
 
 .qbd-stat-card:hover {
 	border-color: var(--background-modifier-border-hover);
+	box-shadow: 0 2px 8px rgba(0,0,0,0.06);
 }
 
 .qbd-stat-value {
-	font-size: 22px;
-	font-weight: 700;
+	font-size: 24px;
+	font-weight: 800;
 	color: var(--text-normal);
 	font-family: var(--font-monospace, monospace);
 	margin: 0;
-	line-height: 1.2;
-	letter-spacing: -0.02em;
+	line-height: 1.1;
+	letter-spacing: -0.03em;
 }
 
 .qbd-stat-label {
 	font-size: 10px;
-	color: var(--text-muted);
+	color: var(--text-faint);
 	text-transform: uppercase;
-	letter-spacing: 0.07em;
-	margin: 4px 0 0;
-	font-weight: 500;
+	letter-spacing: 0.08em;
+	margin: 6px 0 0;
+	font-weight: 600;
 }
 
 .qbd-stat-sub {
@@ -128,11 +130,12 @@
 .qbd-quiz-card:hover {
 	background: var(--background-secondary);
 	border-color: var(--background-modifier-border-hover);
-	box-shadow: 0 2px 12px rgba(0, 0, 0, 0.12);
+	box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+	transform: translateY(-1px);
 }
 
 .qbd-quiz-card:active {
-	transform: scale(0.985);
+	transform: translateY(0) scale(0.985);
 }
 
 .qbd-quiz-card-accent {
@@ -266,19 +269,22 @@
 }
 
 .qbd-empty-icon {
-	width: 40px;
-	height: 40px;
+	width: 48px;
+	height: 48px;
+	border-radius: 14px;
+	background: var(--background-secondary);
+	border: 1px solid var(--background-modifier-border);
 	display: flex;
 	align-items: center;
 	justify-content: center;
 	color: var(--text-faint);
-	opacity: 0.35;
-	margin-bottom: 4px;
+	opacity: 0.45;
+	margin-bottom: 6px;
 }
 
 .qbd-empty-icon svg {
-	width: 28px;
-	height: 28px;
+	width: 22px;
+	height: 22px;
 }
 
 .qbd-empty-hint {

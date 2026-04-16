@@ -40,13 +40,35 @@
 	min-width: 0;
 	overflow-y: auto;
 	overflow-x: hidden;
-	padding: 24px 28px;
-	animation: qbd-fade-in 0.18s ease-out;
+	padding: 28px 32px;
+	animation: qbd-fade-in 0.2s ease-out;
 }
 
 @keyframes qbd-fade-in {
-	from { opacity: 0; transform: translateY(6px); }
+	from { opacity: 0; transform: translateY(8px); }
 	to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ── Scrollbar styling ── */
+.qbd-content::-webkit-scrollbar,
+.qbd-ai-result-list::-webkit-scrollbar {
+	width: 6px;
+}
+
+.qbd-content::-webkit-scrollbar-track,
+.qbd-ai-result-list::-webkit-scrollbar-track {
+	background: transparent;
+}
+
+.qbd-content::-webkit-scrollbar-thumb,
+.qbd-ai-result-list::-webkit-scrollbar-thumb {
+	background: var(--background-modifier-border);
+	border-radius: 3px;
+}
+
+.qbd-content::-webkit-scrollbar-thumb:hover,
+.qbd-ai-result-list::-webkit-scrollbar-thumb:hover {
+	background: var(--background-modifier-border-hover);
 }
 
 /* ── Responsive tablet ── */
@@ -116,10 +138,6 @@
 	.qbd-detail-ring-card {
 		flex: 0 0 auto;
 	}
-
-	.qbd-ai-layout {
-		flex-direction: column !important;
-	}
 }
 
 /* ── Responsive mobile ── */
@@ -143,6 +161,7 @@
 		flex-direction: row !important;
 		gap: 0 !important;
 		padding: 0 4px;
+		width: 100%;
 	}
 
 	.qbd-nav-item {
@@ -177,15 +196,6 @@
 	.qbd-detail-stats-col {
 		width: 100% !important;
 		flex-direction: column;
-	}
-
-	.qbd-ai-layout {
-		flex-direction: column !important;
-	}
-
-	.qbd-ai-form,
-	.qbd-ai-preview {
-		width: 100% !important;
 	}
 
 	.qbd-home-header {

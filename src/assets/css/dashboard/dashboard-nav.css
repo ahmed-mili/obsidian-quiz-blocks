@@ -4,7 +4,7 @@
 
 /* ── Brand ── */
 .qbd-nav-brand {
-	padding: 18px 14px 10px;
+	padding: 18px 14px 12px;
 	display: flex;
 	flex-direction: column;
 	gap: 0;
@@ -20,15 +20,17 @@
 	display: flex;
 	align-items: center;
 	justify-content: center;
-	width: 22px;
-	height: 22px;
+	width: 26px;
+	height: 26px;
+	border-radius: var(--radius-m, 8px);
+	background: color-mix(in srgb, var(--interactive-accent) 14%, transparent);
 	color: var(--interactive-accent);
 	flex-shrink: 0;
 }
 
 .qbd-nav-brand-icon svg {
-	width: 18px;
-	height: 18px;
+	width: 16px;
+	height: 16px;
 }
 
 .qbd-nav-brand-title {
@@ -43,7 +45,7 @@
 .qbd-nav-sep {
 	height: 1px;
 	background: var(--background-modifier-border);
-	margin: 4px 14px 8px;
+	margin: 6px 14px 8px;
 }
 
 /* ── Spacer ── */
@@ -74,7 +76,7 @@
 	cursor: pointer;
 	text-align: left;
 	font-family: var(--font-interface, inherit);
-	transition: background 0.12s ease, color 0.12s ease;
+	transition: background 0.14s ease, color 0.14s ease;
 	position: relative;
 }
 
@@ -84,10 +86,20 @@
 }
 
 .qbd-nav-item--active {
-	background: var(--background-modifier-hover, rgba(255,255,255,0.06));
+	background: color-mix(in srgb, var(--interactive-accent) 8%, transparent);
 	color: var(--text-normal);
 	font-weight: 600;
-	box-shadow: inset 3px 0 0 var(--interactive-accent);
+}
+
+.qbd-nav-item--active::before {
+	content: "";
+	position: absolute;
+	left: 0;
+	top: 6px;
+	bottom: 6px;
+	width: 3px;
+	border-radius: 0 3px 3px 0;
+	background: var(--interactive-accent);
 }
 
 .qbd-nav-icon {
@@ -97,13 +109,17 @@
 	width: 18px;
 	height: 18px;
 	flex-shrink: 0;
-	opacity: 0.65;
-	transition: opacity 0.12s ease;
+	opacity: 0.55;
+	transition: opacity 0.14s ease;
 }
 
 .qbd-nav-item--active .qbd-nav-icon,
 .qbd-nav-item:hover .qbd-nav-icon {
 	opacity: 1;
+}
+
+.qbd-nav-item--active .qbd-nav-icon {
+	color: var(--interactive-accent);
 }
 
 .qbd-nav-icon svg {
@@ -118,7 +134,7 @@
 .qbd-nav-badge {
 	margin-left: auto;
 	font-size: 10px;
-	font-weight: 600;
+	font-weight: 700;
 	padding: 2px 7px;
 	border-radius: 10px;
 	background: var(--interactive-accent);
