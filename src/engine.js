@@ -74,6 +74,9 @@ async function renderInteractiveQuiz(context) {
 	const isTextQuestion = q => !!(q && (q.type === "text" || q.text === true));
 
 	// Créer le contexte partagé (ctx) pour injection de dépendances
+	const originalQuizMode = quizMode;
+	const originalLearnExamOptions = learnExamOptions ? { ...learnExamOptions } : null;
+
 	const ctx = {
 		app,
 		container,
@@ -85,6 +88,8 @@ async function renderInteractiveQuiz(context) {
 		examOptions,
 		examDurationMs,
 		learnExamOptions,
+		originalQuizMode,
+		originalLearnExamOptions,
 		get examTimeRemaining() { return examTimeRemaining; },
 		set examTimeRemaining(v) { examTimeRemaining = v; },
 		get examStarted() { return examStarted; },
@@ -725,7 +730,7 @@ function render() {
     container.querySelectorAll('.quiz-track-item[data-slide-kind="question"]').forEach(ctx.interactions.bindQuestionTrackItem);
     ctx.interactions.bindStaticControls();
 
-    if (isExamMode && !examStarted) {
+    if (ctx.isExamMode && !ctx.examStarted) {
         // En mode examen, tant que l'examen n'a pas commencé,
         // on affiche seulement l'écran de démarrage (pas de navigation, pas de quiz)
         container.innerHTML = `${ctx.exam.examTimerHtml()}<div class="quiz-exam-placeholder" data-exam-placeholder="1"></div>`;
@@ -739,7 +744,7 @@ function render() {
     ctx.state.updateNavHighlight();
     ctx.state.setSlidingClass(quizState.isSliding);
 
-    if (isExamMode) {
+    if (ctx.isExamMode) {
         ctx.exam.startExamTimer();
     }
 }

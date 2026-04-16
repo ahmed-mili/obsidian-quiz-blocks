@@ -232,7 +232,7 @@ module.exports = function createStateHandlers(ctx) {
 		goToSlide(ctx.SLIDE_RESULTS_INDEX, { forceRender: false });
 	}
 
-	function resetQuiz({ preserveSliding = false } = {}) {
+	function resetQuiz({ preserveSliding = false, resetToOriginalMode = false } = {}) {
 		ctx.closeHintModal();
 		ctx.track.clearTrackTransitionFallback();
 		ctx.viewport.destroyActiveSlideResizeObserver();
@@ -264,8 +264,19 @@ module.exports = function createStateHandlers(ctx) {
 		ctx.examStarted = false;
 		ctx.examEnded = false;
 		ctx.examStartTime = 0;
-		ctx.examTimeRemaining = ctx.examDurationMs;
 		ctx.stopExamTimer();
+
+		// Réinitialiser au mode d'origine si demandé
+		if (resetToOriginalMode && ctx.originalQuizMode === "learn") {
+			ctx.quizMode = "learn";
+			ctx.isExamMode = false;
+			ctx.examOptions = null;
+			ctx.examDurationMs = 0;
+			ctx.learnExamOptions = ctx.originalLearnExamOptions;
+			ctx.examTimeRemaining = 0;
+		} else {
+			ctx.examTimeRemaining = ctx.examDurationMs;
+		}
 
 		ctx.render();
 	}

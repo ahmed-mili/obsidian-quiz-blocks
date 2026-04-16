@@ -43,9 +43,16 @@ function createAiClient(plugin) {
 	- multiSelect: true si choix multiple
 	- type: "text" pour texte libre, absent sinon
 	- answer: réponse attendue (pour texte libre)
-		- learn: un paragraphe de leçon explicative qui enseigne le concept avant la question (optionnel mais recommandé pour les quiz éducatifs)
+	- learn: un paragraphe de leçon explicative qui enseigne le concept avant la question (optionnel mais recommandé pour les quiz éducatifs)
 
-Génère ${typeInstruction}. Réponds UNIQUEMENT avec le tableau JSON5, sans explication ni formatage.`;
+	Le dernier élément du tableau peut être un objet de configuration de mode (sans champ prompt) :
+	  - { mode: "exam", examDurationMinutes: 10, examAutoSubmit: true, examShowTimer: true } pour un mode examen chronométré
+	  - { mode: "learn", examDurationMinutes: 10, examAutoSubmit: true, examShowTimer: true } pour un mode apprentissage avec transition vers examen
+	  - { mode: "learn" } pour un mode apprentissage sans examen
+	  - { learnMode: true } comme raccourci pour mode: "learn"
+	  - { examMode: true } comme raccourci pour mode: "exam"
+
+	Génère ${typeInstruction}. Réponds UNIQUEMENT avec le tableau JSON5, sans explication ni formatage.`;
 
 		const userPrompt = source === "topic"
 			? `Génère un quiz sur le sujet : ${prompt}`

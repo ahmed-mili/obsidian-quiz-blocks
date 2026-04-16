@@ -158,10 +158,15 @@ module.exports = function createCardRenderers(ctx) {
 
 	function resultsSlideHtml() {
 		const { pct, correct, total } = ctx.computeScorePercent();
-		const examBtn = (ctx.quizMode === "learn" && ctx.learnExamOptions)
+		// Mode learn : bouton "Passer l'examen"
+		const learnExamBtn = (ctx.quizMode === "learn" && ctx.learnExamOptions)
 			? `<button class="quiz-action-btn quiz-exam-btn" type="button">Passer l'examen</button>`
 			: "";
-		return `<div class="quiz-track-item" data-slide-kind="results"><section class="quiz-result"><h2 class="quiz-result-title" style="font-weight:900;">Résultats</h2><p style="font-size:48px;font-weight:900;margin:18px 0 6px;">${pct}%</p><p>Bonnes réponses : <strong>${correct}/${total}</strong></p><div class="quiz-actions"><button class="quiz-action-btn success quiz-retry-btn" type="button">Recommencer</button>${examBtn}</div></section></div>`;
+		// Mode examen issu du mode learn : bouton "Repasser l'examen"
+		const retakeExamBtn = (ctx.quizMode === "exam" && ctx.originalQuizMode === "learn" && ctx.originalLearnExamOptions)
+			? `<button class="quiz-action-btn quiz-exam-btn" type="button">Repasser l'examen</button>`
+			: "";
+		return `<div class="quiz-track-item" data-slide-kind="results"><section class="quiz-result"><h2 class="quiz-result-title" style="font-weight:900;">Résultats</h2><p style="font-size:48px;font-weight:900;margin:18px 0 6px;">${pct}%</p><p>Bonnes réponses : <strong>${correct}/${total}</strong></p><div class="quiz-actions"><button class="quiz-action-btn success quiz-retry-btn" type="button">Recommencer</button>${learnExamBtn}${retakeExamBtn}</div></section></div>`;
 	}
 
 

@@ -312,7 +312,7 @@ module.exports = function createZoomHandlers(ctx) {
 			cleanup();
 			return;
 		}
-		ctx.resetQuiz({ preserveSliding: false });
+		ctx.resetQuiz({ preserveSliding: false, resetToOriginalMode: true });
 
 		/* IMPORTANT :
 		   render() a relancé restartAsyncLifecycle(),

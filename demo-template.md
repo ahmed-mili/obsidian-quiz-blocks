@@ -132,13 +132,31 @@ Copy the block below into any Obsidian note to try all question types at once.
     explainHtml: '<ul><li><strong>200 OK</strong>: the request was successful and the server returned the content.</li><li><strong>404 Not Found</strong>: the URL exists but the resource does not — classic broken link.</li><li><strong>403 Forbidden</strong>: the server understood the request but refuses to authorize it.</li><li><strong>500 Internal Server Error</strong>: something went wrong on the server side, not your fault.</li></ul>',
   },
 
-  // ── EXAM MODE ─────────────────────────────────────────────────────────────
-  {
-    examMode: true,
-    examDurationMinutes: 8,
-    examAutoSubmit: true,
-    examShowTimer: true,
-  },
+  // ── MODE CONFIG ─────────────────────────────────────────────────────────────
+  // Uncomment one of the following config blocks to change the quiz mode:
+
+  // Exam mode (timed quiz, locked after time up)
+  // {
+  //   mode: "exam",
+  //   examDurationMinutes: 8,
+  //   examAutoSubmit: true,
+  //   examShowTimer: true,
+  // },
+
+  // Learn mode (lessons before each question, no timer)
+  // {
+  //   mode: "learn",
+  // },
+
+  // Learn mode with exam transition (lessons first, then "Passer l'examen" button)
+  // {
+  //   mode: "learn",
+  //   examDurationMinutes: 10,
+  //   examAutoSubmit: true,
+  //   examShowTimer: true,
+  // },
+
+  // Shorthands: { examMode: true } = mode: "exam", { learnMode: true } = mode: "learn"
 ]
 ```
 ````
@@ -189,6 +207,8 @@ Copy the block below into any Obsidian note to try all question types at once.
   {
     mode: "learn",
     examDurationMinutes: 10,
+    examAutoSubmit: true,
+    examShowTimer: true,
   },
 ]
 ```

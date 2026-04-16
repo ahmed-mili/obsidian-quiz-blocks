@@ -35,31 +35,35 @@ function extractExamOptions(quizArray) {
 	if (!Array.isArray(quizArray) || quizArray.length === 0) return { questions: quizArray, quizMode: "quiz", examOptions: null, learnExamOptions: null };
 
 	const lastItem = quizArray[quizArray.length - 1];
-	const isConfigObject = lastItem && typeof lastItem === "object" && !lastItem.prompt && (lastItem.examMode === true || typeof lastItem.mode === "string");
+	const isConfigObject = lastItem && typeof lastItem === "object" && !lastItem.prompt && (lastItem.examMode === true || lastItem.learnMode === true || typeof lastItem.mode === "string");
 
 	if (isConfigObject) {
 		// Déterminer le mode : "learn" | "exam" | "quiz"
-		const mode = typeof lastItem.mode === "string" ? lastItem.mode : (lastItem.examMode === true ? "exam" : "quiz");
+		let mode = typeof lastItem.mode === "string" ? lastItem.mode : "";
+		if (!mode) {
+			if (lastItem.examMode === true) mode = "exam";
+			else if (lastItem.learnMode === true) mode = "learn";
+			else mode = "quiz";
+		}
 		const quizMode = (mode === "learn" || mode === "exam" || mode === "quiz") ? mode : "quiz";
+
+		// Construction des options d'examen
+		const buildExamOpts = () => ({
+			durationMinutes: Math.max(1, Math.min(180, Number(lastItem.examDurationMinutes) || 10)),
+			autoSubmit: lastItem.examAutoSubmit !== false,
+			showTimer: lastItem.examShowTimer !== false
+		});
 
 		// Options d'examen (mode exam actif)
 		let examOptions = null;
 		if (quizMode === "exam") {
-			examOptions = {
-				durationMinutes: Math.max(1, Math.min(180, Number(lastItem.examDurationMinutes) || 10)),
-				autoSubmit: lastItem.examAutoSubmit !== false,
-				showTimer: lastItem.examShowTimer !== false
-			};
+			examOptions = buildExamOpts();
 		}
 
 		// Options d'examen pour le mode learn (utilisé par "Passer l'examen")
 		let learnExamOptions = null;
-		if (quizMode === "learn" && (lastItem.examDurationMinutes || lastItem.examMode)) {
-			learnExamOptions = {
-				durationMinutes: Math.max(1, Math.min(180, Number(lastItem.examDurationMinutes) || 10)),
-				autoSubmit: lastItem.examAutoSubmit !== false,
-				showTimer: lastItem.examShowTimer !== false
-			};
+		if (quizMode === "learn" && lastItem.examDurationMinutes != null) {
+			learnExamOptions = buildExamOpts();
 		}
 
 		return {
