@@ -4,7 +4,9 @@
   "version": "1.4.0-beta",  
   "minAppVersion": "1.5.0",
   "description": "Create fully interactive quizzes in Obsidian from code blocks, including blocks generated with any AI. Supports multiple question types, hints, scoring, navigation, and smooth transitions.",
-  "author": "Ahmed",
+  "author": "Ahmed Mili",
+  "authorUrl": "https://github.com/ahmed-mili",
+  "helpUrl": "https://github.com/ahmed-mili/obsidian-quiz-blocks",
   "isDesktopOnly": false,
   "main": "main.js"
 }
