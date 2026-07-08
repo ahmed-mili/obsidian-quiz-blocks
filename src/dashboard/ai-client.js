@@ -1,27 +1,24 @@
 'use strict';
 
 /* ══════════════════════════════════════════════════════════
-   AI CLIENT — Anthropic + Ollama
-   Anthropic: fetch() avec header anti-CORS. Vision API pour images.
+   AI CLIENT — Claude Code + Ollama
+   Claude: via le CLI Claude Code (compte Pro/Max/Team/Enterprise,
+   aucune clé API). Prompt passé par stdin, sortie JSON.
    Ollama: fetch() pour lire les corps d'erreur. Multimodal pour images.
 ══════════════════════════════════════════════════════════ */
 
 function createAiClient(plugin) {
 	const DEFAULT_MODELS = {
-		anthropic: "claude-sonnet-4-20250514",
+		"claude-code": "sonnet",
 		ollama: "qwen3:14b",
 		"ollama-cloud": "qwen3:14b",
 	};
 
 	async function generate(prompt, options = {}) {
 		const { count = 5, type = "Mixte", source = "topic", images = [] } = options;
-		const provider = plugin.settings.aiProvider || "anthropic";
-		const apiKey = (plugin.settings.aiApiKey || "").trim();
+		const provider = plugin.settings.aiProvider || "claude-code";
 		const model = plugin.settings.aiModel || DEFAULT_MODELS[provider];
 
-		if (provider === "anthropic" && !apiKey) {
-			throw new Error("Clé API Anthropic non configurée. Allez dans les paramètres du plugin.");
-		}
 		if (provider === "ollama-cloud" && !(plugin.settings.aiOllamaCloudKey || "").trim()) {
 			throw new Error("Clé API Ollama Cloud non configurée. Allez dans les paramètres du plugin.");
 		}
@@ -69,153 +66,117 @@ function createAiClient(plugin) {
 				: {};
 			return callOllama(model, systemPrompt, userPrompt, ollamaUrl, authHeader, images);
 		} else {
-			return callAnthropic(apiKey, model, systemPrompt, userPrompt, images);
+			return callClaudeCode(model, systemPrompt, userPrompt, images);
 		}
 	}
 
-	async function callAnthropic(apiKey, model, systemPrompt, userPrompt, images = []) {
-		// Use fetch() directly — Obsidian runs in Electron where fetch bypasses CORS
-		// This is the same approach used by obsidian-copilot and other working plugins
-		const headers = {
-			"Content-Type": "application/json",
-			"anthropic-version": "2023-06-01",
-			"anthropic-dangerous-direct-browser-access": "true",
-			"x-api-key": apiKey
-		};
+	/* ── Claude via le CLI Claude Code (compte par abonnement) ──
+	   Aucune clé API : réutilise la session du CLI connecté au
+	   compte Pro/Max/Team/Enterprise. Prompt complet par stdin
+	   (aucun échappement d'argument), sortie --output-format json. */
+	async function callClaudeCode(model, systemPrompt, userPrompt, images = []) {
+		const { Platform } = require("obsidian");
+		if (!Platform.isDesktopApp) {
+			throw new Error("La génération via Claude est disponible sur desktop uniquement.");
+		}
+		if (!/^[a-zA-Z0-9._:-]+$/.test(model)) {
+			throw new Error("Nom de modèle Claude invalide : " + model);
+		}
 
-		// ── Step 1: Verify API key and check available models ──
-		let availableModels = [];
-		try {
-			const modelsResp = await fetch("https://api.anthropic.com/v1/models?limit=100", {
-				method: "GET",
-				headers
+		const cp = require("child_process");
+		const os = require("os");
+		const path = require("path");
+		const fs = require("fs");
+		const { buildChildEnv } = require("./ai-providers");
+
+		// Images : écrites en fichiers temporaires que Claude lit
+		// avec le tool Read (multimodal, read-only)
+		let tools = '""';
+		let imageNote = "";
+		let tmpDir = null;
+		if (images.length > 0) {
+			tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "quiz-blocks-"));
+			const paths = images.map((img, i) => {
+				const ext = ((img.mediaType || "image/png").split("/")[1] || "png").replace("jpeg", "jpg");
+				const p = path.join(tmpDir, "image-" + (i + 1) + "." + ext);
+				fs.writeFileSync(p, Buffer.from(img.base64, "base64"));
+				return p;
 			});
-			if (modelsResp.ok) {
-				const modelsData = await modelsResp.json();
-				availableModels = (modelsData?.data || []).map(m => m.id);
-				console.log("[quiz-blocks] Available models:", availableModels.join(", "));
-
-				if (!availableModels.includes(model)) {
-					const fallback = availableModels.find(m => m.includes("sonnet")) || availableModels[0];
-					console.log("[quiz-blocks] Model", model, "not available, falling back to:", fallback);
-					model = fallback;
-				}
-			} else {
-				console.warn("[quiz-blocks] Could not list models:", modelsResp.status);
-				if (modelsResp.status === 401 || modelsResp.status === 403) {
-					throw new Error("Clé API Anthropic invalide. Vérifiez sur console.anthropic.com/settings/keys");
-				}
-			}
-		} catch (err) {
-			if (err.message.includes("Clé API")) throw err;
-			console.warn("[quiz-blocks] Model list request failed:", err.message);
+			tools = '"Read"';
+			imageNote = "\n\nLis d'abord ces images avec le tool Read, puis base le quiz sur leur contenu :\n" +
+				paths.map(p => "- " + p).join("\n");
 		}
 
-		// ── Step 2: Build user content (text + images for Vision API) ──
-		const userContent = images.length > 0
-			? [
-				...images.map(img => ({
-					type: "image",
-					source: {
-						type: "base64",
-						media_type: img.mediaType,
-						data: img.base64
+		const fullPrompt = systemPrompt + "\n\n" + userPrompt + imageNote;
+		const cmd = "claude -p --output-format json --model " + model +
+			" --tools " + tools + " --no-session-persistence --setting-sources \"\"";
+
+		let stdout;
+		try {
+			stdout = await new Promise((resolve, reject) => {
+				const child = cp.exec(cmd, {
+					cwd: os.homedir(),
+					env: buildChildEnv(),
+					timeout: 180000,
+					maxBuffer: 16 * 1024 * 1024,
+					windowsHide: true
+				}, (err, out, stderr) => {
+					if (err) {
+						err.stderr = stderr;
+						err.stdout = out;
+						reject(err);
+					} else {
+						resolve(out);
 					}
-				})),
-				{ type: "text", text: userPrompt }
-			]
-			: userPrompt;
-
-		// ── Step 3: Call Messages API ──
-		const attempts = [
-			{
-				label: "with system param",
-				body: {
-					model,
-					max_tokens: 4096,
-					system: systemPrompt,
-					messages: [{ role: "user", content: userContent }]
-				}
-			},
-			{
-				label: "system merged into user",
-				body: {
-					model,
-					max_tokens: 4096,
-					messages: [{ role: "user", content: images.length > 0
-						? [...images.map(img => ({
-							type: "image",
-							source: {
-								type: "base64",
-								media_type: img.mediaType,
-								data: img.base64
-							}
-						})), { type: "text", text: systemPrompt + "\n\n" + userPrompt }]
-						: systemPrompt + "\n\n" + userPrompt }]
-				}
-			}
-		];
-
-		for (let i = 0; i < attempts.length; i++) {
-			const attempt = attempts[i];
-			console.log("[quiz-blocks] Attempt", i + 1, "(", attempt.label, ") with model:", model);
-
-			try {
-				const resp = await fetch("https://api.anthropic.com/v1/messages", {
-					method: "POST",
-					headers,
-					body: JSON.stringify(attempt.body)
 				});
-
-				const data = await resp.json();
-
-				// If we got a non-2xx status, check for errors
-				if (!resp.ok) {
-					const errMsg = data?.error?.message || data?.error?.type || JSON.stringify(data?.error || {});
-					const status = resp.status;
-					console.error("[quiz-blocks] Attempt", i + 1, "failed:", status, errMsg);
-
-					// Specific known errors — show clear French message
-					const errLower = errMsg.toLowerCase();
-					if (errLower.includes("credit balance") || errLower.includes("billing") || errLower.includes("plan")) {
-						throw new Error("Crédits insuffisants. Allez sur console.anthropic.com/settings/plans pour recharger votre compte.");
-					}
-					if (status === 401 || status === 403) {
-						throw new Error("Clé API Anthropic invalide. Vérifiez sur console.anthropic.com/settings/keys");
-					}
-					if (status === 429) {
-						throw new Error("Limite de requêtes atteinte. Réessayez dans quelques instants.");
-					}
-
-					// 400 — try next attempt only for potential format issues
-					if (status === 400 && i < attempts.length - 1) {
-						continue;
-					}
-
-					throw new Error(
-						"Erreur Anthropic (" + status + ") : " + errMsg
-					);
-				}
-
-				// Success!
-				const content = data?.content?.[0]?.text || "";
-				if (!content.trim()) {
-					throw new Error("L'IA n'a retourné aucune réponse. Réessayez ou changez de modèle.");
-				}
-
-				console.log("[quiz-blocks] Success with", attempt.label, "- response length:", content.length);
-				return parseQuizResponse(content);
-
-			} catch (err) {
-				// If it's an error we threw, re-throw it
-				if (err.message.startsWith("Crédits") || err.message.startsWith("Clé API") || err.message.startsWith("Limite") || err.message.startsWith("Erreur Anthropic")) {
-					throw err;
-				}
-				// Network error
-				if (i < attempts.length - 1) continue;
-				throw new Error("Impossible de contacter l'API Anthropic : " + err.message);
+				child.stdin.write(fullPrompt);
+				child.stdin.end();
+			});
+		} catch (err) {
+			console.error("[quiz-blocks] Claude Code error:", err.message, err.stderr || "");
+			const detail = ((err.stderr || "") + " " + (err.stdout || "") + " " + err.message).toLowerCase();
+			if (err.code === "ENOENT" || err.code === 127 || detail.includes("not recognized") || detail.includes("introuvable") || detail.includes("command not found")) {
+				throw new Error("Claude Code n'est pas installé. Installez-le depuis claude.com/claude-code puis connectez-vous avec /login.");
+			}
+			if (err.killed || detail.includes("etimedout")) {
+				throw new Error("Claude n'a pas répondu dans le délai imparti (3 min). Réessayez.");
+			}
+			if (detail.includes("login") || detail.includes("api key") || detail.includes("authentication") || detail.includes("credential")) {
+				throw new Error("Compte Claude non connecté. Dans un terminal, lancez \"claude\" puis /login avec votre compte Pro/Max/Team/Enterprise.");
+			}
+			throw new Error("Erreur Claude Code : " + (err.stderr || err.message).trim().slice(0, 300));
+		} finally {
+			if (tmpDir) {
+				try { fs.rmSync(tmpDir, { recursive: true, force: true }); } catch (e) { /* best effort */ }
 			}
 		}
+
+		let data;
+		try {
+			data = JSON.parse(stdout);
+		} catch (e) {
+			throw new Error("Réponse Claude Code illisible. Réessayez.");
+		}
+
+		if (data.is_error) {
+			const msg = String(data.result || "Erreur inconnue");
+			const msgLower = msg.toLowerCase();
+			if (msgLower.includes("login") || msgLower.includes("api key") || msgLower.includes("credential")) {
+				throw new Error("Compte Claude non connecté. Dans un terminal, lancez \"claude\" puis /login avec votre compte Pro/Max/Team/Enterprise.");
+			}
+			if (msgLower.includes("rate limit") || msgLower.includes("usage limit")) {
+				throw new Error("Limite d'utilisation de votre abonnement Claude atteinte. Réessayez plus tard.");
+			}
+			throw new Error("Erreur Claude : " + msg.slice(0, 300));
+		}
+
+		const content = data.result || "";
+		if (!content.trim()) {
+			throw new Error("Claude n'a retourné aucune réponse. Réessayez ou changez de modèle.");
+		}
+
+		console.log("[quiz-blocks] Claude Code success - response length:", content.length);
+		return parseQuizResponse(content);
 	}
 
 	async function callOllama(model, systemPrompt, userPrompt, ollamaUrl, authHeaders, images = []) {

@@ -1,0 +1,159 @@
+/* ═════════════════════════════════════════════════════════
+   UI SELECT — Dropdown custom (trigger + menu portalé)
+   Couleurs 100 % variables natives Obsidian : le menu vit
+   au <body>, hors de tout wrapper de tokens du plugin.
+   ═════════════════════════════════════════════════════════ */
+
+/* ── Trigger (look champ) ──
+   background/box-shadow !important : neutralise le chrome natif
+   des <button> d'Obsidian (.theme-dark button, spécificité 0,1,1). */
+.qbd-select {
+	appearance: none;
+	-webkit-appearance: none;
+	display: inline-flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 8px;
+	min-height: 32px;
+	height: auto;
+	padding: 5px 10px;
+	font-family: var(--font-interface, inherit);
+	font-size: 12.5px;
+	font-weight: 500;
+	color: var(--text-normal);
+	background-color: var(--background-primary) !important;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: var(--radius-m, 8px);
+	box-shadow: none !important;
+	outline: none;
+	cursor: pointer;
+	min-width: 0;
+	max-width: 100%;
+	transition: border-color 0.14s ease, background-color 0.14s ease;
+}
+
+.qbd-select:hover {
+	background-color: var(--background-modifier-hover) !important;
+}
+
+.qbd-select:focus-visible,
+.qbd-select[aria-expanded="true"] {
+	border-color: var(--interactive-accent);
+}
+
+.qbd-select--disabled {
+	opacity: 0.45;
+	cursor: not-allowed;
+}
+
+.qbd-select-label {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	min-width: 0;
+	text-align: left;
+	flex: 1;
+}
+
+.qbd-select-label--empty {
+	color: var(--text-faint);
+	font-weight: 400;
+}
+
+.qbd-select-chevron {
+	display: inline-flex;
+	align-items: center;
+	color: var(--text-faint);
+	flex-shrink: 0;
+	transition: transform 0.16s ease;
+}
+
+.qbd-select[aria-expanded="true"] .qbd-select-chevron {
+	transform: rotate(180deg);
+}
+
+.qbd-select-chevron svg {
+	width: 14px;
+	height: 14px;
+}
+
+/* ── Menu (portalé au <body>) ── */
+.qbd-select-menu {
+	position: fixed;
+	z-index: 1000;
+	display: flex;
+	flex-direction: column;
+	gap: 1px;
+	padding: 4px;
+	min-width: max-content;
+	max-width: min(340px, calc(100vw - 16px));
+	overflow-y: auto;
+	background: color-mix(in srgb, var(--background-primary) 94%, transparent);
+	backdrop-filter: blur(14px);
+	-webkit-backdrop-filter: blur(14px);
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 10px;
+	box-shadow: 0 14px 28px -6px rgba(0, 0, 0, 0.4), 0 2px 6px -1px rgba(0, 0, 0, 0.22);
+	scrollbar-width: thin;
+	animation: qbd-select-in 0.12s ease-out;
+}
+
+@keyframes qbd-select-in {
+	from { opacity: 0; transform: translateY(-3px); }
+	to   { opacity: 1; transform: translateY(0); }
+}
+
+.qbd-select-option {
+	display: flex;
+	align-items: center;
+	gap: 7px;
+	width: 100%;
+	padding: 6px 9px 6px 7px;
+	background: transparent !important;
+	border: none;
+	box-shadow: none !important;
+	border-radius: 6px;
+	color: var(--text-normal);
+	font-family: var(--font-interface, inherit);
+	font-size: 12.5px;
+	text-align: left;
+	white-space: nowrap;
+	cursor: pointer;
+}
+
+.qbd-select-option:hover {
+	background: var(--background-modifier-hover) !important;
+}
+
+.qbd-select-option.is-active {
+	color: var(--interactive-accent);
+	font-weight: 600;
+}
+
+.qbd-select-check {
+	width: 14px;
+	flex-shrink: 0;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	color: var(--interactive-accent);
+}
+
+.qbd-select-check svg {
+	width: 13px;
+	height: 13px;
+}
+
+.qbd-select-option-label {
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.qbd-select-option-hint {
+	margin-left: auto;
+	padding-left: 14px;
+	font-size: 10.5px;
+	color: var(--text-faint);
+	flex-shrink: 0;
+}

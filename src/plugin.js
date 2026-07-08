@@ -14,8 +14,7 @@ const QUIZ_BLOCK_LANGUAGE = "quiz-blocks";
 const DEFAULT_SETTINGS = {
 	enableCodeHighlighting: true,
 	quizStats: {},
-	aiProvider: "anthropic",
-	aiApiKey: "",
+	aiProvider: "claude-code",
 	aiModel: "",
 	aiOllamaUrl: "http://localhost:11434",
 	aiOllamaCloudKey: "",
@@ -208,70 +207,34 @@ class QuizBlocksSettingTab extends obsidian.PluginSettingTab {
 			cls: "setting-item-description"
 		});
 
-		// ─── Modèles par fournisseur ───
-		const ANTHROPIC_MODELS = [
-			{ value: "claude-sonnet-4-6", label: "Claude Sonnet 4.6 (recommandé)" },
-			{ value: "claude-opus-4-6", label: "Claude Opus 4.6 (le plus intelligent)" },
-			{ value: "claude-haiku-4-5-20251001", label: "Claude Haiku 4.5 (rapide)" },
-			{ value: "claude-sonnet-4-5-20250929", label: "Claude Sonnet 4.5" },
-			{ value: "claude-opus-4-5-20251101", label: "Claude Opus 4.5" },
-			{ value: "claude-sonnet-4-20250514", label: "Claude Sonnet 4" },
-			{ value: "claude-opus-4-20250514", label: "Claude Opus 4" }
-		];
-
-		const OLLAMA_MODELS = [
-			{ value: "qwen3:14b", label: "Qwen 3 14B (recommandé)" },
-			{ value: "qwen3.5:9b", label: "Qwen 3.5 9B (léger)" },
-			{ value: "qwen3.5:27b", label: "Qwen 3.5 27B (performant)" },
-			{ value: "deepseek-r1:14b", label: "DeepSeek R1 14B (raisonnement)" },
-			{ value: "qwen3-coder:30b-a3b", label: "Qwen 3 Coder 30B (code)" },
-			{ value: "gemma3:12b", label: "Gemma 3 12B" },
-			{ value: "gemma3:27b", label: "Gemma 3 27B (qualité)" },
-			{ value: "llama3.3:70b", label: "Llama 3.3 70B (64 Go+ VRAM)" },
-			{ value: "llama4:scout", label: "Llama 4 Scout (contexte 512K)" },
-			{ value: "phi4:14b", label: "Phi-4 14B" },
-			{ value: "phi4-mini", label: "Phi-4 Mini (léger)" },
-			{ value: "mistral-nemo", label: "Mistral Nemo" },
-			{ value: "mixtral", label: "Mixtral" },
-			{ value: "gemma3:4b", label: "Gemma 3 4B (ultra léger)" }
-		];
-
-		const OLLAMA_CLOUD_MODELS = [
-			{ value: "qwen3:14b", label: "Qwen 3 14B" },
-			{ value: "qwen3.5:27b", label: "Qwen 3.5 27B" },
-			{ value: "deepseek-r1:14b", label: "DeepSeek R1 14B" },
-			{ value: "llama4:scout", label: "Llama 4 Scout" },
-			{ value: "gemma3:27b", label: "Gemma 3 27B" },
-			{ value: "phi4:14b", label: "Phi-4 14B" }
-		];
+		// ─── Modèles par fournisseur (registry partagé) ───
+		const aiProviders = require("./dashboard/ai-providers");
+		const CLAUDE_CODE_MODELS = aiProviders.CLAUDE_CODE_MODELS;
+		const OLLAMA_MODELS = aiProviders.OLLAMA_MODELS;
+		const OLLAMA_CLOUD_MODELS = aiProviders.OLLAMA_CLOUD_MODELS;
 
 		const TUTORIALS = {
-			anthropic: {
-				title: "Comment configurer Anthropic (Claude)",
+			"claude-code": {
+				title: "Comment configurer Claude (compte par abonnement)",
 				sections: [
 					{
-						heading: "1. Créer un compte",
-						text: "Allez sur console.anthropic.com et créez un compte gratuit.",
-						link: { label: "Ouvrir console.anthropic.com", url: "https://console.anthropic.com" }
+						heading: "1. Installer Claude Code",
+						text: "La génération utilise le CLI Claude Code : aucune clé API, c'est votre abonnement Claude (Pro, Max, Team ou Enterprise) qui est utilisé.",
+						link: { label: "Installer Claude Code", url: "https://claude.com/claude-code" }
 					},
 					{
-						heading: "2. Obtenir une clé API",
-						text: "Accédez à la section « API Keys » dans votre tableau de bord et cliquez sur « Create Key ».",
-						link: { label: "Voir les clés API", url: "https://console.anthropic.com/settings/keys" }
-					},
-					{
-						heading: "3. Configurer ici",
-						text: "Collez votre clé API ci-dessus et choisissez le modèle Claude souhaité",
+						heading: "2. Connecter votre compte",
+						text: "Ouvrez un terminal, lancez « claude », puis tapez /login et connectez-vous avec votre compte Claude.",
 						link: null
 					},
 					{
-						heading: "4. Ajouter des crédits",
-						text: "Si vous n'avez pas de crédits, ajoutez-en dans « Plans & Billing ».",
-						link: { label: "Gérer le billing", url: "https://console.anthropic.com/settings/plans" }
+						heading: "3. C'est tout",
+						text: "Le plugin détecte Claude Code automatiquement. Choisissez un modèle ci-dessus et générez.",
+						link: null
 					}
 				],
-				warning: "Votre clé API est stockée localement dans Obsidian et n'est jamais partagée.",
-				docsLink: { label: "Documentation Anthropic", url: "https://docs.anthropic.com/en/docs/about-claude/models" }
+				warning: "Vos requêtes passent par votre session Claude Code locale et comptent dans l'usage de votre abonnement. Aucune clé n'est stockée dans Obsidian.",
+				docsLink: { label: "Documentation Claude Code", url: "https://code.claude.com/docs" }
 			},
 			ollama: {
 				title: "Comment configurer Ollama",
@@ -337,14 +300,14 @@ class QuizBlocksSettingTab extends obsidian.PluginSettingTab {
 			.setName("Fournisseur IA")
 			.setDesc("Choisissez le fournisseur pour la génération de quiz")
 			.addDropdown(dropdown => dropdown
-				.addOption("anthropic", "Anthropic (Claude)")
+				.addOption("claude-code", "Claude (abonnement)")
 				.addOption("ollama", "Ollama (local)")
 					.addOption("ollama-cloud", "Ollama Cloud")
-				.setValue(this.plugin.settings.aiProvider || "anthropic")
+				.setValue(this.plugin.settings.aiProvider || "claude-code")
 				.onChange(async (value) => {
 					this.plugin.settings.aiProvider = value;
 					// Reset model to default when switching provider
-					const defaults = { anthropic: "claude-sonnet-4-20250514", ollama: "qwen3:14b", "ollama-cloud": "qwen3:14b" };
+					const defaults = { "claude-code": "sonnet", ollama: "qwen3:14b", "ollama-cloud": "qwen3:14b" };
 					this.plugin.settings.aiModel = defaults[value] || "";
 					await this.plugin.saveSettings();
 					// Re-render settings but preserve scroll position
@@ -355,21 +318,6 @@ class QuizBlocksSettingTab extends obsidian.PluginSettingTab {
 						if (modal) modal.scrollTop = scrollTop;
 					});
 				}));
-
-		// API Key (Anthropic only)
-		if (this.plugin.settings.aiProvider === "anthropic") {
-			new obsidian.Setting(containerEl)
-				.setName("Clé API Anthropic")
-				.setDesc("Votre clé API Anthropic. Obligatoire pour utiliser Claude.")
-				.addText(text => {
-					text.setPlaceholder("sk-ant-api03-…")
-						.setValue(this.plugin.settings.aiApiKey || "")
-						.onChange(async (value) => {
-							this.plugin.settings.aiApiKey = value;
-							await this.plugin.saveSettings();
-						});
-				});
-		}
 
 		// API Key (Ollama Cloud only)
 		if (currentProvider === "ollama-cloud") {
@@ -387,8 +335,8 @@ class QuizBlocksSettingTab extends obsidian.PluginSettingTab {
 		}
 
 		// Model dropdown (provider-specific)
-		const currentProvider = this.plugin.settings.aiProvider || "anthropic";
-		const models = currentProvider === "ollama-cloud" ? OLLAMA_CLOUD_MODELS : currentProvider === "ollama" ? OLLAMA_MODELS : ANTHROPIC_MODELS;
+		const currentProvider = this.plugin.settings.aiProvider || "claude-code";
+		const models = currentProvider === "ollama-cloud" ? OLLAMA_CLOUD_MODELS : currentProvider === "ollama" ? OLLAMA_MODELS : CLAUDE_CODE_MODELS;
 		const currentModel = this.plugin.settings.aiModel || models[0].value;
 
 		new obsidian.Setting(containerEl)
@@ -400,7 +348,7 @@ class QuizBlocksSettingTab extends obsidian.PluginSettingTab {
 				: "Modèle Claude à utiliser pour la génération.")
 			.addDropdown(dropdown => {
 				for (const m of models) {
-					dropdown.addOption(m.value, m.label);
+					dropdown.addOption(m.value, m.label + (m.hint ? " (" + m.hint + ")" : ""));
 				}
 				// If current model is not in the list, add it as custom
 				if (!models.find(m => m.value === currentModel)) {
@@ -436,7 +384,7 @@ class QuizBlocksSettingTab extends obsidian.PluginSettingTab {
 			const tutorialHeader = tutorialEl.createDiv({ cls: "qb-ai-tutorial-header" });
 			tutorialHeader.style.cssText = "display: flex; align-items: center; gap: 0.5em; margin-bottom: 0.8em;";
 			const headerIcon = tutorialHeader.createSpan({ cls: "qb-ai-tutorial-icon" });
-			obsidian.setIcon(headerIcon, currentProvider === "anthropic" ? "brain" : currentProvider === "ollama-cloud" ? "cloud" : "cpu");
+			obsidian.setIcon(headerIcon, currentProvider === "claude-code" ? "sparkles" : currentProvider === "ollama-cloud" ? "cloud" : "cpu");
 			headerIcon.style.cssText = "display: flex; align-items: center; color: var(--interactive-accent);";
 			tutorialHeader.createEl("h4", {
 				text: tutorial.title,
@@ -667,6 +615,17 @@ module.exports = class InteractiveQuizPlugin extends obsidian.Plugin {
 
 		if ("aiCompatibleUrl" in this.settings) {
 			delete this.settings.aiCompatibleUrl;
+			await this.saveSettings();
+		}
+
+		// Migration : le provider Anthropic (clé API) devient
+		// Claude via Claude Code (compte par abonnement)
+		if (this.settings.aiProvider === "anthropic" || "aiApiKey" in this.settings) {
+			if (this.settings.aiProvider === "anthropic") {
+				this.settings.aiProvider = "claude-code";
+				this.settings.aiModel = "sonnet";
+			}
+			delete this.settings.aiApiKey;
 			await this.saveSettings();
 		}
 	}

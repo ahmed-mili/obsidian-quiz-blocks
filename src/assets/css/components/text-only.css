@@ -1,0 +1,527 @@
+/* =========================================================
+   23) MODE TEXT ONLY / REPONSE LIBRE
+   ========================================================= */
+
+.quiz-mode-toggle{
+  box-sizing: border-box;
+  width: max-content;
+  max-width: calc(100% - (var(--quiz-side-gap) * 2));
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 10px;
+  margin: -2px auto 16px;
+  padding: 7px 10px 7px 12px;
+  border-radius: 10px;
+  background:
+    linear-gradient(180deg,
+      color-mix(in srgb, var(--background-secondary) 74%, transparent) 0%,
+      color-mix(in srgb, var(--background-primary) 82%, transparent) 100%
+    );
+  border: 1px solid color-mix(in srgb, var(--background-modifier-border) 82%, var(--text-muted) 18%);
+  box-shadow:
+    0 4px 12px rgba(0,0,0,0.12),
+    0 1px 0 rgba(255,255,255,0.035) inset;
+  transition:
+    border-color 220ms ease,
+    box-shadow 260ms ease,
+    background 260ms ease;
+}
+
+.quiz-mode-toggle:has(.quiz-mode-switch.is-on){
+  border-color: var(--interactive-accent);
+  box-shadow:
+    0 4px 12px rgba(0,0,0,0.12),
+    0 0 0 1px color-mix(in srgb, var(--interactive-accent) 16%, transparent) inset;
+}
+
+.quiz-mode-toggle-label{
+  white-space: nowrap;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.2;
+  letter-spacing: 0;
+  color: var(--text-muted);
+  transition: color 220ms ease;
+}
+
+.quiz-mode-toggle:has(.quiz-mode-switch.is-on) .quiz-mode-toggle-label{
+  color: var(--text-normal);
+}
+
+.quiz-mode-switch{
+  appearance: none;
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 42px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  cursor: pointer;
+  transition:
+    transform var(--quiz-dur-fast) var(--quiz-ease-smooth),
+    filter var(--quiz-dur-fast) ease;
+}
+
+.quiz-mode-switch-track{
+  position: relative;
+  display: block;
+  width: 42px;
+  height: 24px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: color-mix(in srgb, #25263a 88%, var(--background-secondary));
+  border: 1px solid color-mix(in srgb, #6f748f 28%, transparent);
+  box-shadow:
+    0 1px 1px rgba(255,255,255,0.04) inset,
+    0 6px 14px rgba(0,0,0,0.22) inset,
+    0 1px 0 rgba(255,255,255,0.04);
+  transition:
+    background 300ms cubic-bezier(0.2, 0.9, 0.2, 1),
+    border-color 220ms ease,
+    box-shadow 320ms cubic-bezier(0.2, 0.9, 0.2, 1);
+}
+
+.quiz-mode-switch-track::after{
+  content: "";
+  position: absolute;
+  inset: -1px;
+  pointer-events: none;
+  opacity: 0;
+  transform: translateX(-125%);
+  background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.26) 45%, transparent 78%);
+}
+
+.quiz-mode-switch-thumb{
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  background: #9aa1bd;
+  box-shadow:
+    0 2px 6px rgba(0,0,0,0.34),
+    0 1px 0 rgba(255,255,255,0.24) inset;
+  will-change: transform;
+  transition:
+    transform 320ms cubic-bezier(0.22, 1.28, 0.36, 1),
+    background 220ms ease,
+    box-shadow 320ms cubic-bezier(0.2, 0.9, 0.2, 1);
+}
+
+.quiz-mode-switch:hover,
+.quiz-mode-switch:focus-visible{
+  outline: none;
+  filter: saturate(1.08);
+}
+
+.quiz-mode-switch:focus-visible .quiz-mode-switch-track{
+  box-shadow:
+    0 0 0 2px color-mix(in srgb, var(--quiz-primary) 34%, transparent),
+    0 6px 14px rgba(0,0,0,0.22) inset;
+}
+
+.quiz-mode-switch:active{
+  transform: scale(0.96);
+}
+
+.quiz-mode-switch.is-on .quiz-mode-switch-track{
+  background: color-mix(in srgb, var(--quiz-primary) 82%, #3b5fff 18%);
+  border-color: color-mix(in srgb, var(--quiz-primary) 58%, transparent);
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--quiz-primary) 20%, transparent),
+    0 8px 18px color-mix(in srgb, var(--quiz-primary) 22%, transparent),
+    0 1px 0 rgba(255,255,255,0.18) inset;
+}
+
+.quiz-mode-switch.is-on .quiz-mode-switch-thumb{
+  transform: translateX(18px);
+  background: #eef4ff;
+  box-shadow:
+    0 2px 8px rgba(0,0,0,0.30),
+    0 0 0 1px rgba(255,255,255,0.30) inset;
+}
+
+.quiz-mode-switch.is-animating .quiz-mode-switch-track::after{
+  opacity: 1;
+  transform: translateX(125%);
+  transition:
+    transform 320ms cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 140ms ease;
+}
+
+.quiz-mode-switch.is-animating .quiz-mode-switch-thumb{
+  animation: quiz-mode-switch-pop 320ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@keyframes quiz-mode-switch-pop{
+  0% { scale: 1; }
+  45% { scale: 0.92; }
+  100% { scale: 1; }
+}
+
+.quiz-exam-start-content .quiz-mode-toggle{
+  margin: 14px auto 14px;
+}
+
+.quiz-start-mode-selector{
+  box-sizing: border-box;
+  width: min(100%, 420px);
+  max-width: 100%;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin: 14px auto 14px;
+  padding: 5px;
+  border: 1px solid color-mix(in srgb, var(--background-modifier-border) 78%, var(--text-muted) 22%);
+  border-radius: 8px;
+  background:
+    linear-gradient(180deg,
+      color-mix(in srgb, var(--background-secondary) 70%, transparent) 0%,
+      color-mix(in srgb, var(--background-primary) 84%, transparent) 100%
+    );
+  box-shadow:
+    0 4px 12px rgba(0,0,0,0.12),
+    0 1px 0 rgba(255,255,255,0.035) inset;
+}
+
+.quiz-start-mode-option{
+  appearance: none;
+  box-sizing: border-box;
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  padding: 9px 12px 10px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition:
+    border-color 180ms ease,
+    background 180ms ease,
+    color 180ms ease,
+    transform var(--quiz-dur-fast) var(--quiz-ease-smooth),
+    box-shadow 220ms ease;
+}
+
+/* Cause : ce <button> est en flex-direction:column (titre + sous-titre empilés)
+   mais ne déclarait aucune height. La hauteur de champ ambiante d'Obsidian
+   (notamment sur mobile) s'appliquait alors par défaut, rendant le bouton trop
+   court ; le sous-titre débordait sous la boîte et était masqué par la carte
+   suivante. On force le dimensionnement au contenu. Le double sélecteur garantit
+   une spécificité supérieure à toute règle `button` ambiante (sans !important). */
+.quiz-start-mode-selector .quiz-start-mode-option{
+  height: auto;
+  min-height: auto;
+}
+
+.quiz-start-mode-option:hover,
+.quiz-start-mode-option:focus-visible{
+  outline: none;
+  color: var(--text-normal);
+  border-color: color-mix(in srgb, var(--interactive-accent) 36%, transparent);
+  background: color-mix(in srgb, var(--interactive-accent) 8%, transparent);
+}
+
+.quiz-start-mode-option:active{
+  transform: scale(0.985);
+}
+
+.quiz-start-mode-option.is-active{
+  color: var(--text-normal);
+  border-color: var(--interactive-accent);
+  background:
+    linear-gradient(180deg,
+      color-mix(in srgb, var(--interactive-accent) 18%, var(--background-secondary)) 0%,
+      color-mix(in srgb, var(--interactive-accent) 10%, var(--background-primary)) 100%
+    );
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--interactive-accent) 18%, transparent) inset,
+    0 6px 16px rgba(0,0,0,0.14);
+}
+
+.quiz-start-mode-title{
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.quiz-start-mode-sub{
+  max-width: 100%;
+  overflow: hidden;
+  color: currentColor;
+  opacity: 0.72;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.quiz-textonly{
+  margin: 10px var(--quiz-option-side-gap) 0;
+}
+
+.quiz-textonly-label{
+  display: block;
+  margin: 0 0 8px;
+  color: var(--text-muted);
+  font-size: 0.78em;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.quiz-textonly-answer .quiz-textarea{
+  min-height: 180px;
+}
+
+.quiz-textonly-check-actions{
+  width: 100%;
+  margin-top: 12px;
+  padding-bottom: 4px;
+}
+
+.quiz-textonly-review{
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-top: 16px;
+}
+
+.quiz-textonly-expected,
+.quiz-textonly-explain-block,
+.quiz-textonly-comparison,
+.quiz-textonly-self{
+  box-sizing: border-box;
+  padding: 14px 16px;
+  border-radius: 10px;
+  border: 1px solid color-mix(in srgb, var(--background-modifier-border) 82%, var(--quiz-primary) 18%);
+  background: color-mix(in srgb, var(--background-secondary) 76%, transparent);
+}
+
+.quiz-textonly-self{
+  padding: 12px 14px;
+  border-color: color-mix(in srgb, var(--interactive-accent) 42%, var(--background-modifier-border));
+  background:
+    linear-gradient(180deg,
+      color-mix(in srgb, var(--interactive-accent) 8%, var(--background-secondary)) 0%,
+      color-mix(in srgb, var(--background-secondary) 78%, transparent) 100%
+    );
+}
+
+.quiz-textonly-expected{
+  border-color: color-mix(in srgb, var(--quiz-success) 38%, var(--background-modifier-border));
+  background: color-mix(in srgb, var(--quiz-success) 8%, var(--background-secondary));
+}
+
+.quiz-textonly-expected-list{
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.quiz-textonly-expected-item{
+  color: var(--text-normal);
+  font-weight: 700;
+  line-height: 1.45;
+}
+
+.quiz-textonly-expected-pair{
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
+  line-height: 1.4;
+}
+
+.quiz-textonly-explain-content{
+  color: var(--text-normal);
+  line-height: 1.55;
+}
+
+.quiz-textonly-explain-content p:first-child{
+  margin-top: 0;
+}
+
+.quiz-textonly-explain-content p:last-child{
+  margin-bottom: 0;
+}
+
+.quiz-textonly-comparison .quiz-options-wrap{
+  margin-top: 4px;
+}
+
+.quiz-textonly-option{
+  cursor: default;
+}
+
+.quiz-textonly-option:not(.correct):hover,
+.quiz-textonly-option:not(.correct):focus-visible,
+.quiz-textonly-option.correct:hover,
+.quiz-textonly-option.correct:focus-visible{
+  transform: none;
+}
+
+.quiz-textonly-rating-row{
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.quiz-textonly-rating-btn.understood{
+  border-color: color-mix(in srgb, var(--quiz-success) 36%, var(--background-modifier-border));
+}
+
+.quiz-textonly-rating-btn.partial{
+  border-color: color-mix(in srgb, var(--quiz-hint) 40%, var(--background-modifier-border));
+}
+
+.quiz-textonly-rating-btn.review{
+  border-color: color-mix(in srgb, var(--quiz-danger) 34%, var(--background-modifier-border));
+}
+
+.quiz-textonly-rating-btn.understood.selected{
+  color: var(--quiz-accent-text);
+  background: var(--quiz-success);
+  border-color: var(--quiz-success);
+}
+
+.quiz-textonly-rating-btn.partial.selected{
+  color: var(--quiz-accent-text);
+  background: var(--quiz-hint);
+  border-color: var(--quiz-hint);
+}
+
+.quiz-textonly-rating-btn.review.selected{
+  color: var(--quiz-accent-text);
+  background: var(--quiz-danger);
+  border-color: var(--quiz-danger);
+}
+
+.quiz-textonly-nav-actions{
+  margin-top: 18px;
+}
+
+.quiz-textonly-result-grid{
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 10px;
+  margin: 18px 0 6px;
+}
+
+.quiz-textonly-correction-hint{
+  max-width: 620px;
+  margin: 10px auto 0;
+  color: var(--text-muted);
+  font-size: 0.92rem;
+  line-height: 1.45;
+}
+
+.quiz-textonly-result-stat{
+  padding: 14px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--background-modifier-border);
+  background: color-mix(in srgb, var(--background-secondary) 84%, transparent);
+}
+
+.quiz-textonly-result-stat strong{
+  display: block;
+  margin-bottom: 4px;
+  font-size: 2rem;
+  line-height: 1;
+}
+
+.quiz-textonly-result-stat span{
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  font-weight: 800;
+}
+
+.quiz-textonly-result-stat.understood{
+  border-color: color-mix(in srgb, var(--quiz-success) 48%, var(--background-modifier-border));
+}
+
+.quiz-textonly-result-stat.partial{
+  border-color: color-mix(in srgb, var(--quiz-hint) 52%, var(--background-modifier-border));
+}
+
+.quiz-textonly-result-stat.review{
+  border-color: color-mix(in srgb, var(--quiz-danger) 44%, var(--background-modifier-border));
+}
+
+.quiz-textonly-result-stat.pending{
+  opacity: 0.82;
+}
+
+.quiz-tab.checked{
+  border-color: color-mix(in srgb, var(--quiz-hint) 48%, var(--background-modifier-border));
+  background: color-mix(in srgb, var(--quiz-hint) 10%, var(--background-primary));
+}
+
+.quiz-tab.understood{
+  border-color: color-mix(in srgb, var(--quiz-success) 55%, var(--background-modifier-border));
+  background: color-mix(in srgb, var(--quiz-success) 16%, var(--background-primary));
+}
+
+.quiz-tab.partial{
+  border-color: color-mix(in srgb, var(--quiz-hint) 55%, var(--background-modifier-border));
+  background: color-mix(in srgb, var(--quiz-hint) 14%, var(--background-primary));
+}
+
+.quiz-tab.review{
+  border-color: color-mix(in srgb, var(--quiz-danger) 55%, var(--background-modifier-border));
+  background: color-mix(in srgb, var(--quiz-danger) 12%, var(--background-primary));
+}
+
+@media (max-width: 640px){
+  .quiz-mode-toggle{
+    max-width: calc(100% - 16px);
+    gap: 8px;
+    padding-left: 10px;
+    padding-right: 8px;
+  }
+
+  .quiz-mode-toggle-label,
+  .quiz-mode-toggle-label{
+    font-size: 0.72em;
+  }
+
+  .quiz-start-mode-selector{
+    grid-template-columns: 1fr;
+    width: 100%;
+    max-width: 100%;
+  }
+
+  .quiz-start-mode-selector .quiz-start-mode-option{
+    width: 100%;
+    min-width: 0;
+    height: auto;
+    min-height: auto;
+    padding: 10px 12px;
+  }
+
+  .quiz-start-mode-title{
+    font-size: 14px;
+  }
+
+  .quiz-start-mode-sub{
+    white-space: normal;
+    overflow: visible;
+    text-overflow: clip;
+    font-size: 11px;
+    line-height: 1.25;
+  }
+
+  .quiz-textonly-expected-pair{
+    grid-template-columns: 1fr;
+  }
+}

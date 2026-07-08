@@ -18,11 +18,13 @@
 @import url('./components/explanations.css');
 @import url('./components/embeds.css');
 @import url('./components/inputs.css');
+@import url('./components/text-only.css');
 @import url('./components/terminal-cmd.css');
 @import url('./components/terminal-powershell.css');
 @import url('./components/terminal-bash.css');
 @import url('./components/resource-btn.css');
 @import url('./components/settings-code.css');
+@import url('./components/ui-select.css');
 
 /* Pages */
 @import url('./pages/results.css');
