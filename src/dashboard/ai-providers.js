@@ -26,7 +26,7 @@ const PROVIDERS = [
 		sub: "Compte Pro / Max",
 		logo: "claude",
 		desktopOnly: true,
-		defaultModel: "sonnet"
+		defaultModel: "opus"
 	},
 	{
 		id: "ollama-cloud",
@@ -54,9 +54,9 @@ function getProvider(id) {
 /* Mêmes noms que le sélecteur /model de Claude Code ; les values
    sont les alias CLI stables (suivent les derniers modèles du compte). */
 const CLAUDE_CODE_MODELS = [
-	{ value: "sonnet", label: "Sonnet 5", hint: "recommandé" },
-	{ value: "fable", label: "Fable 5", hint: "le plus intelligent" },
-	{ value: "opus", label: "Opus 4.8" },
+	{ value: "opus", label: "Opus 4.8", hint: "recommandé" },
+	{ value: "fable", label: "Fable 5", hint: "le plus puissant" },
+	{ value: "sonnet", label: "Sonnet 5", hint: "efficace au quotidien" },
 	{ value: "haiku", label: "Haiku 4.5", hint: "le plus rapide" }
 ];
 

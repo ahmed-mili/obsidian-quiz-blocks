@@ -308,7 +308,7 @@ class QuizBlocksSettingTab extends obsidian.PluginSettingTab {
 				.onChange(async (value) => {
 					this.plugin.settings.aiProvider = value;
 					// Reset model to default when switching provider
-					const defaults = { "claude-code": "sonnet", ollama: "qwen3:14b", "ollama-cloud": "qwen3:14b" };
+					const defaults = { "claude-code": "opus", ollama: "qwen3:14b", "ollama-cloud": "qwen3:14b" };
 					this.plugin.settings.aiModel = defaults[value] || "";
 					await this.plugin.saveSettings();
 					// Re-render settings but preserve scroll position
