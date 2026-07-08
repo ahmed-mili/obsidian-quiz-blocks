@@ -157,3 +157,53 @@
 	color: var(--text-faint);
 	flex-shrink: 0;
 }
+
+/* ── Menu d'actions (bouton « + » du composer, etc.) ── */
+.qbd-action-menu .qbd-select-option {
+	padding: 7px 10px 7px 8px;
+	gap: 9px;
+	align-items: flex-start;
+}
+
+.qbd-action-menu-icon {
+	color: var(--text-muted);
+	margin-top: 1px;
+}
+
+.qbd-action-menu-icon svg {
+	width: 14px;
+	height: 14px;
+}
+
+.qbd-select-option:hover .qbd-action-menu-icon {
+	color: var(--interactive-accent);
+}
+
+.qbd-action-menu-body {
+	display: flex;
+	flex-direction: column;
+	gap: 1px;
+	min-width: 0;
+}
+
+.qbd-action-menu-sub {
+	font-size: 10.5px;
+	color: var(--text-faint);
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	max-width: 240px;
+}
+
+.qbd-select-option--disabled {
+	opacity: 0.45;
+	cursor: not-allowed;
+}
+
+.qbd-select-option--disabled:hover {
+	background: transparent !important;
+}
+
+.qbd-select-option--disabled:hover .qbd-action-menu-icon {
+	color: var(--text-muted);
+}

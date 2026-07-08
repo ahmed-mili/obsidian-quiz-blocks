@@ -83,54 +83,8 @@
 	letter-spacing: 0.08em;
 }
 
-/* ── Provider cards (grille cliquable) ── */
-.qbd-ai-provider-grid {
-	display: grid;
-	grid-template-columns: repeat(3, minmax(0, 1fr));
-	gap: 8px;
-}
-
-.qbd-ai-pcard {
-	display: flex;
-	flex-direction: column;
-	align-items: stretch;
-	gap: 5px;
-	padding: 10px 12px;
-	background: var(--background-primary) !important;
-	border: 1px solid var(--background-modifier-border);
-	box-shadow: none !important;
-	border-radius: var(--radius-m, 8px);
-	height: auto;
-	cursor: pointer;
-	font-family: var(--font-interface, inherit);
-	text-align: left;
-	min-width: 0;
-	transition: border-color 0.14s ease, background 0.14s ease, transform 0.1s ease;
-}
-
-.qbd-ai-pcard:hover {
-	border-color: var(--background-modifier-border-hover, var(--background-modifier-border));
-	background: var(--background-modifier-hover, rgba(255,255,255,0.03)) !important;
-}
-
-.qbd-ai-pcard:active {
-	transform: scale(0.98);
-}
-
-.qbd-ai-pcard--active {
-	border-color: var(--interactive-accent);
-	background: color-mix(in srgb, var(--interactive-accent) 7%, var(--background-primary)) !important;
-	box-shadow: 0 0 0 1px var(--interactive-accent) inset, 0 2px 12px color-mix(in srgb, var(--interactive-accent) 12%, transparent) !important;
-}
-
-.qbd-ai-pcard-top {
-	display: flex;
-	align-items: center;
-	gap: 7px;
-	min-width: 0;
-}
-
-.qbd-ai-pcard-logo {
+/* ── Sélecteur de fournisseur (logos + statut) ── */
+.qbd-provider-logo {
 	display: inline-flex;
 	align-items: center;
 	justify-content: center;
@@ -138,38 +92,72 @@
 	height: 18px;
 	flex-shrink: 0;
 	color: var(--text-muted);
-	transition: color 0.14s ease;
 }
 
-.qbd-ai-pcard-logo svg {
-	width: 16px;
-	height: 16px;
+.qbd-provider-logo svg {
+	width: 15px;
+	height: 15px;
 }
 
-/* Couleur de marque Claude (terracotta) sur la card active/hover */
-.qbd-ai-pcard--active .qbd-ai-pcard-logo--claude,
-.qbd-ai-pcard:hover .qbd-ai-pcard-logo--claude {
+/* Couleurs de marque */
+.qbd-provider-logo--claude {
 	color: #d97757;
 }
 
-.qbd-ai-pcard--active .qbd-ai-pcard-logo--ollama,
-.qbd-ai-pcard:hover .qbd-ai-pcard-logo--ollama {
+.qbd-provider-logo--ollama {
 	color: var(--text-normal);
 }
 
-.qbd-ai-pcard-name {
-	font-size: 12px;
+/* Trigger : logo + nom + dot */
+.qbd-select-label .qbd-provider-logo {
+	margin-right: 7px;
+	vertical-align: -4px;
+}
+
+.qbd-provider-trigger-name {
 	font-weight: 600;
-	color: var(--text-normal);
+}
+
+.qbd-select-label .qbd-status-dot {
+	margin-left: 8px;
+	vertical-align: 1px;
+}
+
+/* Option du menu : logo + (nom / statut) + dot */
+.qbd-provider-option-body {
+	display: flex;
+	flex-direction: column;
+	gap: 1px;
+	min-width: 0;
+	margin-right: 18px;
+}
+
+.qbd-provider-option-body .qbd-select-option-label {
+	font-weight: 600;
+}
+
+.qbd-provider-option-sub {
+	font-size: 10.5px;
+	color: var(--text-muted);
 	white-space: nowrap;
 	overflow: hidden;
 	text-overflow: ellipsis;
-	min-width: 0;
-	flex: 1;
+	max-width: 220px;
 }
 
-/* Dot de statut : vert prêt / orange config requise / rouge erreur */
-.qbd-ai-pcard-dot {
+.qbd-select-option .qbd-provider-logo {
+	margin-top: 1px;
+	align-self: flex-start;
+}
+
+.qbd-select-option .qbd-status-dot {
+	margin-left: auto;
+	align-self: center;
+}
+
+/* ── Dot de statut : vert prêt / orange config / rouge erreur ── */
+.qbd-status-dot {
+	display: inline-block;
 	width: 7px;
 	height: 7px;
 	border-radius: 50%;
@@ -177,8 +165,7 @@
 	background: var(--text-faint);
 }
 
-.qbd-ai-pcard-dot--checking {
-	background: var(--text-faint);
+.qbd-status-dot--checking {
 	animation: qbd-dot-pulse 1.1s ease-in-out infinite;
 }
 
@@ -187,26 +174,17 @@
 	50%      { opacity: 1; }
 }
 
-.qbd-ai-pcard-dot--ok {
+.qbd-status-dot--ok {
 	background: var(--color-green, #4ade80);
 	box-shadow: 0 0 6px color-mix(in srgb, var(--color-green, #4ade80) 60%, transparent);
 }
 
-.qbd-ai-pcard-dot--warn {
+.qbd-status-dot--warn {
 	background: var(--color-orange, #fb923c);
 }
 
-.qbd-ai-pcard-dot--err {
+.qbd-status-dot--err {
 	background: var(--color-red, #f87171);
-}
-
-.qbd-ai-pcard-sub {
-	font-size: 10.5px;
-	color: var(--text-muted);
-	white-space: nowrap;
-	overflow: hidden;
-	text-overflow: ellipsis;
-	min-width: 0;
 }
 
 /* ── Rangée modèle ── */
@@ -342,182 +320,151 @@
 	height: 12px;
 }
 
-/* ── Tabs card ── */
-.qbd-ai-tabs-card {
+/* ── Composer (champ unique façon chat) ── */
+.qbd-ai-composer {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	padding: 14px 14px 10px;
 	background: var(--background-secondary);
 	border: 1px solid var(--background-modifier-border);
-	border-radius: var(--radius-l, 12px);
-	overflow: hidden;
+	border-radius: 16px;
+	transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
-.qbd-ai-tab-bar {
-	display: flex;
-	border-bottom: 1px solid var(--background-modifier-border);
-	padding: 4px 4px 0;
-	gap: 2px;
+.qbd-ai-composer:focus-within {
+	border-color: var(--interactive-accent);
+	box-shadow: 0 0 0 2px color-mix(in srgb, var(--interactive-accent) 16%, transparent);
 }
 
-.qbd-ai-tab {
-	flex: 1;
-	padding: 8px 6px 10px;
-	font-size: 12px;
-	font-weight: 500;
+.qbd-ai-composer--dragover {
+	border-color: var(--interactive-accent);
+	border-style: dashed;
+	background: color-mix(in srgb, var(--interactive-accent) 5%, var(--background-secondary));
+}
+
+.qbd-ai-composer-input {
+	width: 100%;
 	background: transparent;
 	border: none;
-	border-bottom: 2px solid transparent;
-	border-radius: var(--radius-m, 8px) var(--radius-m, 8px) 0 0;
-	color: var(--text-muted);
-	cursor: pointer;
+	box-shadow: none !important;
+	outline: none;
+	resize: none;
+	padding: 0;
+	color: var(--text-normal);
+	font-size: 13.5px;
+	line-height: 1.55;
 	font-family: var(--font-interface, inherit);
-	transition: all 0.14s ease;
-	text-align: center;
+	min-height: 42px;
+	max-height: 220px;
+	overflow-y: auto;
+}
+
+.qbd-ai-composer-input::placeholder {
+	color: var(--text-faint);
+}
+
+.qbd-ai-composer-bottom {
 	display: flex;
 	align-items: center;
+	justify-content: space-between;
+}
+
+/* Bouton « + » — ajouter images / note active */
+.qbd-ai-composer-add {
+	display: inline-flex;
+	align-items: center;
 	justify-content: center;
+	width: 30px;
+	height: 30px;
+	padding: 0;
+	border-radius: 50%;
+	background: transparent !important;
+	border: 1px solid var(--background-modifier-border);
+	box-shadow: none !important;
+	color: var(--text-muted);
+	cursor: pointer;
+	transition: border-color 0.14s ease, color 0.14s ease, background 0.14s ease;
+}
+
+.qbd-ai-composer-add:hover {
+	border-color: var(--interactive-accent);
+	color: var(--interactive-accent);
+	background: color-mix(in srgb, var(--interactive-accent) 8%, transparent) !important;
+}
+
+.qbd-ai-composer-add svg {
+	width: 16px;
+	height: 16px;
+}
+
+/* Attachements dans le composer */
+.qbd-ai-composer-attachments {
+	display: flex;
+	gap: 8px;
+	flex-wrap: wrap;
+	align-items: center;
+}
+
+.qbd-ai-note-chip {
+	display: inline-flex;
+	align-items: center;
 	gap: 6px;
-}
-
-.qbd-ai-tab:hover {
-	color: var(--text-normal);
-	background: var(--background-modifier-hover, rgba(255,255,255,0.03));
-}
-
-.qbd-ai-tab--active {
-	font-weight: 600;
+	padding: 5px 8px;
 	background: var(--background-primary);
+	border: 1px solid var(--background-modifier-border);
+	border-radius: var(--radius-m, 8px);
+	font-size: 11.5px;
 	color: var(--text-normal);
-	border-bottom-color: var(--interactive-accent);
+	max-width: 240px;
 }
 
-.qbd-ai-tab-icon {
+.qbd-ai-note-chip-icon {
+	display: inline-flex;
+	align-items: center;
+	color: var(--interactive-accent);
+	flex-shrink: 0;
+}
+
+.qbd-ai-note-chip-icon svg {
+	width: 13px;
+	height: 13px;
+}
+
+.qbd-ai-note-chip-name {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	min-width: 0;
+}
+
+.qbd-ai-note-chip-remove {
 	display: inline-flex;
 	align-items: center;
 	justify-content: center;
 	width: 16px;
 	height: 16px;
-	opacity: 0.6;
-}
-
-.qbd-ai-tab--active .qbd-ai-tab-icon {
-	opacity: 1;
-	color: var(--interactive-accent);
-}
-
-.qbd-ai-tab-icon svg {
-	width: 14px;
-	height: 14px;
-}
-
-.qbd-ai-tab-content {
-	padding: 16px;
-	background: var(--background-primary);
-}
-
-/* ── Inputs ── */
-.qbd-ai-input,
-.qbd-ai-textarea {
-	width: 100%;
-	background: var(--background-secondary);
-	border: 1px solid var(--background-modifier-border);
-	border-radius: var(--radius-m, 8px);
-	padding: 10px 13px;
-	color: var(--text-normal);
-	font-size: 13px;
-	outline: none;
-	box-sizing: border-box;
-	font-family: var(--font-interface, inherit);
-	transition: border-color 0.15s ease, box-shadow 0.15s ease;
-}
-
-.qbd-ai-input:focus,
-.qbd-ai-textarea:focus {
-	border-color: var(--interactive-accent);
-	box-shadow: 0 0 0 2px color-mix(in srgb, var(--interactive-accent) 20%, transparent);
-}
-
-.qbd-ai-input::placeholder,
-.qbd-ai-textarea::placeholder {
+	padding: 0;
+	border: none;
+	border-radius: 50%;
+	background: transparent !important;
+	box-shadow: none !important;
 	color: var(--text-faint);
-}
-
-.qbd-ai-textarea {
-	resize: vertical;
-	min-height: 100px;
-	line-height: 1.6;
-}
-
-
-/* ── Image drop zone ── */
-.qbd-ai-drop-zone {
-	border: 2px dashed var(--background-modifier-border);
-	border-radius: var(--radius-l, 12px);
-	padding: 32px 20px;
-	text-align: center;
 	cursor: pointer;
-	font-size: 13px;
-	color: var(--text-muted);
-	transition: all 0.2s ease;
-	display: flex;
-	flex-direction: column;
-	align-items: center;
-	gap: 8px;
+	flex-shrink: 0;
 }
 
-.qbd-ai-drop-zone-icon {
-	width: 40px;
-	height: 40px;
-	border-radius: 10px;
-	background: var(--background-secondary);
-	border: 1px solid var(--background-modifier-border);
-	display: flex;
-	align-items: center;
-	justify-content: center;
-	color: var(--text-faint);
-	margin-bottom: 4px;
-	transition: all 0.2s ease;
+.qbd-ai-note-chip-remove:hover {
+	color: var(--color-red, #f87171);
 }
 
-.qbd-ai-drop-zone-icon svg {
-	width: 18px;
-	height: 18px;
-}
-
-.qbd-ai-drop-zone:hover .qbd-ai-drop-zone-icon,
-.qbd-ai-drop-zone--hover .qbd-ai-drop-zone-icon {
-	color: var(--interactive-accent);
-	border-color: var(--interactive-accent);
-	background: color-mix(in srgb, var(--interactive-accent) 8%, transparent);
-}
-
-.qbd-ai-drop-zone-text {
-	font-size: 13px;
-	font-weight: 500;
-	color: var(--text-muted);
-	margin: 0;
-}
-
-.qbd-ai-drop-zone:hover,
-.qbd-ai-drop-zone--hover {
-	border-color: var(--interactive-accent);
-	background: color-mix(in srgb, var(--interactive-accent) 4%, transparent);
-	color: var(--text-normal);
-}
-
-.qbd-ai-drop-hint {
-	font-size: 10px;
-	color: var(--text-faint);
-	margin: 0;
+.qbd-ai-note-chip-remove svg {
+	width: 11px;
+	height: 11px;
 }
 
 .qbd-ai-file-input {
 	display: none;
-}
-
-.qbd-ai-image-thumbs {
-	display: flex;
-	gap: 8px;
-	flex-wrap: wrap;
-	margin-top: 10px;
 }
 
 .qbd-ai-image-thumb {
@@ -1020,44 +967,12 @@
 		font-size: 12px;
 	}
 
-	.qbd-ai-tab {
-		font-size: 11px;
-		padding: 7px 4px 9px;
-		gap: 4px;
-	}
-
-	.qbd-ai-tab-icon {
-		width: 14px;
-		height: 14px;
-	}
-
-	.qbd-ai-tab-icon svg {
-		width: 12px;
-		height: 12px;
-	}
-
 	.qbd-ai-option-row {
 		flex-wrap: wrap;
 	}
 
 	.qbd-ai-option-label {
 		width: auto;
-	}
-
-	/* Cards provider en pile sur mobile — les libellés restent lisibles */
-	.qbd-ai-provider-grid {
-		grid-template-columns: 1fr;
-	}
-
-	.qbd-ai-pcard {
-		flex-direction: row;
-		align-items: center;
-		justify-content: space-between;
-	}
-
-	.qbd-ai-pcard-sub {
-		white-space: normal;
-		text-align: right;
 	}
 
 	.qbd-ai-model-row {
@@ -1084,10 +999,6 @@
 	.qbd-ai-result-actions .qbd-btn {
 		flex: none;
 		width: 100%;
-	}
-
-	.qbd-ai-drop-zone {
-		padding: 24px 16px;
 	}
 
 	.qbd-ai-preview-empty,

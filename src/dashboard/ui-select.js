@@ -40,7 +40,12 @@ function createSelect(parent, opts) {
 
 	function refreshLabel() {
 		const cur = currentOption();
-		labelEl.textContent = cur ? cur.label : (value || placeholder);
+		if (opts.renderTrigger) {
+			labelEl.empty();
+			opts.renderTrigger(labelEl, cur || null);
+		} else {
+			labelEl.textContent = cur ? cur.label : (value || placeholder);
+		}
 		labelEl.classList.toggle("qbd-select-label--empty", !cur && !value);
 		trigger.disabled = disabled;
 		trigger.classList.toggle("qbd-select--disabled", disabled);
@@ -95,8 +100,12 @@ function createSelect(parent, opts) {
 			optBtn.setAttribute("aria-selected", o.value === value ? "true" : "false");
 			const check = optBtn.createSpan({ cls: "qbd-select-check" });
 			if (o.value === value) obsidian.setIcon(check, "check");
-			optBtn.createSpan({ cls: "qbd-select-option-label", text: o.label });
-			if (o.hint) optBtn.createSpan({ cls: "qbd-select-option-hint", text: o.hint });
+			if (opts.renderOption) {
+				opts.renderOption(optBtn, o);
+			} else {
+				optBtn.createSpan({ cls: "qbd-select-option-label", text: o.label });
+				if (o.hint) optBtn.createSpan({ cls: "qbd-select-option-hint", text: o.hint });
+			}
 			optBtn.addEventListener("click", () => {
 				const changed = o.value !== value;
 				value = o.value;
@@ -139,5 +148,80 @@ function createSelect(parent, opts) {
 	};
 }
 
+/*
+ * openActionMenu(anchorEl, items) — menu flottant d'actions
+ * (même surface visuelle que le dropdown). items :
+ * [{ icon, label, sub?, disabled?, onClick }]
+ */
+function openActionMenu(anchorEl, items) {
+	closeAllSelects();
+
+	const rect = anchorEl.getBoundingClientRect();
+	const menuEl = document.body.createDiv({ cls: "qbd-select-menu qbd-action-menu" });
+	menuEl.setAttribute("role", "menu");
+
+	for (const item of items) {
+		const btn = menuEl.createEl("button", {
+			cls: "qbd-select-option" + (item.disabled ? " qbd-select-option--disabled" : "")
+		});
+		btn.type = "button";
+		btn.setAttribute("role", "menuitem");
+		if (item.disabled) btn.disabled = true;
+		const iconEl = btn.createSpan({ cls: "qbd-select-check qbd-action-menu-icon" });
+		if (item.icon) obsidian.setIcon(iconEl, item.icon);
+		const body = btn.createDiv({ cls: "qbd-action-menu-body" });
+		body.createSpan({ cls: "qbd-select-option-label", text: item.label });
+		if (item.sub) body.createSpan({ cls: "qbd-action-menu-sub", text: item.sub });
+		btn.addEventListener("click", () => {
+			closeMenu();
+			if (!item.disabled && item.onClick) item.onClick();
+		});
+	}
+
+	// Position : au-dessus ou en dessous de l'ancre selon la place
+	menuEl.style.left = rect.left + "px";
+	menuEl.style.visibility = "hidden";
+	menuEl.style.top = "0px";
+	const menuRect = menuEl.getBoundingClientRect();
+	const below = rect.bottom + 4;
+	const above = rect.top - 4 - menuRect.height;
+	menuEl.style.top = (below + menuRect.height <= window.innerHeight - 8 || above < 8 ? below : above) + "px";
+	if (menuRect.width + rect.left > window.innerWidth - 8) {
+		menuEl.style.left = Math.max(8, window.innerWidth - 8 - menuRect.width) + "px";
+	}
+	menuEl.style.visibility = "";
+
+	function closeMenu() {
+		menuEl.remove();
+		openMenus.delete(closeMenu);
+		document.removeEventListener("mousedown", onDocDown, true);
+		document.removeEventListener("keydown", onKeyDown, true);
+		window.removeEventListener("scroll", onScroll, true);
+		window.removeEventListener("resize", closeMenu);
+	}
+
+	function onDocDown(e) {
+		if (anchorEl.contains(e.target) || menuEl.contains(e.target)) return;
+		closeMenu();
+	}
+
+	function onKeyDown(e) {
+		if (e.key === "Escape") closeMenu();
+	}
+
+	function onScroll(e) {
+		if (menuEl.contains(e.target)) return;
+		closeMenu();
+	}
+
+	openMenus.add(closeMenu);
+	document.addEventListener("mousedown", onDocDown, true);
+	document.addEventListener("keydown", onKeyDown, true);
+	window.addEventListener("scroll", onScroll, true);
+	window.addEventListener("resize", closeMenu);
+
+	return { close: closeMenu };
+}
+
 const obsidian = require("obsidian");
-module.exports = { createSelect, closeAllSelects };
+module.exports = { createSelect, closeAllSelects, openActionMenu };

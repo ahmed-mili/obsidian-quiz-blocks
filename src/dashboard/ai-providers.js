@@ -51,12 +51,13 @@ function getProvider(id) {
 }
 
 /* ── Modèles par provider ── */
-/* Alias stables Claude Code : suivent automatiquement les
-   derniers modèles disponibles sur le compte connecté. */
+/* Mêmes noms que le sélecteur /model de Claude Code ; les values
+   sont les alias CLI stables (suivent les derniers modèles du compte). */
 const CLAUDE_CODE_MODELS = [
-	{ value: "sonnet", label: "Claude Sonnet", hint: "recommandé" },
-	{ value: "opus", label: "Claude Opus", hint: "le plus puissant" },
-	{ value: "haiku", label: "Claude Haiku", hint: "le plus rapide" }
+	{ value: "sonnet", label: "Sonnet 5", hint: "recommandé" },
+	{ value: "fable", label: "Fable 5", hint: "le plus intelligent" },
+	{ value: "opus", label: "Opus 4.8" },
+	{ value: "haiku", label: "Haiku 4.5", hint: "le plus rapide" }
 ];
 
 const OLLAMA_CLOUD_MODELS = [

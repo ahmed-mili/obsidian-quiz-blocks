@@ -14,7 +14,7 @@ const QUIZ_BLOCK_LANGUAGE = "quiz-blocks";
 const DEFAULT_SETTINGS = {
 	enableCodeHighlighting: true,
 	quizStats: {},
-	aiProvider: "claude-code",
+	aiProvider: "",
 	aiModel: "",
 	aiOllamaUrl: "http://localhost:11434",
 	aiOllamaCloudKey: "",
@@ -300,10 +300,11 @@ class QuizBlocksSettingTab extends obsidian.PluginSettingTab {
 			.setName("Fournisseur IA")
 			.setDesc("Choisissez le fournisseur pour la génération de quiz")
 			.addDropdown(dropdown => dropdown
+				.addOption("", "Aucun (à choisir)")
 				.addOption("claude-code", "Claude (abonnement)")
 				.addOption("ollama", "Ollama (local)")
 					.addOption("ollama-cloud", "Ollama Cloud")
-				.setValue(this.plugin.settings.aiProvider || "claude-code")
+				.setValue(this.plugin.settings.aiProvider || "")
 				.onChange(async (value) => {
 					this.plugin.settings.aiProvider = value;
 					// Reset model to default when switching provider
@@ -318,6 +319,8 @@ class QuizBlocksSettingTab extends obsidian.PluginSettingTab {
 						if (modal) modal.scrollTop = scrollTop;
 					});
 				}));
+
+		const currentProvider = this.plugin.settings.aiProvider || "";
 
 		// API Key (Ollama Cloud only)
 		if (currentProvider === "ollama-cloud") {
@@ -334,32 +337,34 @@ class QuizBlocksSettingTab extends obsidian.PluginSettingTab {
 				});
 		}
 
-		// Model dropdown (provider-specific)
-		const currentProvider = this.plugin.settings.aiProvider || "claude-code";
-		const models = currentProvider === "ollama-cloud" ? OLLAMA_CLOUD_MODELS : currentProvider === "ollama" ? OLLAMA_MODELS : CLAUDE_CODE_MODELS;
-		const currentModel = this.plugin.settings.aiModel || models[0].value;
+		// Model dropdown (provider-specific) — masqué tant qu'aucun
+		// fournisseur n'est choisi
+		if (currentProvider) {
+			const models = currentProvider === "ollama-cloud" ? OLLAMA_CLOUD_MODELS : currentProvider === "ollama" ? OLLAMA_MODELS : CLAUDE_CODE_MODELS;
+			const currentModel = this.plugin.settings.aiModel || models[0].value;
 
-		new obsidian.Setting(containerEl)
-			.setName("Modèle")
-			.setDesc(currentProvider === "ollama"
-				? "Modèle Ollama à utiliser. Assurez-vous de l'avoir téléchargé avec ollama pull."
-				: currentProvider === "ollama-cloud"
-				? "Modèle Ollama Cloud à utiliser pour la génération."
-				: "Modèle Claude à utiliser pour la génération.")
-			.addDropdown(dropdown => {
-				for (const m of models) {
-					dropdown.addOption(m.value, m.label + (m.hint ? " (" + m.hint + ")" : ""));
-				}
-				// If current model is not in the list, add it as custom
-				if (!models.find(m => m.value === currentModel)) {
-					dropdown.addOption(currentModel, currentModel + " (personnalisé)");
-				}
-				dropdown.setValue(currentModel);
-				dropdown.onChange(async (value) => {
-					this.plugin.settings.aiModel = value;
-					await this.plugin.saveSettings();
+			new obsidian.Setting(containerEl)
+				.setName("Modèle")
+				.setDesc(currentProvider === "ollama"
+					? "Modèle Ollama à utiliser. Assurez-vous de l'avoir téléchargé avec ollama pull."
+					: currentProvider === "ollama-cloud"
+					? "Modèle Ollama Cloud à utiliser pour la génération."
+					: "Modèle Claude à utiliser (mêmes noms que dans Claude Code).")
+				.addDropdown(dropdown => {
+					for (const m of models) {
+						dropdown.addOption(m.value, m.label + (m.hint ? " (" + m.hint + ")" : ""));
+					}
+					// If current model is not in the list, add it as custom
+					if (!models.find(m => m.value === currentModel)) {
+						dropdown.addOption(currentModel, currentModel + " (personnalisé)");
+					}
+					dropdown.setValue(currentModel);
+					dropdown.onChange(async (value) => {
+						this.plugin.settings.aiModel = value;
+						await this.plugin.saveSettings();
+					});
 				});
-			});
+		}
 
 		// Ollama URL (local only)
 		if (currentProvider === "ollama") {
@@ -618,12 +623,13 @@ module.exports = class InteractiveQuizPlugin extends obsidian.Plugin {
 			await this.saveSettings();
 		}
 
-		// Migration : le provider Anthropic (clé API) devient
-		// Claude via Claude Code (compte par abonnement)
+		// Migration : le provider Anthropic (clé API) est remplacé par
+		// Claude via Claude Code (abonnement). Le choix du fournisseur
+		// redevient explicite : aucun présélectionné.
 		if (this.settings.aiProvider === "anthropic" || "aiApiKey" in this.settings) {
 			if (this.settings.aiProvider === "anthropic") {
-				this.settings.aiProvider = "claude-code";
-				this.settings.aiModel = "sonnet";
+				this.settings.aiProvider = "";
+				this.settings.aiModel = "";
 			}
 			delete this.settings.aiApiKey;
 			await this.saveSettings();

@@ -8,12 +8,11 @@
 ══════════════════════════════════════════════════════════ */
 
 const aiProviders = require("./ai-providers");
-const { createSelect, closeAllSelects } = require("./ui-select");
+const { createSelect, closeAllSelects, openActionMenu } = require("./ui-select");
 
 function createAiHandlers(ctx) {
-	let currentTab = "topic";
-	let topicValue = "";
-	let textValue = "";
+	let composerText = "";
+	let noteAttachment = null; // { name, content }
 	let questionCount = 5;
 	let questionType = "Mixte";
 	let images = [];
@@ -21,18 +20,11 @@ function createAiHandlers(ctx) {
 	let generatedQuestions = [];
 	let errorMessage = "";
 
-	const TABS = [
-		{ key: "topic", label: "Sujet", icon: "lightbulb" },
-		{ key: "image", label: "Image", icon: "image" },
-		{ key: "text", label: "Texte", icon: "file-text" }
-	];
-
 	const TYPES = ["Mixte", "Choix unique", "Choix multiple", "Texte libre"];
 
 	function canGenerate() {
-		return (currentTab === "topic" && topicValue.trim()) ||
-			(currentTab === "image" && images.length > 0) ||
-			(currentTab === "text" && textValue.trim());
+		if (!(ctx.plugin.settings.aiProvider || "")) return false;
+		return !!(composerText.trim() || images.length > 0 || noteAttachment);
 	}
 
 	async function render(container) {
@@ -53,101 +45,177 @@ function createAiHandlers(ctx) {
 		titleRow.createEl("h2", { cls: "qbd-ai-title", text: "Générer un quiz" });
 		formCol.createEl("p", { cls: "qbd-ai-subtitle", text: "Créez un quiz à partir d'un sujet, d'images ou d'un texte." });
 
-		// ── Carte Modèle IA : providers cliquables + modèle ──
-		const provider = ctx.plugin.settings.aiProvider || "claude-code";
-		const currentModel = ctx.plugin.settings.aiModel || aiProviders.getProvider(provider).defaultModel;
+		// ── Carte Modèle IA : sélecteur de fournisseur + modèle ──
+		// Aucun fournisseur par défaut : le choix est la première étape,
+		// la rangée Modèle n'apparaît qu'une fois le fournisseur choisi.
+		const provider = ctx.plugin.settings.aiProvider || "";
+		const currentModel = provider
+			? (ctx.plugin.settings.aiModel || aiProviders.getProvider(provider).defaultModel)
+			: "";
 
 		const modelCard = formCol.createDiv({ cls: "qbd-ai-model-card" });
 		const modelHeader = modelCard.createDiv({ cls: "qbd-ai-model-header" });
 		modelHeader.createEl("span", { cls: "qbd-ai-model-label", text: "Modèle IA" });
 
-		// Grille des providers — un clic change de fournisseur
-		const grid = modelCard.createDiv({ cls: "qbd-ai-provider-grid" });
-		const statusEls = {};
-		for (const p of aiProviders.PROVIDERS) {
-			const card = grid.createEl("button", {
-				cls: "qbd-ai-pcard" + (p.id === provider ? " qbd-ai-pcard--active" : "")
-			});
-			card.type = "button";
-			card.setAttribute("aria-pressed", p.id === provider ? "true" : "false");
-			const top = card.createDiv({ cls: "qbd-ai-pcard-top" });
-			const logo = top.createSpan({ cls: "qbd-ai-pcard-logo qbd-ai-pcard-logo--" + p.logo });
-			aiProviders.setBrandLogo(logo, p.logo);
-			top.createSpan({ cls: "qbd-ai-pcard-name", text: p.name });
-			const dot = top.createSpan({ cls: "qbd-ai-pcard-dot qbd-ai-pcard-dot--checking" });
-			const sub = card.createDiv({ cls: "qbd-ai-pcard-sub", text: p.sub });
-			statusEls[p.id] = { dot, sub };
-			card.addEventListener("click", async () => {
-				if (p.id === provider) return;
-				ctx.plugin.settings.aiProvider = p.id;
-				ctx.plugin.settings.aiModel = p.defaultModel;
+		// Rangée fournisseur — un seul sélecteur, options avec logos + statut
+		const providerRow = modelCard.createDiv({ cls: "qbd-ai-model-row" });
+		providerRow.createEl("span", { cls: "qbd-ai-model-row-label", text: "Fournisseur" });
+		const providerSelect = createSelect(providerRow, {
+			value: provider || undefined,
+			placeholder: "Choisir un fournisseur…",
+			options: aiProviders.PROVIDERS.map(p => ({ value: p.id, label: p.name, logo: p.logo, sub: p.sub })),
+			renderTrigger: (el, o) => {
+				if (!o) {
+					el.setText("Choisir un fournisseur…");
+					return;
+				}
+				const logo = el.createSpan({ cls: "qbd-provider-logo qbd-provider-logo--" + o.logo });
+				aiProviders.setBrandLogo(logo, o.logo);
+				el.createSpan({ cls: "qbd-provider-trigger-name", text: o.label });
+				const st = providerStatus[o.value];
+				el.createSpan({ cls: "qbd-status-dot qbd-status-dot--" + (st ? st.dot : "checking") });
+			},
+			renderOption: (el, o) => {
+				const logo = el.createSpan({ cls: "qbd-provider-logo qbd-provider-logo--" + o.logo });
+				aiProviders.setBrandLogo(logo, o.logo);
+				const body = el.createDiv({ cls: "qbd-provider-option-body" });
+				body.createSpan({ cls: "qbd-select-option-label", text: o.label });
+				const st = providerStatus[o.value];
+				body.createSpan({ cls: "qbd-provider-option-sub", text: st ? st.text : o.sub });
+				el.createSpan({ cls: "qbd-status-dot qbd-status-dot--" + (st ? st.dot : "checking") });
+			},
+			onChange: async (id) => {
+				ctx.plugin.settings.aiProvider = id;
+				ctx.plugin.settings.aiModel = aiProviders.getProvider(id).defaultModel;
 				await ctx.plugin.saveSettings();
 				render(container);
-			});
-		}
-
-		// Rangée modèle — dropdown custom (jamais de <select> natif)
-		const modelRow = modelCard.createDiv({ cls: "qbd-ai-model-row" });
-		modelRow.createEl("span", { cls: "qbd-ai-model-row-label", text: "Modèle" });
-		const modelSelect = createSelect(modelRow, {
-			value: currentModel,
-			options: withCurrentOption(aiProviders.getDefaultModels(provider), currentModel),
-			onChange: async (v) => {
-				ctx.plugin.settings.aiModel = v;
-				await ctx.plugin.saveSettings();
 			}
 		});
 
-		// Zone de hint contextuelle (clé manquante, serveur offline…)
-		const hintZone = modelCard.createDiv({ cls: "qbd-ai-model-hint" });
-
-		refreshProviderStatuses({ statusEls, hintZone, provider, currentModel, modelSelect });
-
-
-		// ── Onglets source ──
-		const tabsCard = formCol.createDiv({ cls: "qbd-ai-tabs-card" });
-		const tabBar = tabsCard.createDiv({ cls: "qbd-ai-tab-bar" });
-		for (const tab of TABS) {
-			const btn = tabBar.createEl("button", {
-				cls: `qbd-ai-tab ${currentTab === tab.key ? "qbd-ai-tab--active" : ""}`
+		// Rangée modèle + hint : seulement une fois le fournisseur choisi
+		let modelSelect = null;
+		let hintZone = null;
+		if (provider) {
+			const modelRow = modelCard.createDiv({ cls: "qbd-ai-model-row" });
+			modelRow.createEl("span", { cls: "qbd-ai-model-row-label", text: "Modèle" });
+			modelSelect = createSelect(modelRow, {
+				value: currentModel,
+				options: withCurrentOption(aiProviders.getDefaultModels(provider), currentModel),
+				onChange: async (v) => {
+					ctx.plugin.settings.aiModel = v;
+					await ctx.plugin.saveSettings();
+				}
 			});
-			const tabIcon = btn.createSpan({ cls: "qbd-ai-tab-icon" });
-			obsidian.setIcon(tabIcon, tab.icon);
-			btn.createSpan({ cls: "qbd-ai-tab-label", text: tab.label });
-			btn.addEventListener("click", () => {
-				currentTab = tab.key;
-				render(container);
-			});
+
+			// Zone de hint contextuelle (clé manquante, serveur offline…)
+			hintZone = modelCard.createDiv({ cls: "qbd-ai-model-hint" });
 		}
 
-		const tabContent = tabsCard.createDiv({ cls: "qbd-ai-tab-content" });
+		refreshProviderStatuses({ providerSelect, hintZone, provider, currentModel, modelSelect });
+
+
+		// ── Composer (champ unique + bouton « + » d'attachements) ──
 		let generateBtnRef = null;
 
-		if (currentTab === "topic") {
-			const input = tabContent.createEl("input", {
-				type: "text",
-				cls: "qbd-ai-input",
-				placeholder: "La Révolution française, Algorithmes de tri…",
-				value: topicValue
-			});
-			input.addEventListener("input", (e) => {
-				topicValue = e.target.value;
-				updateGenerateBtn(generateBtnRef);
-			});
-		} else if (currentTab === "image") {
-			renderImageTab(tabContent);
-		} else {
-			const textarea = tabContent.createEl("textarea", {
-				cls: "qbd-ai-textarea",
-				placeholder: "Collez le contenu source… La sélection active est pré-remplie automatiquement.",
-				value: textValue
-			});
-			textarea.rows = 5;
-			textarea.addEventListener("input", (e) => {
-				textValue = e.target.value;
-				updateGenerateBtn(generateBtnRef);
-			});
+		const composer = formCol.createDiv({ cls: "qbd-ai-composer" });
+
+		// Attachements : vignettes d'images + note attachée
+		if (images.length > 0 || noteAttachment) {
+			const attachRow = composer.createDiv({ cls: "qbd-ai-composer-attachments" });
+			for (let i = 0; i < images.length; i++) {
+				const thumb = attachRow.createDiv({ cls: "qbd-ai-image-thumb" });
+				const imgEl = thumb.createEl("img", { cls: "qbd-ai-image-thumb-img" });
+				imgEl.src = images[i].url;
+				const removeBtn = thumb.createEl("button", { cls: "qbd-ai-image-remove" });
+				obsidian.setIcon(removeBtn, "x");
+				const idx = i;
+				removeBtn.addEventListener("click", () => {
+					URL.revokeObjectURL(images[idx].url);
+					images.splice(idx, 1);
+					render(containerRef);
+				});
+			}
+			if (noteAttachment) {
+				const chip = attachRow.createDiv({ cls: "qbd-ai-note-chip" });
+				const chipIcon = chip.createSpan({ cls: "qbd-ai-note-chip-icon" });
+				obsidian.setIcon(chipIcon, "file-text");
+				chip.createSpan({ cls: "qbd-ai-note-chip-name", text: noteAttachment.name });
+				const chipRemove = chip.createEl("button", { cls: "qbd-ai-note-chip-remove" });
+				obsidian.setIcon(chipRemove, "x");
+				chipRemove.addEventListener("click", () => {
+					noteAttachment = null;
+					render(containerRef);
+				});
+			}
 		}
+
+		const composerInput = composer.createEl("textarea", { cls: "qbd-ai-composer-input" });
+		composerInput.placeholder = "Décrivez le sujet du quiz, ou collez votre contenu…";
+		composerInput.value = composerText;
+		composerInput.rows = 2;
+		const autoGrow = () => {
+			composerInput.style.height = "auto";
+			composerInput.style.height = Math.min(composerInput.scrollHeight, 220) + "px";
+		};
+		composerInput.addEventListener("input", (e) => {
+			composerText = e.target.value;
+			autoGrow();
+			updateGenerateBtn(generateBtnRef);
+		});
+		// Coller une image directement dans le champ
+		composerInput.addEventListener("paste", (e) => {
+			const files = Array.from(e.clipboardData?.files || []).filter(f => f.type.startsWith("image/"));
+			if (files.length > 0) {
+				e.preventDefault();
+				addImageFiles(files);
+			}
+		});
+		requestAnimationFrame(autoGrow);
+
+		// Rangée du bas : bouton « + » (ajouter ce dont on a besoin)
+		const composerBottom = composer.createDiv({ cls: "qbd-ai-composer-bottom" });
+		const addBtn = composerBottom.createEl("button", { cls: "qbd-ai-composer-add" });
+		addBtn.type = "button";
+		addBtn.setAttribute("aria-label", "Ajouter du contenu");
+		obsidian.setIcon(addBtn, "plus");
+
+		const fileInput = composer.createEl("input", { type: "file", cls: "qbd-ai-file-input" });
+		fileInput.accept = "image/*";
+		fileInput.multiple = true;
+		fileInput.addEventListener("change", (e) => {
+			if (e.target.files?.length) addImageFiles(Array.from(e.target.files));
+		});
+
+		addBtn.addEventListener("click", () => {
+			const activeFile = ctx.getActiveFile ? ctx.getActiveFile() : ctx.app.workspace.getActiveFile();
+			openActionMenu(addBtn, [
+				{
+					icon: "image",
+					label: "Ajouter des images",
+					sub: "PNG · JPG · WEBP — ou glissez / collez",
+					onClick: () => fileInput.click()
+				},
+				{
+					icon: "file-text",
+					label: "Utiliser la note active",
+					sub: activeFile ? activeFile.basename : "Aucune note ouverte",
+					disabled: !activeFile,
+					onClick: () => attachActiveNote(activeFile)
+				}
+			]);
+		});
+
+		// Glisser-déposer d'images sur tout le composer
+		composer.addEventListener("dragover", (e) => {
+			e.preventDefault();
+			composer.classList.add("qbd-ai-composer--dragover");
+		});
+		composer.addEventListener("dragleave", () => composer.classList.remove("qbd-ai-composer--dragover"));
+		composer.addEventListener("drop", (e) => {
+			e.preventDefault();
+			composer.classList.remove("qbd-ai-composer--dragover");
+			if (e.dataTransfer?.files?.length) addImageFiles(Array.from(e.dataTransfer.files));
+		});
 
 		// ── Options ──
 		const optionsCard = formCol.createDiv({ cls: "qbd-ai-options" });
@@ -212,14 +280,22 @@ function createAiHandlers(ctx) {
 		return [...models, { value: current, label: current, hint: "personnalisé" }];
 	}
 
-	function setDot(els, state) {
-		els.dot.className = "qbd-ai-pcard-dot qbd-ai-pcard-dot--" + state;
+	/* Derniers statuts connus par provider : { dot, text }.
+	   Lus par le sélecteur de fournisseur (trigger + options). */
+	const providerStatus = {};
+
+	function setStatus(id, providerSelect, dot, text) {
+		providerStatus[id] = { dot, text };
+		// Redessine le trigger (dot de statut du fournisseur choisi)
+		if (providerSelect && providerSelect.el.isConnected) {
+			providerSelect.setValue(ctx.plugin.settings.aiProvider || undefined);
+		}
 	}
 
 	/* Hint contextuel sous la rangée modèle : icône + texte
 	   + action optionnelle (lien externe, réglages, commande). */
 	function renderHint(zone, opts) {
-		if (!zone.isConnected) return;
+		if (!zone || !zone.isConnected) return;
 		zone.empty();
 		if (!opts) return;
 		const hint = zone.createDiv({ cls: "qbd-ai-hint qbd-ai-hint--" + (opts.type || "info") });
@@ -248,23 +324,19 @@ function createAiHandlers(ctx) {
 		setting.openTabById(ctx.plugin.manifest.id);
 	}
 
-	/* Détections async : dots + sous-titres des 3 cards, et pour
-	   le provider actif, hint contextuel + liste réelle de modèles. */
-	function refreshProviderStatuses({ statusEls, hintZone, provider, currentModel, modelSelect }) {
+	/* Détections async : statut de chaque provider (trigger + menu du
+	   sélecteur), et pour le provider actif, hint contextuel + liste
+	   réelle de modèles. */
+	function refreshProviderStatuses({ providerSelect, hintZone, provider, currentModel, modelSelect }) {
 		const settings = ctx.plugin.settings;
 
 		aiProviders.checkClaudeCode().then(res => {
-			const els = statusEls["claude-code"];
-			if (!els || !els.dot.isConnected) return;
 			if (res.ok) {
-				setDot(els, "ok");
-				els.sub.textContent = "Prêt · v" + res.version;
+				setStatus("claude-code", providerSelect, "ok", "Claude Code v" + res.version);
 			} else if (res.reason === "mobile") {
-				setDot(els, "warn");
-				els.sub.textContent = "Desktop uniquement";
+				setStatus("claude-code", providerSelect, "warn", "Desktop uniquement");
 			} else {
-				setDot(els, "err");
-				els.sub.textContent = "CLI non détecté";
+				setStatus("claude-code", providerSelect, "err", "Claude Code non installé");
 			}
 			if (provider !== "claude-code") return;
 			if (res.ok) {
@@ -287,17 +359,13 @@ function createAiHandlers(ctx) {
 		});
 
 		aiProviders.checkOllamaLocal(settings.aiOllamaUrl).then(res => {
-			const els = statusEls["ollama"];
-			if (!els || !els.dot.isConnected) return;
 			if (res.ok) {
-				setDot(els, "ok");
-				els.sub.textContent = res.models.length + " modèle" + (res.models.length > 1 ? "s" : "") + " installé" + (res.models.length > 1 ? "s" : "");
+				const n = res.models.length;
+				setStatus("ollama", providerSelect, "ok", n + " modèle" + (n > 1 ? "s" : "") + " installé" + (n > 1 ? "s" : ""));
 			} else if (res.reason === "no-models") {
-				setDot(els, "warn");
-				els.sub.textContent = "Aucun modèle installé";
+				setStatus("ollama", providerSelect, "warn", "Aucun modèle installé");
 			} else {
-				setDot(els, "err");
-				els.sub.textContent = "Serveur non détecté";
+				setStatus("ollama", providerSelect, "err", "Serveur non détecté");
 			}
 			if (provider !== "ollama") return;
 			if (res.ok) {
@@ -328,20 +396,14 @@ function createAiHandlers(ctx) {
 		});
 
 		aiProviders.checkOllamaCloud(settings.aiOllamaCloudKey).then(res => {
-			const els = statusEls["ollama-cloud"];
-			if (!els || !els.dot.isConnected) return;
 			if (res.ok) {
-				setDot(els, "ok");
-				els.sub.textContent = "Connecté";
+				setStatus("ollama-cloud", providerSelect, "ok", "Connecté");
 			} else if (res.reason === "no-key") {
-				setDot(els, "warn");
-				els.sub.textContent = "Clé API requise";
+				setStatus("ollama-cloud", providerSelect, "warn", "Clé API requise");
 			} else if (res.reason === "bad-key") {
-				setDot(els, "err");
-				els.sub.textContent = "Clé invalide";
+				setStatus("ollama-cloud", providerSelect, "err", "Clé invalide");
 			} else {
-				setDot(els, "err");
-				els.sub.textContent = "Hors ligne";
+				setStatus("ollama-cloud", providerSelect, "err", "Hors ligne");
 			}
 			if (provider !== "ollama-cloud") return;
 			if (res.ok) {
@@ -385,47 +447,18 @@ function createAiHandlers(ctx) {
 		render(containerRef);
 	}
 
-	function renderImageTab(container) {
-		const dropZone = container.createDiv({ cls: "qbd-ai-drop-zone" });
-		const dropIcon = dropZone.createDiv({ cls: "qbd-ai-drop-zone-icon" });
-		obsidian.setIcon(dropIcon, "upload");
-		dropZone.createEl("p", { cls: "qbd-ai-drop-zone-text", text: "Glissez des images ici" });
-		dropZone.createEl("p", { cls: "qbd-ai-drop-hint", text: "ou cliquez pour sélectionner · PNG · JPG · WEBP" });
-
-		const fileInput = container.createEl("input", {
-			type: "file",
-			cls: "qbd-ai-file-input"
-		});
-		fileInput.accept = "image/*";
-		fileInput.multiple = true;
-		fileInput.addEventListener("change", (e) => {
-			if (e.target.files?.length) addImageFiles(Array.from(e.target.files));
-		});
-
-		dropZone.addEventListener("click", () => fileInput.click());
-		dropZone.addEventListener("dragover", (e) => { e.preventDefault(); dropZone.classList.add("qbd-ai-drop-zone--hover"); });
-		dropZone.addEventListener("dragleave", () => { dropZone.classList.remove("qbd-ai-drop-zone--hover"); });
-		dropZone.addEventListener("drop", (e) => {
-			e.preventDefault();
-			dropZone.classList.remove("qbd-ai-drop-zone--hover");
-			if (e.dataTransfer?.files?.length) addImageFiles(Array.from(e.dataTransfer.files));
-		});
-
-		if (images.length > 0) {
-			const thumbs = container.createDiv({ cls: "qbd-ai-image-thumbs" });
-			for (let i = 0; i < images.length; i++) {
-				const thumb = thumbs.createDiv({ cls: "qbd-ai-image-thumb" });
-				const imgEl = thumb.createEl("img", { cls: "qbd-ai-image-thumb-img" });
-				imgEl.src = images[i].url;
-				const removeBtn = thumb.createEl("button", { cls: "qbd-ai-image-remove" });
-				obsidian.setIcon(removeBtn, "x");
-				const idx = i;
-				removeBtn.addEventListener("click", () => {
-					URL.revokeObjectURL(images[idx].url);
-					images.splice(idx, 1);
-					render(containerRef);
-				});
-			}
+	/* Attache le contenu de la note active comme source du quiz. */
+	async function attachActiveNote(file) {
+		if (!file) {
+			new obsidian.Notice("Aucune note active");
+			return;
+		}
+		try {
+			const content = await ctx.app.vault.read(file);
+			noteAttachment = { name: file.basename, content };
+			render(containerRef);
+		} catch (e) {
+			new obsidian.Notice("Impossible de lire la note active");
 		}
 	}
 
@@ -483,8 +516,8 @@ function createAiHandlers(ctx) {
 			restartBtn.addEventListener("click", () => {
 				phase = "idle";
 				generatedQuestions = [];
-				topicValue = "";
-				textValue = "";
+				composerText = "";
+				noteAttachment = null;
 				images = [];
 				render(container.parentElement.parentElement);
 			});
@@ -543,13 +576,18 @@ function createAiHandlers(ctx) {
 			const aiClient = require("./ai-client");
 			const client = aiClient(ctx.plugin);
 
-			const prompt = currentTab === "topic" ? topicValue
-				: currentTab === "text" ? textValue
-				: "Analyse les images fournies";
+			// Source déduite du contenu du composer :
+			// images → vision ; note attachée → texte source ; sinon sujet
+			const source = images.length > 0 ? "image" : noteAttachment ? "text" : "topic";
+			const prompt = source === "image"
+				? (composerText.trim() || "Analyse les images fournies")
+				: source === "text"
+				? (composerText.trim() ? composerText.trim() + "\n\n" : "") + noteAttachment.content
+				: composerText.trim();
 
 			// Convert image files to base64 for vision API
 			let imageData = [];
-			if (currentTab === "image" && images.length > 0) {
+			if (images.length > 0) {
 				imageData = await Promise.all(images.map(async (img) => {
 					const buffer = await img.file.arrayBuffer();
 					const bytes = new Uint8Array(buffer);
@@ -565,7 +603,7 @@ function createAiHandlers(ctx) {
 			generatedQuestions = await client.generate(prompt, {
 				count: questionCount,
 				type: questionType,
-				source: currentTab,
+				source,
 				images: imageData
 			});
 		} catch (err) {
