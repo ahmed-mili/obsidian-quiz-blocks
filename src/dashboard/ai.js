@@ -481,7 +481,6 @@ function createAiHandlers(ctx) {
 			const iconWrap = loader.createDiv({ cls: "qbd-ai-loading-icon" });
 			obsidian.setIcon(iconWrap, "sparkles");
 			loader.createEl("p", { cls: "qbd-ai-loading-title", text: "Quiz en cours de création…" });
-			loader.createEl("p", { cls: "qbd-ai-loading-sub", text: "Cela ne prendra qu'un instant." });
 
 			const dots = loader.createDiv({ cls: "qbd-ai-loading-dots" });
 			for (let i = 0; i < 3; i++) {
