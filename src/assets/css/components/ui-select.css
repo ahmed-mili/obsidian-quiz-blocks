@@ -83,8 +83,8 @@
 	z-index: 1000;
 	display: flex;
 	flex-direction: column;
-	gap: 2px;
-	padding: 5px;
+	gap: 3px;
+	padding: 6px;
 	min-width: max-content;
 	max-width: min(340px, calc(100vw - 16px));
 	overflow-y: auto;
@@ -103,12 +103,17 @@
 	to   { opacity: 1; transform: translateY(0); }
 }
 
+/* Espacement calibré Notion Calendar : ~36px de hauteur par
+   option simple, padding vertical franc, lignes qui respirent */
 .qbd-select-option {
 	display: flex;
 	align-items: center;
-	gap: 7px;
+	gap: 8px;
 	width: 100%;
-	padding: 8px 10px 8px 8px;
+	height: auto;          /* le chrome natif d'Obsidian impose une height fixe sur les <button> — sans ça le contenu est écrasé */
+	min-height: 36px;
+	padding: 9px 12px 9px 9px;
+	line-height: 1.35;
 	background: transparent !important;
 	border: none;
 	box-shadow: none !important;

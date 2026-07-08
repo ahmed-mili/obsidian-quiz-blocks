@@ -127,19 +127,19 @@
 .qbd-provider-option-body {
 	display: flex;
 	flex-direction: column;
-	gap: 3px;
+	gap: 4px;
 	min-width: 0;
 	margin-right: 14px;
 }
 
 .qbd-provider-option-body .qbd-select-option-label {
 	font-weight: 600;
-	line-height: 1.25;
+	line-height: 1.3;
 }
 
 .qbd-provider-option-sub {
 	font-size: 10.5px;
-	line-height: 1.3;
+	line-height: 1.35;
 	color: var(--text-muted);
 	white-space: nowrap;
 	overflow: hidden;
@@ -148,7 +148,7 @@
 }
 
 .qbd-select-option .qbd-provider-logo {
-	margin-top: 2px;
+	margin-top: 3px;
 	align-self: flex-start;
 }
 
@@ -157,10 +157,10 @@
 	align-self: center;
 }
 
-/* Options du fournisseur : plus d'air entre les lignes du menu */
+/* Options du fournisseur (2 lignes) : plus d'air, façon Notion Calendar */
 .qbd-select-option:has(.qbd-provider-option-body) {
-	padding-top: 9px;
-	padding-bottom: 9px;
+	padding-top: 11px;
+	padding-bottom: 11px;
 }
 
 /* ── Dot de statut : vert prêt / orange config / rouge erreur ── */
