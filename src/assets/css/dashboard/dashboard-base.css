@@ -210,3 +210,129 @@
 		padding: 10px 12px;
 	}
 }
+
+/* ═════════════════════════════════════════════════════════
+   COQUILLE MOBILE OBSIDIAN (.is-mobile)
+   Obsidian pose .is-mobile sur le <body> sur téléphone/tablette ET
+   en émulation (dev:mobile on) — contrairement aux media queries
+   viewport, qui ne se déclenchent pas sous l'émulation (viewport
+   large). La nav passe en barre horizontale en HAUT, le contenu
+   occupe toute la largeur en dessous. Desktop (sans .is-mobile)
+   totalement inchangé.
+   ═════════════════════════════════════════════════════════ */
+.is-mobile .qbd-layout {
+	flex-direction: column;
+}
+
+.is-mobile .qbd-sidebar {
+	width: 100%;
+	min-width: 0;
+	height: auto;
+	flex-direction: row;
+	flex-shrink: 0;
+	border-right: none;
+	border-bottom: 1px solid var(--background-modifier-border);
+	overflow-x: auto;
+	overflow-y: hidden;
+}
+
+.is-mobile .qbd-nav-brand,
+.is-mobile .qbd-nav-sep,
+.is-mobile .qbd-nav-spacer,
+.is-mobile .qbd-nav-footer,
+.is-mobile .qbd-nav-badge {
+	display: none;
+}
+
+.is-mobile .qbd-nav-items {
+	flex-direction: row;
+	gap: 2px;
+	padding: 4px 6px;
+	width: 100%;
+}
+
+/* Onglets façon tab bar : icône au-dessus d'un petit label, chaque
+   onglet se partage la largeur (flex 1 1 0 + min-width 0 pour ne pas
+   forcer le width:100% de la sidebar verticale). */
+.is-mobile .qbd-nav-item {
+	flex: 1 1 0;
+	min-width: 0;
+	width: auto;
+	flex-direction: column;
+	gap: 3px;
+	justify-content: center;
+	padding: 6px 4px;
+	min-height: 48px; /* cible tactile confortable */
+}
+
+/* Labels visibles dans la barre (icône + petit label), même sous les
+   media queries viewport qui les masquent en mode rail desktop étroit. */
+.is-mobile .qbd-nav-label {
+	display: block;
+	font-size: 10px;
+	max-width: 100%;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	text-align: center;
+}
+
+/* Indicateur d'onglet actif : soulignement en bas (pas de barre à
+   gauche, qui n'a pas de sens dans une barre horizontale). */
+.is-mobile .qbd-nav-item--active::before {
+	left: 8px;
+	right: 8px;
+	top: auto;
+	bottom: 0;
+	width: auto;
+	height: 2px;
+	border-radius: 2px 2px 0 0;
+}
+
+.is-mobile .qbd-content {
+	padding: 16px 14px;
+}
+
+/* ── Grilles de contenu : 1 colonne en mobile ──
+   Les media queries viewport (600/900/1200px) ne se déclenchent pas
+   sous l'émulation Obsidian (viewport large) ; on empile via .is-mobile
+   pour un rendu cohérent sur mobile réel ET en émulation. */
+.is-mobile .qbd-home-stats,
+.is-mobile .qbd-home-grid,
+.is-mobile .qbd-ai-layout {
+	grid-template-columns: 1fr;
+}
+
+.is-mobile .qbd-detail-body {
+	flex-direction: column;
+}
+
+.is-mobile .qbd-detail-stats-col {
+	width: 100%;
+	flex-direction: row;
+	flex-wrap: wrap;
+}
+
+/* ── Cibles tactiles ≥ 40px en mobile ──
+   Beaucoup de contrôles sont à 30-32px sur desktop (souris) ; au doigt
+   il faut au moins 40px. Gaté sur .is-mobile → desktop inchangé. */
+.is-mobile .qbd-select,
+.is-mobile .qbd-btn {
+	min-height: 44px;
+}
+
+.is-mobile .qbd-ai-composer-add,
+.is-mobile .qbd-ai-composer-send {
+	width: 40px;
+	height: 40px;
+}
+
+/* Slider : zone tactile verticale plus haute (track natif de 6px). */
+.is-mobile .qbd-ai-range {
+	height: 36px;
+}
+
+/* Options des menus portalés (ui-select, model menu, action menu) :
+   le menu vit au <body>, .is-mobile (posé sur body) les couvre. */
+.is-mobile .qbd-select-option {
+	min-height: 44px;
+}

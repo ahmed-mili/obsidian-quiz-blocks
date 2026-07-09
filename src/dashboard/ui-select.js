@@ -84,8 +84,14 @@ function createSelect(parent, opts) {
 		const rect = trigger.getBoundingClientRect();
 		menuEl = document.body.createDiv({ cls: "qbd-select-menu" });
 		menuEl.setAttribute("role", "listbox");
-		const spaceBelow = window.innerHeight - rect.bottom - 16;
-		const maxH = Math.max(Math.min(spaceBelow, 320), 140);
+		// Hauteur max bornée par la place du meilleur côté. Un select bas
+		// sur écran mobile a peu de place en dessous → on ouvrira vers le
+		// haut (openUp) plutôt que de déborder sous le pli (le menu est
+		// position:fixed, la partie hors écran serait inatteignable).
+		const spaceBelow = window.innerHeight - rect.bottom - 8;
+		const spaceAbove = rect.top - 8;
+		const openUp = spaceBelow < 160 && spaceAbove > spaceBelow;
+		const maxH = Math.max(Math.min(openUp ? spaceAbove : spaceBelow, 320), 120);
 		menuEl.style.top = rect.bottom + 4 + "px";
 		menuEl.style.left = rect.left + "px";
 		menuEl.style.minWidth = rect.width + "px";
@@ -115,8 +121,13 @@ function createSelect(parent, opts) {
 			});
 		}
 
-		// Si le menu déborde à droite du viewport, le rabattre
+		// Positionnement vertical définitif : au-dessus si le bas manque
+		// de place (openUp), sinon en dessous (défaut déjà posé).
 		const menuRect = menuEl.getBoundingClientRect();
+		if (openUp) {
+			menuEl.style.top = Math.max(8, rect.top - 4 - menuRect.height) + "px";
+		}
+		// Si le menu déborde à droite du viewport, le rabattre
 		if (menuRect.right > window.innerWidth - 8) {
 			menuEl.style.left = Math.max(8, window.innerWidth - 8 - menuRect.width) + "px";
 		}

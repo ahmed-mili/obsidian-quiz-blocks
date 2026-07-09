@@ -23,7 +23,15 @@ function createAiHandlers(ctx) {
 	const TYPES = ["Mixte", "Choix unique", "Choix multiple", "Texte libre"];
 
 	function canGenerate() {
-		if (!(ctx.plugin.settings.aiProvider || "")) return false;
+		const providerId = ctx.plugin.settings.aiProvider || "";
+		if (!providerId) return false;
+		// Un fournisseur desktop-only (Claude Code CLI) est inutilisable sur
+		// mobile : on bloque l'envoi à la source (le bouton d'envoi lit
+		// canGenerate) plutôt que de laisser l'utilisateur envoyer un prompt
+		// qui échouera — sinon composer « cassé ». Le hint « desktop
+		// uniquement » explique déjà pourquoi.
+		const provider = aiProviders.getProvider(providerId);
+		if (provider && provider.desktopOnly && ctx.app.isMobile) return false;
 		return !!(composerText.trim() || images.length > 0 || noteAttachment);
 	}
 
