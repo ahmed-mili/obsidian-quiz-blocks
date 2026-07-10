@@ -256,8 +256,11 @@ class ImportQuizModal extends obsidian.Modal {
 
 		if (["text", "cmd", "powershell", "bash"].includes(type)) {
 			question.acceptedAnswers = q.acceptedAnswers || q.acceptableAnswers || [""];
-			if (question.acceptedAnswers.length === 1 && question.acceptedAnswers[0] === "" && q.correctText) {
-				question.acceptedAnswers = [q.correctText];
+			if (question.acceptedAnswers.length === 1 && question.acceptedAnswers[0] === "") {
+				// `answer` (string) : format émis par la génération IA et
+				// accepté par le moteur (terminal.js) — cf. editor.js.
+				const single = q.correctText || q.answer;
+				if (single) question.acceptedAnswers = [String(single)];
 			}
 			question.caseSensitive = q.caseSensitive || false;
 			question.placeholder = q.placeholder || "";
@@ -266,7 +269,7 @@ class ImportQuizModal extends obsidian.Modal {
 			}
 		}
 
-		const knownKeys = new Set(['id','title','prompt','promptHtml','options','correctIndex','multiSelect','correctIndices','ordering','slots','possibilities','correctOrder','matching','rows','choices','correctMap','type','terminalVariant','textVariant','commandPrefix','placeholder','caseSensitive','acceptedAnswers','acceptableAnswers','correctText','hint','explain','explainHtml','resourceButton','examMode','examDurationMinutes','examAutoSubmit','examShowTimer']);
+		const knownKeys = new Set(['id','title','prompt','promptHtml','options','correctIndex','multiSelect','correctIndices','ordering','slots','possibilities','correctOrder','matching','rows','choices','correctMap','type','terminalVariant','textVariant','commandPrefix','placeholder','caseSensitive','acceptedAnswers','acceptableAnswers','correctText','answer','hint','explain','explainHtml','resourceButton','examMode','examDurationMinutes','examAutoSubmit','examShowTimer']);
 		question._extraFields = {};
 		for (const key of Object.keys(q)) {
 			if (!knownKeys.has(key)) question._extraFields[key] = q[key];
