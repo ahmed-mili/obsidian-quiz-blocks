@@ -2,27 +2,67 @@
    DASHBOARD AI VIEW
    ═════════════════════════════════════════════════════════ */
 
-.qbd-ai-layout {
-	display: grid;
-	/* Formulaire compact à gauche, aperçu large à droite : la zone
-	   d'aperçu (« Le quiz apparaîtra ici ») reçoit l'essentiel de la
-	   largeur, le formulaire ne garde que ce qu'il lui faut. */
-	grid-template-columns: minmax(0, 480px) minmax(0, 1fr);
-	gap: 24px;
+/* ── Scène unique (maquette validée 2026-07-10, plus de 2 colonnes) :
+   idle/loading/error → titre + composer centrés dans la page
+   (référence claude.ai) ; result → éditeur pleine page, composer en
+   bas (variante B « chat »). ── */
+.qbd-ai-stage {
 	height: 100%;
-	overflow-y: auto;
-}
-
-/* ── Form column ── */
-.qbd-ai-form {
-	min-width: 0;
 	display: flex;
 	flex-direction: column;
-	gap: 16px;
-	/* Ne pas étirer le formulaire sur toute la hauteur : il reste
-	   collé en haut, à la hauteur de son contenu (plus de grand vide
-	   sous le formulaire). L'aperçu, lui, occupe toute la hauteur. */
-	align-self: start;
+	gap: 14px;
+	overflow-y: auto;
+	min-width: 0;
+}
+
+.qbd-ai-stage--idle,
+.qbd-ai-stage--loading,
+.qbd-ai-stage--error {
+	align-items: center;
+	justify-content: center;
+	text-align: center;
+	padding: 24px 12px;
+}
+
+/* Le composer garde une largeur de lecture, quel que soit l'état. */
+.qbd-ai-stage .qbd-ai-composer {
+	width: min(660px, 100%);
+	flex-shrink: 0;
+	text-align: left;
+}
+
+.qbd-ai-stage--idle .qbd-ai-composer,
+.qbd-ai-stage--loading .qbd-ai-composer,
+.qbd-ai-stage--error .qbd-ai-composer {
+	margin-top: 8px;
+}
+
+.qbd-ai-stage .qbd-ai-model-hint {
+	width: min(660px, 100%);
+	text-align: left;
+}
+
+/* Loader / erreur : cartes centrées SOUS le composer — l'animation de
+   génération (qbd-glide + dots) est inchangée, seul le cadre l'est. */
+.qbd-ai-stage .qbd-ai-preview-loading,
+.qbd-ai-stage .qbd-ai-preview-error {
+	flex: none;
+	width: min(660px, 100%);
+	min-height: 200px;
+}
+
+/* Résultat : la zone quiz absorbe la hauteur, le composer vit en bas. */
+.qbd-ai-stage--result {
+	padding: 4px 0 8px;
+	align-items: center;
+}
+
+.qbd-ai-result-zone {
+	flex: 1;
+	min-height: 0;
+	width: 100%;
+	display: flex;
+	flex-direction: column;
 }
 
 /* ── Page header ── */
@@ -723,11 +763,6 @@
 
 /* ── Éditeur de quiz EMBARQUÉ après génération (référence : l'éditeur
    complet remplace l'aperçu, dans la page — pas de nouvel onglet) ── */
-.qbd-ai-preview--editor {
-	display: flex;
-	flex-direction: column;
-}
-
 .qbd-ai-embed-bar {
 	display: flex;
 	align-items: center;
@@ -978,67 +1013,6 @@
 	transform: translateY(0) scale(0.98);
 }
 
-/* ── Preview column ── */
-.qbd-ai-preview {
-	min-width: 0;
-	display: flex;
-	flex-direction: column;
-	gap: 10px;
-}
-
-.qbd-ai-preview-label {
-	font-size: 10px;
-	font-weight: 600;
-	color: var(--text-faint);
-	text-transform: uppercase;
-	letter-spacing: 0.08em;
-	margin: 0;
-}
-
-.qbd-ai-preview-empty {
-	flex: 1;
-	border: 2px dashed var(--background-modifier-border);
-	border-radius: var(--radius-l, 12px);
-	display: flex;
-	flex-direction: column;
-	align-items: center;
-	justify-content: center;
-	gap: 10px;
-	min-height: 260px;
-	background: var(--background-secondary);
-}
-
-.qbd-ai-preview-empty-icon {
-	width: 48px;
-	height: 48px;
-	border-radius: 14px;
-	background: var(--background-primary);
-	border: 1px solid var(--background-modifier-border);
-	display: flex;
-	align-items: center;
-	justify-content: center;
-	color: var(--text-faint);
-	opacity: 0.5;
-}
-
-.qbd-ai-preview-empty-icon svg {
-	width: 20px;
-	height: 20px;
-}
-
-.qbd-ai-preview-empty-text {
-	font-size: 13px;
-	color: var(--text-muted);
-	font-weight: 500;
-	margin: 0;
-}
-
-.qbd-ai-preview-empty-hint {
-	font-size: 11px;
-	color: var(--text-faint);
-	margin: 0;
-}
-
 /* ── Loading state ── */
 .qbd-ai-preview-loading {
 	flex: 1;
@@ -1282,15 +1256,6 @@
 
 /* ── Responsive ── */
 @media (max-width: 900px) {
-	.qbd-ai-layout {
-		grid-template-columns: 1fr;
-	}
-
-	.qbd-ai-form,
-	.qbd-ai-preview {
-		width: 100%;
-	}
-
 	.qbd-ai-result-list {
 		max-height: 280px;
 	}
@@ -1323,7 +1288,6 @@
 		width: 100%;
 	}
 
-	.qbd-ai-preview-empty,
 	.qbd-ai-preview-loading,
 	.qbd-ai-preview-error {
 		min-height: 180px;

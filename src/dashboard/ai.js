@@ -21,9 +21,9 @@ function createAiHandlers(ctx) {
 	// Client IA de la génération en cours — permet au bouton stop (et à
 	// la touche Esc) d'annuler réellement (kill du CLI / abort du fetch).
 	let activeClient = null;
-	// Éditeur de quiz EMBARQUÉ dans la colonne droite après génération
-	// (référence : l'éditeur complet remplace l'aperçu, pas de nouvel
-	// onglet). generationId invalide l'instance à chaque nouvelle génération.
+	// Éditeur de quiz EMBARQUÉ pleine page après génération (référence :
+	// l'éditeur complet, pas de nouvel onglet ; composer en bas).
+	// generationId invalide l'instance à chaque nouvelle génération.
 	let embedEditor = null;
 	let generationId = 0;
 	let generatedQuestions = [];
@@ -52,18 +52,25 @@ function createAiHandlers(ctx) {
 		document.querySelectorAll(".qbd-hover-tip").forEach(t => t.remove());
 		container.empty();
 
-		// ── Layout 2 colonnes ──
-		const layout = container.createDiv({ cls: "qbd-ai-layout" });
+		// ── Scène unique (le layout 2 colonnes est supprimé — maquette
+		// validée 2026-07-10) : idle/loading/error → titre + composer
+		// CENTRÉS dans la page (référence claude.ai, plus de zone
+		// « Aperçu » vide) ; result → l'ÉDITEUR embarqué pleine page et
+		// le composer EN BAS (variante B « chat »). `formCol` reste le
+		// nom du parent du composer pour ne pas réécrire tout le bloc.
+		const stage = container.createDiv({ cls: "qbd-ai-stage qbd-ai-stage--" + phase });
+		// Zone résultat créée AVANT le composer : l'ordre DOM le met en bas.
+		const resultZone = phase === "result" ? stage.createDiv({ cls: "qbd-ai-result-zone" }) : null;
+		const formCol = stage;
 
-		// ── Formulaire (colonne gauche) ──
-		const formCol = layout.createDiv({ cls: "qbd-ai-form" });
-
-		// ── Page header ──
-		const titleRow = formCol.createDiv({ cls: "qbd-ai-title-row" });
-		const titleIcon = titleRow.createSpan({ cls: "qbd-ai-title-icon" });
-		obsidian.setIcon(titleIcon, "sparkles");
-		titleRow.createEl("h2", { cls: "qbd-ai-title", text: "Générer un quiz" });
-		formCol.createEl("p", { cls: "qbd-ai-subtitle", text: "Créez un quiz à partir d'un sujet, d'images ou d'un texte." });
+		// ── Page header (absent en résultat : la barre du quiz suffit) ──
+		if (phase !== "result") {
+			const titleRow = formCol.createDiv({ cls: "qbd-ai-title-row" });
+			const titleIcon = titleRow.createSpan({ cls: "qbd-ai-title-icon" });
+			obsidian.setIcon(titleIcon, "sparkles");
+			titleRow.createEl("h2", { cls: "qbd-ai-title", text: "Générer un quiz" });
+			formCol.createEl("p", { cls: "qbd-ai-subtitle", text: "Créez un quiz à partir d'un sujet, d'images ou d'un texte." });
+		}
 
 		// ── Fournisseur : bouton LOGO SEUL dans le pied du composer (la
 		// carte « Modèle IA » est supprimée) — le menu garde logos, statut
@@ -522,9 +529,11 @@ function createAiHandlers(ctx) {
 		// (Les options Questions/Type vivent dans le popover du bouton
 		// sliders du composer — l'ancienne carte « Options » est supprimée.)
 
-		// ── Preview (colonne droite) ──
-		const previewCol = layout.createDiv({ cls: "qbd-ai-preview" });
-		renderPreview(previewCol);
+		// ── État de la scène : loader/erreur sous le composer (centrés),
+		// ou l'éditeur embarqué dans la zone résultat (au-dessus). ──
+		if (phase === "loading") renderLoading(stage);
+		else if (phase === "error") renderError(stage);
+		else if (phase === "result") renderResult(resultZone);
 	}
 
 	let containerRef = null;
@@ -697,101 +706,92 @@ function createAiHandlers(ctx) {
 		}
 	}
 
-	function renderPreview(container) {
-		container.empty();
-		container.classList.toggle("qbd-ai-preview--editor", phase === "result");
+	/* Loader de génération — l'ANIMATION VALIDÉE (balayage qbd-glide,
+	   icône sparkles, dots pulsants) est reprise à l'identique : mêmes
+	   classes, mêmes keyframes. Seul le conteneur change (carte centrée
+	   sous le composer, plus de colonne d'aperçu). */
+	function renderLoading(host) {
+		const loader = host.createDiv({ cls: "qbd-ai-preview-loading" });
+		const iconWrap = loader.createDiv({ cls: "qbd-ai-loading-icon" });
+		obsidian.setIcon(iconWrap, "sparkles");
+		loader.createEl("p", { cls: "qbd-ai-loading-title", text: "Quiz en cours de création…" });
 
-		// En phase résultat, l'éditeur embarqué remplace tout l'aperçu
-		// (pas de label « Résultat »).
-		if (phase !== "result") {
-			container.createEl("p", {
-				cls: "qbd-ai-preview-label",
-				text: phase === "idle" ? "Aperçu" : phase === "loading" ? "Génération en cours…" : "Erreur"
-			});
-		}
-
-		if (phase === "idle") {
-			const empty = container.createDiv({ cls: "qbd-ai-preview-empty" });
-			const emptyIconWrap = empty.createDiv({ cls: "qbd-ai-preview-empty-icon" });
-			obsidian.setIcon(emptyIconWrap, "sparkles");
-			empty.createEl("p", { cls: "qbd-ai-preview-empty-text", text: "Le quiz apparaîtra ici" });
-			empty.createEl("p", { cls: "qbd-ai-preview-empty-hint", text: "Remplissez le formulaire et cliquez sur Générer" });
-		} else if (phase === "loading") {
-			const loader = container.createDiv({ cls: "qbd-ai-preview-loading" });
-			const iconWrap = loader.createDiv({ cls: "qbd-ai-loading-icon" });
-			obsidian.setIcon(iconWrap, "sparkles");
-			loader.createEl("p", { cls: "qbd-ai-loading-title", text: "Quiz en cours de création…" });
-
-			const dots = loader.createDiv({ cls: "qbd-ai-loading-dots" });
-			for (let i = 0; i < 3; i++) {
-				dots.createDiv({ cls: "qbd-ai-loading-dot" });
-			}
-		} else if (phase === "error") {
-			const errorEl = container.createDiv({ cls: "qbd-ai-preview-error" });
-			const errorIcon = errorEl.createDiv({ cls: "qbd-ai-error-icon" });
-			obsidian.setIcon(errorIcon, "alert-triangle");
-			errorEl.createEl("p", { cls: "qbd-ai-error-title", text: "Échec de la génération" });
-			errorEl.createEl("p", { cls: "qbd-ai-error-msg", text: errorMessage });
-
-			const retryBtn = errorEl.createEl("button", {
-				cls: "qbd-btn qbd-btn--ghost qbd-ai-error-retry",
-				text: "Réessayer"
-			});
-			retryBtn.addEventListener("click", () => {
-				phase = "idle";
-				render(container.parentElement.parentElement);
-			});
-		} else if (phase === "result") {
-			// ── Barre compacte : compte + Insérer dans une note + Recommencer ──
-			const bar = container.createDiv({ cls: "qbd-ai-embed-bar" });
-			const countWrap = bar.createDiv({ cls: "qbd-ai-result-count-wrap" });
-			const checkIcon = countWrap.createSpan({ cls: "qbd-ai-result-check" });
-			obsidian.setIcon(checkIcon, "check-circle");
-			countWrap.createSpan({ cls: "qbd-ai-result-count", text: `${generatedQuestions.length} questions générées` });
-
-			const insertBtn = bar.createEl("button", {
-				cls: "qbd-btn qbd-btn--primary",
-				text: "Insérer dans une note"
-			});
-			const insertIcon = insertBtn.createSpan({ cls: "qbd-btn-icon" });
-			obsidian.setIcon(insertIcon, "plus");
-			insertBtn.prepend(insertIcon);
-			// Picker : notes OUVERTES en tête + recherche dans tout le vault.
-			insertBtn.addEventListener("click", () => {
-				const seen = new Set();
-				const openFiles = [];
-				for (const leaf of ctx.app.workspace.getLeavesOfType("markdown")) {
-					const f = leaf.view && leaf.view.file;
-					if (f && !seen.has(f.path)) { seen.add(f.path); openFiles.push(f); }
-				}
-				openNotePicker(insertBtn, {
-					openFiles,
-					allFiles: ctx.app.vault.getMarkdownFiles(),
-					onPick: (file) => insertIntoNote(file)
-				});
-			});
-
-			const restartBtn = bar.createEl("button", { cls: "qbd-btn qbd-btn--ghost" });
-			const restartIcon = restartBtn.createSpan({ cls: "qbd-btn-icon" });
-			obsidian.setIcon(restartIcon, "rotate-ccw");
-			restartBtn.createSpan({ text: "Recommencer" });
-			restartBtn.addEventListener("click", () => {
-				phase = "idle";
-				generatedQuestions = [];
-				embedEditor = null;
-				composerText = "";
-				noteAttachment = null;
-				images = [];
-				render(container.parentElement.parentElement);
-			});
-
-			// ── L'ÉDITEUR COMPLET, embarqué à la place de l'aperçu ──
-			const host = container.createDiv({ cls: "qbd-ai-editor-embed qb-root" });
-			mountEmbedEditor(host);
+		const dots = loader.createDiv({ cls: "qbd-ai-loading-dots" });
+		for (let i = 0; i < 3; i++) {
+			dots.createDiv({ cls: "qbd-ai-loading-dot" });
 		}
 	}
 
-	/* Monte l'éditeur de quiz complet dans `host` (colonne droite de la
+	function renderError(host) {
+		const errorEl = host.createDiv({ cls: "qbd-ai-preview-error" });
+		const errorIcon = errorEl.createDiv({ cls: "qbd-ai-error-icon" });
+		obsidian.setIcon(errorIcon, "alert-triangle");
+		errorEl.createEl("p", { cls: "qbd-ai-error-title", text: "Échec de la génération" });
+		errorEl.createEl("p", { cls: "qbd-ai-error-msg", text: errorMessage });
+
+		const retryBtn = errorEl.createEl("button", {
+			cls: "qbd-btn qbd-btn--ghost qbd-ai-error-retry",
+			text: "Réessayer"
+		});
+		retryBtn.addEventListener("click", () => {
+			phase = "idle";
+			render(containerRef);
+		});
+	}
+
+	/* Zone résultat (pleine page, composer en bas) : barre compacte +
+	   l'ÉDITEUR DE QUIZ COMPLET embarqué — exigence explicite, pas une
+	   liste simplifiée. */
+	function renderResult(container) {
+		// ── Barre compacte : compte + Insérer dans une note + Recommencer ──
+		const bar = container.createDiv({ cls: "qbd-ai-embed-bar" });
+		const countWrap = bar.createDiv({ cls: "qbd-ai-result-count-wrap" });
+		const checkIcon = countWrap.createSpan({ cls: "qbd-ai-result-check" });
+		obsidian.setIcon(checkIcon, "check-circle");
+		countWrap.createSpan({ cls: "qbd-ai-result-count", text: `${generatedQuestions.length} questions générées` });
+
+		const insertBtn = bar.createEl("button", {
+			cls: "qbd-btn qbd-btn--primary",
+			text: "Insérer dans une note"
+		});
+		const insertIcon = insertBtn.createSpan({ cls: "qbd-btn-icon" });
+		obsidian.setIcon(insertIcon, "plus");
+		insertBtn.prepend(insertIcon);
+		// Picker : notes OUVERTES en tête + recherche dans tout le vault.
+		insertBtn.addEventListener("click", () => {
+			const seen = new Set();
+			const openFiles = [];
+			for (const leaf of ctx.app.workspace.getLeavesOfType("markdown")) {
+				const f = leaf.view && leaf.view.file;
+				if (f && !seen.has(f.path)) { seen.add(f.path); openFiles.push(f); }
+			}
+			openNotePicker(insertBtn, {
+				openFiles,
+				allFiles: ctx.app.vault.getMarkdownFiles(),
+				onPick: (file) => insertIntoNote(file)
+			});
+		});
+
+		const restartBtn = bar.createEl("button", { cls: "qbd-btn qbd-btn--ghost" });
+		const restartIcon = restartBtn.createSpan({ cls: "qbd-btn-icon" });
+		obsidian.setIcon(restartIcon, "rotate-ccw");
+		restartBtn.createSpan({ text: "Recommencer" });
+		restartBtn.addEventListener("click", () => {
+			phase = "idle";
+			generatedQuestions = [];
+			embedEditor = null;
+			composerText = "";
+			noteAttachment = null;
+			images = [];
+			render(containerRef);
+		});
+
+		// ── L'ÉDITEUR COMPLET, embarqué pleine page (composer en bas) ──
+		const host = container.createDiv({ cls: "qbd-ai-editor-embed qb-root" });
+		mountEmbedEditor(host);
+	}
+
+	/* Monte l'éditeur de quiz complet dans `host` (zone résultat pleine
 	   page). L'instance survit aux re-renders de la page : les questions en
 	   cours d'édition sont reprises tant que la génération n'a pas changé. */
 	function mountEmbedEditor(host) {
@@ -920,7 +920,7 @@ function createAiHandlers(ctx) {
 		activeClient = null;
 		if (generatedQuestions.length > 0) {
 			// Nouvelle génération → l'éditeur embarqué repart des questions
-			// fraîches (renderPreview le monte dans la colonne droite).
+			// fraîches (renderResult le monte pleine page).
 			generationId++;
 			embedEditor = null;
 			phase = "result";

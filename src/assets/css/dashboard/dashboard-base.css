@@ -297,8 +297,7 @@
    sous l'émulation Obsidian (viewport large) ; on empile via .is-mobile
    pour un rendu cohérent sur mobile réel ET en émulation. */
 .is-mobile .qbd-home-stats,
-.is-mobile .qbd-home-grid,
-.is-mobile .qbd-ai-layout {
+.is-mobile .qbd-home-grid {
 	grid-template-columns: 1fr;
 }
 
