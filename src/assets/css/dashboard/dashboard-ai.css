@@ -81,8 +81,14 @@
 	text-align: left;
 }
 
-/* Loader / erreur : cartes centrées SOUS le composer — l'animation de
-   génération (qbd-glide + dots) est inchangée, seul le cadre l'est. */
+/* Loader (AU-DESSUS du composer) / erreur (dessous) : cartes centrées —
+   l'animation de génération (qbd-glide + dots) est inchangée, seul le
+   cadre l'est. La zone du loader est transparente au layout (contents)
+   pour que la carte reste un enfant flex direct du stage (largeur, gap). */
+.qbd-ai-loading-zone {
+	display: contents;
+}
+
 .qbd-ai-stage .qbd-ai-preview-loading,
 .qbd-ai-stage .qbd-ai-preview-error {
 	flex: none;

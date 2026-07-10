@@ -72,6 +72,11 @@ function createAiHandlers(ctx) {
 			formCol.createEl("p", { cls: "qbd-ai-subtitle", text: "Créez un quiz à partir d'un sujet, d'images ou d'un texte." });
 		}
 
+		// Zone du loader de génération : AU-DESSUS du composer (demande
+		// 2026-07-10 — le loader préfigure le résultat, qui vit en haut).
+		// display: contents en CSS → la carte reste un enfant flex direct.
+		const loadingZone = phase === "loading" ? stage.createDiv({ cls: "qbd-ai-loading-zone" }) : null;
+
 		// ── Fournisseur : bouton LOGO SEUL dans le pied du composer (la
 		// carte « Modèle IA » est supprimée) — le menu garde logos, statut
 		// et sous-titre ; le tooltip au survol porte nom + statut.
@@ -540,9 +545,9 @@ function createAiHandlers(ctx) {
 		// (Les options Questions/Type vivent dans le popover du bouton
 		// sliders du composer — l'ancienne carte « Options » est supprimée.)
 
-		// ── État de la scène : loader/erreur sous le composer (centrés),
-		// ou l'éditeur embarqué dans la zone résultat (au-dessus). ──
-		if (phase === "loading") renderLoading(stage);
+		// ── État de la scène : loader AU-DESSUS du composer, erreur sous
+		// le composer, ou l'éditeur embarqué dans la zone résultat. ──
+		if (phase === "loading") renderLoading(loadingZone);
 		else if (phase === "error") renderError(stage);
 		else if (phase === "result") renderResult(resultZone);
 
