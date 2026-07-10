@@ -403,6 +403,14 @@ function createAiHandlers(ctx) {
 				addImageFiles(files);
 			}
 		});
+		// Enter = générer, Shift+Enter = saut de ligne (référence claude.ai).
+		// Enter nu n'insère JAMAIS de retour (même champ vide / pendant une
+		// génération) ; isComposing protège la saisie IME.
+		composerInput.addEventListener("keydown", (e) => {
+			if (e.key !== "Enter" || e.shiftKey || e.isComposing) return;
+			e.preventDefault();
+			if (phase !== "loading" && canGenerate()) startGeneration(containerRef);
+		});
 		requestAnimationFrame(autoGrow);
 
 		// Rangée du bas : bouton « + » (gauche), puis à droite le modèle +
