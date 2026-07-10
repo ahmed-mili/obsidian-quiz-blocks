@@ -171,12 +171,12 @@ function createEffortTrackFx(trackEl, thumbEl, opts) {
 				}
 
 				// Enveloppe de visibilité : 100% sur la moitié droite,
-				// fondu de 50%→6%, invisible sur les 6% gauche (amendé par
+				// fondu de 50%→4%, invisible sur les 4% gauche (amendé par
 				// Ahmed 2026-07-10 : le 1/10 du handoff était trop agressif)
 				let env;
 				if (fx >= 0.5) env = 1;
-				else if (fx <= 0.06) env = 0;
-				else { const q = (fx - 0.06) / 0.44; env = q * q * (3 - 2 * q); }
+				else if (fx <= 0.04) env = 0;
+				else { const q = (fx - 0.04) / 0.46; env = q * q * (3 - 2 * q); }
 				if (env <= 0.01) continue;
 				if (!filled) lit *= 0.1;                     // à droite du curseur : quasi éteint
 
