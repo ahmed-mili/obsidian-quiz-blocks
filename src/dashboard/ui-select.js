@@ -701,11 +701,43 @@ function openEffortSlider(anchorEl, opts) {
 	// ── Éclair Fast (codex) : VRAI toggle du service tier « priority »
 	// (1.5x speed, more usage), persisté via opts.fast.onToggle. Le tooltip
 	// reste au survol ; absent si le modèle n'expose pas le tier Fast. ──
+	let stopDrift = null;
 	if (zapRow) {
 		const zap = zapRow.createEl("button", { cls: "qbd-effort-fast qbd-effort-pop-zap" });
 		zap.type = "button";
 		zap.setAttribute("aria-label", "Fast (1.5x speed)");
 		obsidian.setIcon(zap, "zap");
+		// Drift des étoiles Fast piloté en rAF via --qbd-drift : des keyframes
+		// CSS ne savent ni décélérer ni accélérer. Ici la VITESSE tend vers sa
+		// cible par lissage exponentiel (~0.45s) pendant que l'opacité fond en
+		// CSS (.3s) → les points ralentissent et s'effacent ENSEMBLE, et
+		// repartent en fondu déjà en mouvement. La couche ::after suit à
+		// 0.65x via calc() (parallaxe préservée).
+		const DRIFT_SPEED = 86;  // px/s — 2x la version keyframes (56px/1.3s)
+		const DRIFT_TAU = 0.15;  // s — ~95 % de l'arrêt/du départ en 0.45s
+		const DRIFT_WRAP = 1120; // 20 tuiles de 56px ; 0.65x retombe sur 728
+		const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+		let driftX = 0;
+		let driftV = opts.fast.on ? DRIFT_SPEED : 0; // ouverture : déjà en croisière
+		let driftRaf = 0;
+		let driftLast = 0;
+		const driftStep = (ts) => {
+			const dt = Math.min(0.05, Math.max(0, (ts - driftLast) / 1000));
+			driftLast = ts;
+			const target = opts.fast.on ? DRIFT_SPEED : 0;
+			driftV += (target - driftV) * (1 - Math.exp(-dt / DRIFT_TAU));
+			driftX = (driftX - driftV * dt) % DRIFT_WRAP;
+			fill.style.setProperty("--qbd-drift", driftX.toFixed(2) + "px");
+			if (!target && driftV < 0.5) { driftRaf = 0; return; } // arrêté → veille
+			driftRaf = requestAnimationFrame(driftStep);
+		};
+		const driftWake = () => {
+			// Boucle déjà active : elle lit la nouvelle cible toute seule.
+			if (reduceMotion || driftRaf) return;
+			driftLast = performance.now();
+			driftRaf = requestAnimationFrame(driftStep);
+		};
+		stopDrift = () => cancelAnimationFrame(driftRaf);
 		const refreshZap = () => {
 			zap.classList.toggle("is-on", !!opts.fast.on);
 			zap.setAttribute("aria-pressed", opts.fast.on ? "true" : "false");
@@ -713,9 +745,11 @@ function openEffortSlider(anchorEl, opts) {
 			menuEl.classList.toggle("is-fast", !!opts.fast.on);
 		};
 		refreshZap();
+		if (opts.fast.on) driftWake();
 		zap.addEventListener("click", () => {
 			opts.fast.on = !opts.fast.on;
 			refreshZap();
+			driftWake();
 			if (opts.fast.onToggle) opts.fast.onToggle(opts.fast.on);
 		});
 		attachTip(zap, (tip) => {
@@ -868,6 +902,7 @@ function openEffortSlider(anchorEl, opts) {
 
 	function closeMenu() {
 		if (trackFx) trackFx.destroy(); // stoppe la boucle rAF du canvas
+		if (stopDrift) stopDrift();     // stoppe la boucle rAF du drift Fast
 		for (const t of tips) t.remove();
 		tips.clear();
 		menuEl.remove();

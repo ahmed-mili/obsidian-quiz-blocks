@@ -27,8 +27,8 @@
 	overflow: visible;
 	/* Champ d'étoiles des hauts niveaux : DEUX tuiles (56px, repeat-x) aux
 	   positions distinctes, posées sur des pseudo-éléments animés (dérive
-	   horizontale à vitesses opposées + scintillement) — cf. keyframes
-	   qbd-stars-drift / qbd-stars-twinkle. */
+	   horizontale rAF --qbd-drift + flottement/scintillement — cf.
+	   keyframes qbd-stars-bob / qbd-stars-twinkle). */
 	--qbd-stars:
 		radial-gradient(circle at 12% 32%, rgba(255, 255, 255, 0.5) 0 1px, transparent 1.6px),
 		radial-gradient(circle at 30% 72%, rgba(255, 255, 255, 0.35) 0 0.8px, transparent 1.3px),
@@ -467,12 +467,13 @@
      les points flottent de haut en bas (bob) et scintillent, aucun
      défilement latéral. Elles ne changent PAS quand Fast se toggle.
    — Couches RAPIDES (fill::before/::after) : dérive horizontale
-     continue (parallaxe 2 vitesses). opacity 0 au repos ; Fast ON les
-     révèle en fondu. Leur animation tourne en permanence → le fondu
-     découvre un défilement déjà lancé (pas de départ à l'arrêt) et la
-     désactivation fond sans figer les points. À ultra, ::after est
-     peinte APRÈS l'enfant fill-ultra → les points rapides filent
-     au-dessus du violet pendant que les lents flottent dessous.
+     continue (parallaxe : ::after suit à 0.65x). opacity 0 au repos ;
+     Fast ON les révèle en fondu. Le défilement est piloté en rAF par
+     ui-select.js via --qbd-drift (posée sur le fill) : la vitesse
+     décélère/accélère en douceur (~0.45s), synchrone du fondu — les
+     points ralentissent et s'effacent ENSEMBLE, jamais de saut. À
+     ultra, ::after est peinte APRÈS l'enfant fill-ultra → les points
+     rapides filent au-dessus du violet, les lents flottent dessous.
    Le scintillement vit sur filter:opacity() pour laisser la propriété
    opacity au fondu du toggle. (L'ultracode Claude a ses propres
    règles : grille de points + ripple en canvas.) */
@@ -503,31 +504,26 @@
 		qbd-stars-twinkle 4.6s ease-in-out infinite -1.8s;
 }
 
-/* Couches rapides (Fast) : les points filent de droite à gauche, deux
-   vitesses = parallaxe, révélées/masquées en fondu par is-fast. */
+/* Couches rapides (Fast) : les points filent de droite à gauche
+   (--qbd-drift, rAF ui-select.js), deux vitesses = parallaxe,
+   révélées/masquées en fondu par is-fast. */
 .qbd-effort-pop--codex .qbd-effort-fill::before,
 .qbd-effort-pop--codex .qbd-effort-fill::after {
 	opacity: 0;
 	transition: opacity 0.3s var(--qbd-ease);
-	animation:
-		qbd-stars-drift 1.3s linear infinite,
-		qbd-stars-twinkle 2.4s ease-in-out infinite;
+	background-position: var(--qbd-drift, 0px) 0;
+	animation: qbd-stars-twinkle 2.4s ease-in-out infinite;
 }
 
 .qbd-effort-pop--codex .qbd-effort-fill::after {
 	background-image: var(--qbd-stars-b);
-	animation:
-		qbd-stars-drift 2s linear infinite,
-		qbd-stars-twinkle 3.1s ease-in-out infinite -1.3s;
+	background-position: calc(var(--qbd-drift, 0px) * 0.65) 0;
+	animation: qbd-stars-twinkle 3.1s ease-in-out infinite -1.3s;
 }
 
 .qbd-effort-pop--codex.is-fast .qbd-effort-fill::before,
 .qbd-effort-pop--codex.is-fast .qbd-effort-fill::after {
 	opacity: 1;
-}
-
-@keyframes qbd-stars-drift {
-	to { background-position: -56px 0; }
 }
 
 /* Flottement vertical doux (Fast désactivé) : ±3px, aucun latéral. */
