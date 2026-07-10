@@ -850,6 +850,20 @@
 	overflow: hidden;
 	border: 1px solid var(--background-modifier-border);
 	border-radius: 12px;
+	/* Zone aperçu SANS fond (demande 2026-07-11) : le wallpaper du vault
+	   reste visible derrière le quiz. La chaîne embed → qb-root devient
+	   transparente ; les panneaux qui avaient un fond PROPRE (header,
+	   sidebar, code : background-secondary) ne changent pas, et le
+	   panneau Éditeur — qui héritait du fond du root — récupère
+	   explicitement le sien. Vue builder standalone : inchangée. */
+	background: transparent;
+}
+
+.qbd-ai-editor-embed .qb-root {
+	background: transparent;
+}
+
+.qbd-ai-editor-embed .qb-editor {
 	background: var(--background-primary);
 }
 

@@ -831,6 +831,17 @@ function createAiHandlers(ctx) {
 		const { attachQuizEditorCore } = require("../editor");
 		const prev = embedEditor;
 		const inst = attachQuizEditorCore({}, host, ctx.app, ctx.plugin);
+		// Panneau Éditeur FERMÉ par défaut après génération (demande
+		// 2026-07-11) : ouvert, il révèle immédiatement les réponses.
+		// Questions + Aperçu suffisent pour relire le quiz ; un re-render
+		// conserve les choix de panneaux de l'utilisateur.
+		inst.panels.editor = prev && prev._genId === generationId
+			? prev.panels.editor : false;
+		if (prev && prev._genId === generationId) {
+			inst.panels.sidebar = prev.panels.sidebar;
+			inst.panels.preview = prev.panels.preview;
+			inst.panels.code = prev.panels.code;
+		}
 		inst.buildUI();
 		if (prev && prev._genId === generationId) {
 			// Re-render de la page → reprendre l'édition en cours, en place.
