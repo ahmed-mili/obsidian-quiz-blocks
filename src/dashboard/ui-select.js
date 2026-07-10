@@ -630,8 +630,8 @@ function openEffortSlider(anchorEl, opts) {
 		return hide;
 	}
 
-	// ── En-tête + échelle (claude uniquement — codex n'a que la rangée
-	// slider + éclair Fast, sans titre « Advanced ») ──
+	// ── En-tête + échelle (claude uniquement — codex a sa propre rangée
+	// d'en-tête réduite à l'éclair Fast, sans titre « Advanced ») ──
 	let valueEl = null;
 	if (variant === "claude") {
 		const head = menuEl.createDiv({ cls: "qbd-effort-pop-head" });
@@ -656,9 +656,13 @@ function openEffortSlider(anchorEl, opts) {
 		scale.createSpan({ text: "Plus intelligent" });
 	}
 
-	// ── Slider discret (codex : sur une rangée avec l'éclair Fast) ──
-	const sliderHost = variant === "codex" ? menuEl.createDiv({ cls: "qbd-effort-pop-row" }) : menuEl;
-	const slider = sliderHost.createDiv({ cls: "qbd-effort-slider" });
+	// ── Slider discret (codex : l'éclair Fast vit dans une rangée
+	// d'en-tête AU-DESSUS, aligné à droite — référence 2026-07-10 —,
+	// le slider occupe seul sa ligne, pleine largeur) ──
+	const zapRow = (variant === "codex" && opts.fast)
+		? menuEl.createDiv({ cls: "qbd-effort-pop-zaprow" })
+		: null;
+	const slider = menuEl.createDiv({ cls: "qbd-effort-slider" });
 	slider.tabIndex = 0;
 	slider.setAttribute("role", "slider");
 	slider.setAttribute("aria-label", "Effort");
@@ -697,8 +701,8 @@ function openEffortSlider(anchorEl, opts) {
 	// ── Éclair Fast (codex) : VRAI toggle du service tier « priority »
 	// (1.5x speed, more usage), persisté via opts.fast.onToggle. Le tooltip
 	// reste au survol ; absent si le modèle n'expose pas le tier Fast. ──
-	if (variant === "codex" && opts.fast) {
-		const zap = sliderHost.createEl("button", { cls: "qbd-effort-fast qbd-effort-pop-zap" });
+	if (zapRow) {
+		const zap = zapRow.createEl("button", { cls: "qbd-effort-fast qbd-effort-pop-zap" });
 		zap.type = "button";
 		zap.setAttribute("aria-label", "Fast (1.5x speed)");
 		obsidian.setIcon(zap, "zap");

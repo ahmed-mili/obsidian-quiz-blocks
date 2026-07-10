@@ -130,16 +130,14 @@
 	.qbd-effort-pop-value-text.is-out { display: none; }
 }
 
-/* Rangée codex : slider (flex) + éclair Fast à droite, sans en-tête */
-.qbd-effort-pop-row {
+/* Rangée d'en-tête codex : l'éclair Fast seul, AU-DESSUS du slider,
+   aligné à droite (référence 2026-07-10 : bord droit de l'icône ~3px en
+   retrait du bord droit de la piste → le bouton, qui a 5px de chrome
+   autour de son icône 14px, déborde de 2px). */
+.qbd-effort-pop-zaprow {
 	display: flex;
-	align-items: center;
-	gap: 8px;
-}
-
-.qbd-effort-pop-row .qbd-effort-slider {
-	flex: 1;
-	min-width: 0;
+	justify-content: flex-end;
+	margin: 0 -2px 2px 0;
 }
 
 /* Éclair Fast : VRAI toggle (service tier priority). Reset du chrome
@@ -150,8 +148,8 @@
 	display: inline-flex;
 	align-items: center;
 	justify-content: center;
-	width: 26px;
-	height: 26px;
+	width: 24px;
+	height: 24px;
 	padding: 0;
 	flex-shrink: 0;
 	background: transparent !important;
@@ -160,6 +158,12 @@
 	border-radius: 7px;
 	color: var(--text-muted);
 	cursor: pointer;
+}
+
+/* Icône ≈ 0.58 × la hauteur de piste sur la référence → 14px pour 24px */
+.qbd-effort-fast svg {
+	width: 14px;
+	height: 14px;
 }
 
 .qbd-effort-fast:hover {
@@ -456,17 +460,26 @@
 }
 
 /* ── Champ d'étoiles ANIMÉ — UNIQUEMENT au niveau ultra/ultracode
-   (référence : aucun violet, étoile ni animation en dessous).
-   Deux régimes côté Codex :
-   — Fast DÉSACTIVÉ : quasi statique — les points flottent LENTEMENT de
-     haut en bas (bob) et scintillent, aucun défilement latéral ;
-   — Fast ACTIVÉ : dérive horizontale continue (sur le fill bleu à tous
-     les niveaux, et sur l'overlay violet à ultra).
-   (L'ultracode Claude a ses propres règles : grille de points + ripple.) */
+   (référence : aucun violet, étoile ni animation en dessous), plus le
+   régime Fast à tout niveau. DEUX familles de couches ; le toggle Fast
+   est un pur FONDU (transition opacity .3s) — jamais de saut :
+   — Couches LENTES (fill-ultra::before/::after, visibles à ultra) :
+     les points flottent de haut en bas (bob) et scintillent, aucun
+     défilement latéral. Elles ne changent PAS quand Fast se toggle.
+   — Couches RAPIDES (fill::before/::after) : dérive horizontale
+     continue (parallaxe 2 vitesses). opacity 0 au repos ; Fast ON les
+     révèle en fondu. Leur animation tourne en permanence → le fondu
+     découvre un défilement déjà lancé (pas de départ à l'arrêt) et la
+     désactivation fond sans figer les points. À ultra, ::after est
+     peinte APRÈS l'enfant fill-ultra → les points rapides filent
+     au-dessus du violet pendant que les lents flottent dessous.
+   Le scintillement vit sur filter:opacity() pour laisser la propriété
+   opacity au fondu du toggle. (L'ultracode Claude a ses propres
+   règles : grille de points + ripple en canvas.) */
 .qbd-effort-pop--codex.is-ultra .qbd-effort-fill-ultra::before,
 .qbd-effort-pop--codex.is-ultra .qbd-effort-fill-ultra::after,
-.qbd-effort-pop--codex.is-fast .qbd-effort-fill::before,
-.qbd-effort-pop--codex.is-fast .qbd-effort-fill::after {
+.qbd-effort-pop--codex .qbd-effort-fill::before,
+.qbd-effort-pop--codex .qbd-effort-fill::after {
 	content: "";
 	position: absolute;
 	inset: 0;
@@ -474,35 +487,43 @@
 	background-image: var(--qbd-stars);
 	background-size: 56px 100%;
 	background-repeat: repeat-x;
+}
+
+/* Couches lentes (ultra) : bob + twinkle, opacité pleine en continu. */
+.qbd-effort-pop--codex.is-ultra .qbd-effort-fill-ultra::before {
 	animation:
 		qbd-stars-bob 6s ease-in-out infinite,
 		qbd-stars-twinkle 3.8s ease-in-out infinite;
 }
 
-.qbd-effort-pop--codex.is-ultra .qbd-effort-fill-ultra::after,
-.qbd-effort-pop--codex.is-fast .qbd-effort-fill::after {
+.qbd-effort-pop--codex.is-ultra .qbd-effort-fill-ultra::after {
 	background-image: var(--qbd-stars-b);
 	animation:
 		qbd-stars-bob 7.5s ease-in-out infinite -2.4s reverse,
 		qbd-stars-twinkle 4.6s ease-in-out infinite -1.8s;
 }
 
-/* Fast ACTIVÉ → les points filent RAPIDEMENT de droite à gauche
-   (effet vitesse ; deux couches à vitesses différentes = parallaxe,
-   toutes dans le même sens). Fill bleu à tout niveau, overlay violet
-   à ultra. */
-.qbd-effort-pop--codex.is-fast .qbd-effort-fill::before,
-.qbd-effort-pop--codex.is-ultra.is-fast .qbd-effort-fill-ultra::before {
+/* Couches rapides (Fast) : les points filent de droite à gauche, deux
+   vitesses = parallaxe, révélées/masquées en fondu par is-fast. */
+.qbd-effort-pop--codex .qbd-effort-fill::before,
+.qbd-effort-pop--codex .qbd-effort-fill::after {
+	opacity: 0;
+	transition: opacity 0.3s var(--qbd-ease);
 	animation:
 		qbd-stars-drift 1.3s linear infinite,
 		qbd-stars-twinkle 2.4s ease-in-out infinite;
 }
 
-.qbd-effort-pop--codex.is-fast .qbd-effort-fill::after,
-.qbd-effort-pop--codex.is-ultra.is-fast .qbd-effort-fill-ultra::after {
+.qbd-effort-pop--codex .qbd-effort-fill::after {
+	background-image: var(--qbd-stars-b);
 	animation:
 		qbd-stars-drift 2s linear infinite,
 		qbd-stars-twinkle 3.1s ease-in-out infinite -1.3s;
+}
+
+.qbd-effort-pop--codex.is-fast .qbd-effort-fill::before,
+.qbd-effort-pop--codex.is-fast .qbd-effort-fill::after {
+	opacity: 1;
 }
 
 @keyframes qbd-stars-drift {
@@ -515,9 +536,12 @@
 	50% { background-position: 0 3px; }
 }
 
+/* Scintillement sur filter:opacity() — la propriété opacity reste
+   disponible pour le fondu du toggle Fast (une animation écraserait
+   la valeur transitionnée). */
 @keyframes qbd-stars-twinkle {
-	0%, 100% { opacity: 1; }
-	50% { opacity: 0.35; }
+	0%, 100% { filter: opacity(1); }
+	50% { filter: opacity(0.35); }
 }
 
 /* Squish du pouce à chaque changement de niveau (source ChatGPT :
@@ -538,8 +562,8 @@
 	.qbd-effort-fill-ultra { transition: none !important; }
 	.qbd-effort-pop--codex.is-ultra .qbd-effort-fill-ultra::before,
 	.qbd-effort-pop--codex.is-ultra .qbd-effort-fill-ultra::after,
-	.qbd-effort-pop--codex.is-fast .qbd-effort-fill::before,
-	.qbd-effort-pop--codex.is-fast .qbd-effort-fill::after,
+	.qbd-effort-pop--codex .qbd-effort-fill::before,
+	.qbd-effort-pop--codex .qbd-effort-fill::after,
 	.qbd-effort-thumb.is-squish { animation: none !important; }
 	/* Mosaïque canvas claude : effort-canvas.js détecte reduced-motion
 	   lui-même (frame statique, pas de boucle rAF). */
