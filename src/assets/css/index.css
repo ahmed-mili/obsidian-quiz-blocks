@@ -26,6 +26,7 @@
 @import url('./components/settings-code.css');
 @import url('./components/ui-select.css');
 @import url('./components/effort-slider.css');
+@import url('./components/voice-input.css');
 
 /* Pages */
 @import url('./pages/results.css');
