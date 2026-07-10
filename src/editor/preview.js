@@ -153,6 +153,11 @@ module.exports = function createPreviewHandlers(ctx) {
 			const explainEl = card.createDiv({ cls: "quiz-explain good" });
 			explainEl.innerHTML = _resolveImagesInHtml(md2html(q.explain));
 		}
+
+		// LaTeX $...$ / $$...$$ : même rendu MathJax natif que le moteur —
+		// l'aperçu doit être fidèle au quiz final (titre, énoncé, options,
+		// explication).
+		require("../engine/mathjax").mathifyElement(card);
 	}
 
 	function _resolveImagesInHtml(html) {

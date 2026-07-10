@@ -1,5 +1,7 @@
 'use strict';
 
+const { mathifyElement } = require("./mathjax");
+
 module.exports = function createCardRenderers(ctx) {
 	// Variables locales
 	let __quizSubmitSlideSignature = "";
@@ -279,6 +281,8 @@ module.exports = function createCardRenderers(ctx) {
 			const newNode = tmp.firstElementChild;
 			if (!newNode) return;
 			oldNode.replaceWith(newNode);
+			// LaTeX des slides submit/results (récap des réponses).
+			mathifyElement(newNode);
 			ctx.viewport.observeTrackItemInAllSlidesResizeObserver(newNode);
 			binder(newNode);
 		};

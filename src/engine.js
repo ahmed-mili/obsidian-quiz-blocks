@@ -18,6 +18,7 @@ const createHintHandlers = require("./engine/hint");
 const createQuestionHandlers = require("./engine/questions");
 const createTextOnlyHandlers = require("./engine/text-only");
 const createResultsSaver = require("./engine/results-save");
+const { mathifyElement } = require("./engine/mathjax");
 
 async function renderInteractiveQuiz(context) {
 
@@ -662,6 +663,9 @@ function refreshQuestionSlide(qi, { syncHeight = true } = {}) {
 	if (!newItem) return null;
 
 	oldItem.replaceWith(newItem);
+	// LaTeX $...$ / $$...$$ : rendu MathJax natif Obsidian (fire-and-forget
+	// — les ResizeObservers recalent la hauteur quand la formule arrive).
+	mathifyElement(newItem);
 	ctx.viewport.applyTrackGeometry({ refreshWidth: false });
 	ctx.resources.bindQuizResourceButtons(newItem);
 	ctx.warming.bindTrackItemImages(newItem, qi);
@@ -746,6 +750,9 @@ function render() {
     }).join("");
 
     container.innerHTML = `${examChromeHtml}${ctx.cards.navHtml()}${modeToggleHtml}<div class="quiz-track-viewport" data-quiz-height-ready="0"><div class="quiz-track">${slidesHtml}</div></div>`;
+    // LaTeX $...$ / $$...$$ de toutes les slides (prompts, options,
+    // explications, résultats) : rendu MathJax natif Obsidian.
+    mathifyElement(container);
     __quizSubmitSlideSignature = ctx.state.getSubmitSlideSignature();
     __quizResultsSlideSignature = ctx.state.getResultsSlideSignature();
 

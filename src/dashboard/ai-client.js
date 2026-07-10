@@ -84,6 +84,8 @@ function createAiClient(plugin) {
 	- answer: réponse attendue (pour texte libre)
 	- learn: un paragraphe de leçon explicative qui enseigne le concept avant la question (optionnel mais recommandé pour les quiz éducatifs)
 
+	MATHÉMATIQUES : toute expression mathématique (formule, fonction, équation, intégrale, fraction, exposant, symbole grec…) s'écrit OBLIGATOIREMENT en LaTeX délimité par des dollars, comme dans Obsidian : $f(x) = x^3$ en ligne, $$\\int_0^2 2x\\,dx$$ pour une formule isolée. Jamais de pseudo-notation type f(x) = x^3 ou ∫ de 0 à 2 hors des dollars. Cela vaut pour title, prompt, options, answer, learn et explain.
+
 	Le dernier élément du tableau peut être un objet de configuration de mode (sans champ prompt) :
 	  - { mode: "exam", examDurationMinutes: 10, examAutoSubmit: true, examShowTimer: true } pour un mode examen chronométré
 	  - { mode: "learn", examDurationMinutes: 10, examAutoSubmit: true, examShowTimer: true } pour un mode apprentissage avec transition vers examen
