@@ -284,7 +284,8 @@
 .qbd-effort-pop--claude {
 	--qbd-track-h: 22px; /* hauteur du handoff — NE JAMAIS l'augmenter */
 	--qbd-track-r: 6px;
-	--qbd-edge: 8px; /* demi-course → formule du handoff (x−8)/(W−16) */
+	--qbd-edge: 10px; /* ~demi-largeur du pouce 18.75px → points de niveau
+	                     alignés sur les centres du pouce (canvas) */
 }
 
 .qbd-effort-pop--claude .qbd-effort-slider {
@@ -343,16 +344,17 @@
 	background: var(--qbd-ultra);
 }
 
-/* Pouce (handoff amendé par Ahmed 2026-07-10) : 15px de large, PLEINE
-   hauteur de piste (l'inset vertical 2px du handoff est retiré), rayon 5,
-   ombre 0 1px 3px. Piloté en transform par effort-canvas.js (formule
-   1 + v·(W−17), tween .15s JS — pas de transition CSS, le canvas doit
-   rester synchrone du pouce). */
+/* Pouce (handoff amendé par Ahmed 2026-07-10) : 17.8125px de large
+   (15px du handoff +25 % puis −5 %) et PLEINE hauteur de piste (inset
+   vertical retiré), rayon 5, ombre 0 1px 3px. Piloté en transform par
+   effort-canvas.js (formule 1 + v·(W−thumbW−2), thumbW synchronisé à
+   17.8125 là-bas ; tween .15s JS — pas de transition CSS, le canvas
+   doit rester synchrone du pouce). */
 .qbd-effort-pop--claude .qbd-effort-thumb {
 	top: 0;
 	bottom: 0;
 	left: 0;
-	width: 15px;
+	width: 17.8125px;
 	height: auto;
 	border-radius: 5px;
 	background: var(--text-normal); /* #f4f4f6 du handoff, en themed */

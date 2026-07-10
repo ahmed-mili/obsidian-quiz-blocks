@@ -30,7 +30,7 @@ function hexRGB(hex) {
 /*
  * createEffortTrackFx(trackEl, thumbEl, { accent, speed, value }) →
  *   { setValue(v, animate?), setUltra(on), replay(), destroy() }
- * Pilote le pouce en transform (formule du handoff : 1 + v·(W−17)),
+ * Pilote le pouce en transform (formule du handoff : 1 + v·(W−thumbW−2)),
  * avec un tween de 150 ms entre niveaux (le handoff suit le pointeur
  * en continu ; ici les niveaux sont discrets — la durée vient de la
  * source Claude Code : transition .15s). Dessine la mosaïque quand le
@@ -77,7 +77,7 @@ function createEffortTrackFx(trackEl, thumbEl, opts) {
 		const dpr = window.devicePixelRatio || 1;
 		const W = trackEl.clientWidth, H = trackEl.clientHeight;
 		if (!W) return;
-		const thumbW = 15;
+		const thumbW = 17.8125; // 15px du handoff +25 % puis −5 % (amendements Ahmed)
 		const thumbX = 1 + shown * (W - thumbW - 2);
 		thumbEl.style.transform = "translateX(" + thumbX + "px)";
 		if (!ultra) return;

@@ -681,8 +681,8 @@ function openEffortSlider(anchorEl, opts) {
 		dots.push(dot);
 	}
 	// Pouce claude : dans la PISTE (pas le rail) — piloté en transform par
-	// effort-canvas.js (formule du handoff : 1 + v·(W−17)) ; codex : rail
-	// + left % (inchangé).
+	// effort-canvas.js (formule du handoff : 1 + v·(W−thumbW−2)) ; codex :
+	// rail + left % (inchangé).
 	const thumb = (variant === "claude" ? track : rail).createDiv({ cls: "qbd-effort-thumb" });
 	// Piste claude : mosaïque de pixels animés en canvas (handoff validé
 	// « design_handoff_effort_slider ») — visible au niveau ultracode.
