@@ -748,7 +748,7 @@
 	border: none;
 	border-radius: 9px;
 	background: var(--interactive-accent) !important;
-	color: #fff;
+	color: var(--text-on-accent);
 	box-shadow: none !important;
 	cursor: pointer;
 	flex-shrink: 0;
@@ -781,13 +781,12 @@
 	display: inline-flex;
 	align-items: center;
 	justify-content: center;
-	color: #fff;
+	color: inherit;
 }
 
 .qbd-ai-composer-send-icon svg {
 	width: 17px;
 	height: 17px;
-	color: #fff;
 }
 
 @keyframes qbd-send-in {
@@ -798,12 +797,15 @@
 /* Bouton STOP pendant la génération (référence Claude Code : fond GRIS
    NEUTRE discret — pas teinté par l'accent —, petit carré en contour
    clair, tooltip « Arrêter  Esc » au survol). */
+/* Theme-aware (2026-07-11) : fond/carré basés sur --text-normal, pas
+   sur du blanc fixe — en thème clair le carré blanc disparaissait. */
 .qbd-ai-composer-send.is-stop {
-	background: rgba(255, 255, 255, 0.07) !important;
+	background: color-mix(in srgb, var(--text-normal) 8%, transparent) !important;
+	color: var(--text-normal);
 }
 
 .qbd-ai-composer-send.is-stop:hover {
-	background: rgba(255, 255, 255, 0.12) !important;
+	background: color-mix(in srgb, var(--text-normal) 13%, transparent) !important;
 }
 
 /* Carré du stop : dessiné en CSS — GRAND (14px), trait épais (2.5px),
