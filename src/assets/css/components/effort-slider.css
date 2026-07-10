@@ -282,14 +282,16 @@
    #3f3f3e, mosaïque canvas au niveau ultracode, pouce 15px piloté
    en transform, points de niveau fins (ultracode toujours violet). ── */
 .qbd-effort-pop--claude {
-	--qbd-track-h: 22px; /* hauteur du handoff — NE JAMAIS l'augmenter */
+	--qbd-track-h: 21.12px; /* 22px du handoff −4 % (amendement Ahmed) —
+	                           NE JAMAIS l'augmenter ; la grille canvas
+	                           garde ses 5 rangées (floor(21.12/4)) */
 	--qbd-track-r: 6px;
 	--qbd-edge: 10px; /* ~demi-largeur du pouce 18.75px → points de niveau
 	                     alignés sur les centres du pouce (canvas) */
 }
 
 .qbd-effort-pop--claude .qbd-effort-slider {
-	height: 22px;
+	height: var(--qbd-track-h);
 	margin-top: 0; /* l'échelle porte les 8px du handoff */
 }
 
@@ -344,17 +346,17 @@
 	background: var(--qbd-ultra);
 }
 
-/* Pouce (handoff amendé par Ahmed 2026-07-10) : 17.8125px de large
-   (15px du handoff +25 % puis −5 %) et PLEINE hauteur de piste (inset
+/* Pouce (handoff amendé par Ahmed 2026-07-10) : 17.1px de large
+   (15px du handoff +25 %, −5 %, −4 %) et PLEINE hauteur de piste (inset
    vertical retiré), rayon 5, ombre 0 1px 3px. Piloté en transform par
    effort-canvas.js (formule 1 + v·(W−thumbW−2), thumbW synchronisé à
-   17.8125 là-bas ; tween .15s JS — pas de transition CSS, le canvas
+   17.1 là-bas ; tween .15s JS — pas de transition CSS, le canvas
    doit rester synchrone du pouce). */
 .qbd-effort-pop--claude .qbd-effort-thumb {
 	top: 0;
 	bottom: 0;
 	left: 0;
-	width: 17.8125px;
+	width: 17.1px;
 	height: auto;
 	border-radius: 5px;
 	background: var(--text-normal); /* #f4f4f6 du handoff, en themed */

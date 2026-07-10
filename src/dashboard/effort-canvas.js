@@ -77,7 +77,7 @@ function createEffortTrackFx(trackEl, thumbEl, opts) {
 		const dpr = window.devicePixelRatio || 1;
 		const W = trackEl.clientWidth, H = trackEl.clientHeight;
 		if (!W) return;
-		const thumbW = 17.8125; // 15px du handoff +25 % puis −5 % (amendements Ahmed)
+		const thumbW = 17.1; // 15px du handoff +25 %, −5 %, −4 % (amendements Ahmed)
 		const thumbX = 1 + shown * (W - thumbW - 2);
 		thumbEl.style.transform = "translateX(" + thumbX + "px)";
 		if (!ultra) return;
@@ -171,12 +171,13 @@ function createEffortTrackFx(trackEl, thumbEl, opts) {
 				}
 
 				// Enveloppe de visibilité : 100% sur la moitié droite,
-				// fondu de 50%→4%, invisible sur les 4% gauche (amendé par
-				// Ahmed 2026-07-10 : le 1/10 du handoff était trop agressif)
+				// fondu de 50%→2%, invisible sur les 2% gauche (amendé par
+				// Ahmed 2026-07-10 : le 1/10 du handoff était trop agressif,
+				// affiné 6 % → 4 % → 2 %)
 				let env;
 				if (fx >= 0.5) env = 1;
-				else if (fx <= 0.04) env = 0;
-				else { const q = (fx - 0.04) / 0.46; env = q * q * (3 - 2 * q); }
+				else if (fx <= 0.02) env = 0;
+				else { const q = (fx - 0.02) / 0.48; env = q * q * (3 - 2 * q); }
 				if (env <= 0.01) continue;
 				if (!filled) lit *= 0.1;                     // à droite du curseur : quasi éteint
 
