@@ -49,21 +49,16 @@
 	--qbd-ease: cubic-bezier(0.23, 1, 0.32, 1);
 }
 
-/* Panneau claude (handoff validé, au pixel) : 232px, fond #1c1c1f
-   SOLIDE (pas de glass), bordure blanche 9 %, rayon 13, ombre
-   profonde, police système. */
+/* Panneau claude : GÉOMÉTRIE du handoff (232px, padding 12/14, rayon 13),
+   mais surface/textes aux variables de thème Obsidian (même verre que
+   les autres menus qbd-select-menu) — demande explicite : seule
+   l'ANIMATION (effort-canvas.js) garde ses couleurs validées. */
 .qbd-effort-pop--claude {
 	width: 232px;
 	padding: 12px 12px 14px;
-	background: #1c1c1f;
-	backdrop-filter: none;
-	-webkit-backdrop-filter: none;
-	border: 1px solid rgba(255, 255, 255, 0.09);
 	border-radius: 13px;
-	box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
 	user-select: none;
-	font-family: -apple-system, "SF Pro Text", "Segoe UI", Helvetica, Arial, sans-serif;
-	--qbd-ultra: #a78bfa; /* accent validé du handoff (scope panneau) */
+	--qbd-ultra: #a78bfa; /* violet Ultracode = celui de l'animation */
 }
 
 .qbd-effort-pop--codex  { width: 252px; }
@@ -84,7 +79,7 @@
 	font-size: 13.5px;
 	font-weight: 600;
 	letter-spacing: 0.1px;
-	color: #ececef;
+	color: var(--text-normal);
 }
 
 .qbd-effort-pop-value {
@@ -198,8 +193,8 @@
 	width: 15px;
 	height: 15px;
 	border-radius: 50%;
-	border: 1.3px solid #56565c;
-	color: #8e8e95;
+	border: 1.3px solid color-mix(in srgb, var(--text-muted) 60%, transparent);
+	color: var(--text-muted);
 	font-size: 9.5px;
 	font-weight: 600;
 	line-height: 1;
@@ -208,7 +203,7 @@
 }
 
 .qbd-effort-pop-help:hover {
-	color: #ececef;
+	color: var(--text-normal);
 }
 
 /* ── Échelle « Plus rapide / Plus intelligent » (claude) ──
@@ -220,7 +215,7 @@
 	margin-bottom: 8px;
 	font-size: 12px;
 	font-weight: 500;
-	color: #a5a5ad;
+	color: var(--text-muted);
 }
 
 /* ── Slider discret (structure commune, métriques par variante) ── */
@@ -298,7 +293,9 @@
 }
 
 .qbd-effort-pop--claude .qbd-effort-track {
-	background: #3f3f3e; /* fond de piste du handoff */
+	/* Relation du handoff (piste #3f3f3e ≈ panneau #1c1c1f + 14 % de
+	   clair) reproduite en themed : un cran plus claire que la carte. */
+	background: color-mix(in srgb, var(--text-normal) 14%, transparent);
 	overflow: hidden; /* le pouce vit DANS la piste */
 }
 
@@ -357,7 +354,7 @@
 	width: 15px;
 	height: auto;
 	border-radius: 5px;
-	background: #f4f4f6;
+	background: var(--text-normal); /* #f4f4f6 du handoff, en themed */
 	box-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
 	transform: none;
 	will-change: transform;
