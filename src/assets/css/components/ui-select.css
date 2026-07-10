@@ -108,6 +108,7 @@
 .qbd-select-option {
 	display: flex;
 	align-items: center;
+	justify-content: flex-start; /* Obsidian centre le contenu des <button> par défaut → gouttière de check décalée et libellés désalignés ; on force l'alignement à gauche */
 	gap: 8px;
 	width: 100%;
 	height: auto;          /* le chrome natif d'Obsidian impose une height fixe sur les <button> — sans ça le contenu est écrasé */
@@ -163,16 +164,33 @@
 	flex-shrink: 0;
 }
 
-/* ── Menu d'actions (bouton « + » du composer, etc.) ── */
+/* ── Menu d'actions « + » (façon menu claude.ai : lignes simples,
+   icône mutée + label + accessoire à droite) ── */
+.qbd-action-menu {
+	min-width: 248px;
+}
+
 .qbd-action-menu .qbd-select-option {
-	padding: 7px 10px 7px 8px;
-	gap: 9px;
-	align-items: flex-start;
+	padding: 8px 12px 8px 10px;
+	gap: 10px;
+	align-items: center;
 }
 
 .qbd-action-menu-icon {
 	color: var(--text-muted);
-	margin-top: 1px;
+}
+
+/* Accessoire droite (format, nom de note) — position du raccourci claude.ai */
+.qbd-action-menu-hint {
+	margin-left: auto;
+	padding-left: 16px;
+	font-size: 11px;
+	color: var(--text-faint);
+	flex-shrink: 0;
+	max-width: 150px;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
 }
 
 .qbd-action-menu-icon svg {
@@ -210,5 +228,301 @@
 }
 
 .qbd-select-option--disabled:hover .qbd-action-menu-icon {
+	color: var(--text-muted);
+}
+
+/* ── Menu modèle + effort (façon claude.ai) ── */
+.qbd-model-trigger .qbd-select-label {
+	display: inline-flex;
+	align-items: baseline;
+	gap: 7px;
+}
+
+.qbd-model-trigger-name {
+	font-weight: 600;
+}
+
+.qbd-model-trigger-effort {
+	font-size: 11px;
+	font-weight: 500;
+	color: var(--text-muted);
+}
+
+.qbd-model-menu {
+	gap: 2px;
+	min-width: 250px;
+	max-width: min(330px, calc(100vw - 16px));
+}
+
+.qbd-model-menu .qbd-select-option {
+	align-items: flex-start;
+	white-space: normal;
+}
+
+.qbd-model-option-body {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	min-width: 0;
+}
+
+.qbd-model-option-top {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	flex-wrap: wrap;
+}
+
+.qbd-model-option-badge {
+	font-size: 10px;
+	font-weight: 500;
+	line-height: 1.35;
+	padding: 1px 7px;
+	border-radius: 999px;
+	color: var(--interactive-accent);
+	background: color-mix(in srgb, var(--interactive-accent) 14%, transparent);
+	white-space: nowrap;
+}
+
+.qbd-model-option-desc {
+	font-size: 11px;
+	color: var(--text-muted);
+	line-height: 1.35;
+	white-space: normal;
+}
+
+/* ── Menu modèle avec recherche + liste scrollable (façon app Ollama) ──
+   La barre de recherche reste fixe en haut, la liste défile (hauteur ~7 lignes),
+   l'effort reste fixe en dessous. */
+.qbd-model-menu--searchable {
+	min-width: 260px;
+}
+
+.qbd-model-menu-search {
+	padding: 2px 2px 6px;
+}
+
+.qbd-model-menu-search-input {
+	width: 100%;
+	height: 30px;
+	padding: 0 9px;
+	font-size: 13px;
+	color: var(--text-normal);
+	background-color: var(--background-modifier-form-field);
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 7px;
+	box-shadow: none !important;
+	outline: none;
+}
+
+.qbd-model-menu-search-input:focus {
+	border-color: var(--interactive-accent);
+}
+
+.qbd-model-menu-list {
+	max-height: 260px;
+	overflow-y: auto;
+	display: flex;
+	flex-direction: column;
+	gap: 1px;
+	scrollbar-width: thin;
+}
+
+.qbd-model-menu-empty {
+	padding: 10px 8px;
+	font-size: 12px;
+	color: var(--text-muted);
+	text-align: center;
+}
+
+/* Séparateur entre modèles et footer (Effort / Plus de modèles) */
+.qbd-model-menu-sep {
+	height: 1px;
+	margin: 4px 6px;
+	background: var(--background-modifier-border);
+}
+
+/* Lignes footer : « Effort » (avec valeur + chevron) et « Plus de modèles » */
+.qbd-model-menu-row {
+	align-items: center !important;
+}
+
+.qbd-model-menu-row .qbd-select-option-label {
+	flex: 1;
+}
+
+.qbd-model-menu-row-value {
+	font-size: 11.5px;
+	color: var(--text-muted);
+	margin-left: auto;
+}
+
+.qbd-model-menu-row-chevron {
+	display: inline-flex;
+	align-items: center;
+	color: var(--text-faint);
+	flex-shrink: 0;
+	transition: transform 0.14s ease;
+}
+
+/* Lignes « Effort » / « Plus de modèles » surlignées quand leur flyout est ouvert */
+.qbd-effort-row.is-open,
+.qbd-more-row.is-open {
+	background: var(--background-modifier-hover) !important;
+}
+
+/* Flyout « Plus de modèles » : réutilise la surface .qbd-select-menu, liste le
+   reste des modèles (chacun sélectionnable comme dans la liste principale). */
+.qbd-more-flyout {
+	min-width: 200px;
+	max-width: min(320px, calc(100vw - 16px));
+	padding: 4px;
+	gap: 1px;
+}
+
+/* ── Flyout latéral d'effort (façon claude.ai) ──
+   Portalé au <body>, réutilise la surface .qbd-select-menu. S'ouvre à droite
+   du menu modèle au survol de la ligne « Effort ». Niveaux d'effort de Claude
+   Code, le plus élevé (ultracode) en bas. */
+.qbd-effort-flyout {
+	min-width: 244px;
+	max-width: min(320px, calc(100vw - 16px));
+	padding: 8px;
+	gap: 2px;
+}
+
+/* Texte descriptif en tête (comme le picker /effort) */
+.qbd-effort-flyout-head {
+	padding: 2px 8px 8px;
+	font-size: 11px;
+	line-height: 1.4;
+	color: var(--text-muted);
+	white-space: normal;
+	border-bottom: 1px solid var(--background-modifier-border);
+	margin-bottom: 4px;
+}
+
+.qbd-effort-option {
+	align-items: flex-start;
+	white-space: normal;
+}
+
+.qbd-effort-option-body {
+	display: flex;
+	flex-direction: column;
+	gap: 1px;
+	min-width: 0;
+}
+
+.qbd-effort-option-top {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+
+.qbd-effort-option-sub {
+	font-size: 10.5px;
+	color: var(--text-faint);
+	line-height: 1.3;
+	white-space: normal;
+}
+
+/* Badge « Par défaut » sur l'effort par défaut (high) */
+.qbd-effort-badge {
+	font-size: 10px;
+	font-weight: 500;
+	line-height: 1.35;
+	padding: 1px 6px;
+	border-radius: 999px;
+	color: var(--text-muted);
+	background: var(--background-modifier-border);
+	white-space: nowrap;
+}
+
+/* ── Couleurs par niveau : palette EXACTE que voit l'utilisateur dans le picker
+   /effort de Claude Code. Son thème Claude Code est « dark-ansi » → chaque
+   niveau prend une couleur ANSI de son terminal, dont le colorScheme est
+   « Catppuccin Mocha ». Valeurs figées ici depuis ce scheme (le picker YAML
+   du binaire mappe low=warning=yellowBright, medium=success=greenBright,
+   high=permission=blueBright, xhigh=magentaBright, max=rainbow-ansi ;
+   ultracode=violet-ripple, un RGB fixe hors thème → gardé tel quel).
+   Comme dans le picker, la couleur n'apparaît qu'à l'actif/survol (neutre au
+   repos) ; ultracode reste teinté en permanence. */
+.qbd-effort-option--low       { --qbd-effort-color: rgb(249, 226, 175); } /* Catppuccin yellow */
+.qbd-effort-option--medium    { --qbd-effort-color: rgb(166, 227, 161); } /* Catppuccin green */
+.qbd-effort-option--high      { --qbd-effort-color: rgb(137, 180, 250); } /* Catppuccin blue */
+.qbd-effort-option--xhigh     { --qbd-effort-color: rgb(245, 194, 231); } /* Catppuccin pink (magenta) */
+.qbd-effort-option--max       { --qbd-effort-color: rgb(243, 139, 168); } /* Catppuccin red (check) */
+.qbd-effort-option--ultracode,
+.qbd-effort-option--ultra     { --qbd-effort-color: #a684ff; } /* tier spécial (Claude ultracode / Codex ultra) */
+
+/* Révélé au survol ou à la sélection (le picker met la couleur en gras une
+   fois le niveau atteint ; au repos les niveaux normaux restent neutres). */
+.qbd-effort-option:hover .qbd-select-option-label,
+.qbd-effort-option.is-active .qbd-select-option-label {
+	color: var(--qbd-effort-color);
+}
+
+.qbd-effort-option.is-active .qbd-select-check {
+	color: var(--qbd-effort-color);
+}
+
+/* Tier spécial (ultracode / ultra) : violet en permanence (repos inclus). */
+.qbd-effort-option--ultracode .qbd-select-option-label,
+.qbd-effort-option--ultra .qbd-select-option-label {
+	color: var(--qbd-effort-color);
+	font-weight: 600;
+}
+
+.qbd-effort-option--ultracode .qbd-effort-option-sub,
+.qbd-effort-option--ultra .qbd-effort-option-sub {
+	color: color-mix(in srgb, #a684ff 60%, var(--text-faint));
+}
+
+.qbd-effort-option--ultracode .qbd-select-check,
+.qbd-effort-option--ultra .qbd-select-check {
+	color: var(--qbd-effort-color);
+}
+
+/* max : arc-en-ciel animé (rainbow-animated), teintes ANSI Catppuccin
+   (red, redBright, yellow, green, cyan, blue, magenta). Révélé seulement au
+   survol/actif. xhigh (magentaBright) reste uni : en dark-ansi son shimmer
+   pointe sur la même couleur, donc pas d'animation perçue → géré par la règle
+   générique ci-dessus. */
+.qbd-effort-option--max:hover .qbd-select-option-label,
+.qbd-effort-option--max.is-active .qbd-select-option-label {
+	background: linear-gradient(90deg, rgb(243, 139, 168), rgb(243, 139, 168), rgb(249, 226, 175), rgb(166, 227, 161), rgb(148, 226, 213), rgb(137, 180, 250), rgb(245, 194, 231), rgb(243, 139, 168));
+	background-size: 200% auto;
+	-webkit-background-clip: text;
+	background-clip: text;
+	-webkit-text-fill-color: transparent;
+	color: transparent;
+	animation: qbd-effort-rainbow 3.2s linear infinite;
+}
+
+@keyframes qbd-effort-rainbow {
+	to { background-position: -200% center; }
+}
+
+/* Accessibilité : pas d'animation si l'utilisateur la refuse (dégradé figé). */
+@media (prefers-reduced-motion: reduce) {
+	.qbd-effort-option--max:hover .qbd-select-option-label,
+	.qbd-effort-option--max.is-active .qbd-select-option-label {
+		animation: none;
+	}
+}
+
+.qbd-model-menu-row-chevron svg,
+.qbd-model-menu-back .qbd-select-check svg {
+	width: 14px;
+	height: 14px;
+}
+
+/* En-tête « retour » du drill-in Effort */
+.qbd-model-menu-back {
+	font-weight: 600;
+}
+
+.qbd-model-menu-back .qbd-select-check {
 	color: var(--text-muted);
 }

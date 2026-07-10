@@ -4,7 +4,10 @@
 
 .qbd-ai-layout {
 	display: grid;
-	grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+	/* Formulaire compact à gauche, aperçu large à droite : la zone
+	   d'aperçu (« Le quiz apparaîtra ici ») reçoit l'essentiel de la
+	   largeur, le formulaire ne garde que ce qu'il lui faut. */
+	grid-template-columns: minmax(0, 480px) minmax(0, 1fr);
 	gap: 24px;
 	height: 100%;
 	overflow-y: auto;
@@ -16,6 +19,10 @@
 	display: flex;
 	flex-direction: column;
 	gap: 16px;
+	/* Ne pas étirer le formulaire sur toute la hauteur : il reste
+	   collé en haut, à la hauteur de son contenu (plus de grand vide
+	   sous le formulaire). L'aperçu, lui, occupe toute la hauteur. */
+	align-self: start;
 }
 
 /* ── Page header ── */
@@ -108,6 +115,198 @@
 	color: var(--text-normal);
 }
 
+.qbd-provider-logo--openai {
+	color: var(--text-normal);
+}
+
+/* Icône à droite d'un modèle dans le menu (façon app Ollama) : nuage = cloud,
+   téléchargement = local non installé, aucune = local installé. Calée à droite
+   de la ligne, alignée sur le nom. */
+.qbd-model-option-icon {
+	margin-left: auto;
+	padding-left: 14px;
+	display: inline-flex;
+	align-items: center;
+	color: var(--text-faint);
+	flex-shrink: 0;
+}
+
+.qbd-model-option-icon svg {
+	width: 15px;
+	height: 15px;
+}
+
+/* ── Gestionnaire de modèles Ollama (réglages) : liste réordonnable ── */
+.qbd-model-manager {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	width: 100%;
+	margin-top: 8px;
+}
+
+.qbd-model-manager-row {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 6px 8px;
+	background-color: var(--background-modifier-form-field);
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 6px;
+	cursor: grab;
+}
+
+.qbd-model-manager-row.is-dragging {
+	opacity: 0.4;
+}
+
+.qbd-model-manager-row.is-drop-target {
+	border-color: var(--interactive-accent);
+}
+
+.qbd-model-manager-handle {
+	display: inline-flex;
+	align-items: center;
+	color: var(--text-faint);
+	cursor: grab;
+}
+
+.qbd-model-manager-handle svg,
+.qbd-model-manager-icon svg {
+	width: 15px;
+	height: 15px;
+}
+
+.qbd-model-manager-icon {
+	display: inline-flex;
+	align-items: center;
+	color: var(--text-muted);
+}
+
+.qbd-model-manager-label {
+	flex: 1;
+	font-size: 13px;
+	color: var(--text-normal);
+}
+
+.qbd-model-manager-remove {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	padding: 2px;
+	background: transparent !important;
+	border: none;
+	box-shadow: none !important;
+	color: var(--text-faint);
+	cursor: pointer;
+}
+
+.qbd-model-manager-remove:hover {
+	color: var(--text-error);
+}
+
+.qbd-model-manager-remove svg {
+	width: 14px;
+	height: 14px;
+}
+
+.qbd-model-manager-sep {
+	margin: 6px 0 2px;
+	font-size: 11px;
+	font-weight: 600;
+	text-transform: uppercase;
+	letter-spacing: 0.04em;
+	color: var(--text-faint);
+}
+
+.qbd-model-manager-add {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 6px;
+	margin-top: 8px;
+}
+
+.qbd-model-manager-add-label {
+	font-size: 12px;
+	color: var(--text-muted);
+}
+
+.qbd-model-manager-chip {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	padding: 3px 8px !important;
+	font-size: 12px;
+	background-color: var(--background-modifier-form-field) !important;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 999px;
+	box-shadow: none !important;
+	color: var(--text-normal);
+	cursor: pointer;
+}
+
+.qbd-model-manager-chip:hover {
+	background-color: var(--background-modifier-hover) !important;
+	border-color: var(--interactive-accent);
+}
+
+.qbd-model-manager-chip-icon {
+	display: inline-flex;
+	align-items: center;
+}
+
+.qbd-model-manager-chip-icon svg {
+	width: 13px;
+	height: 13px;
+}
+
+.qbd-model-manager-note {
+	margin-top: 6px;
+	font-size: 12px;
+	color: var(--text-muted);
+}
+
+.qbd-model-manager-manual {
+	display: flex;
+	gap: 6px;
+	align-items: center;
+	margin-top: 8px;
+}
+
+.qbd-model-manager-input {
+	flex: 1;
+	height: 28px;
+	padding: 0 8px;
+	font-size: 13px;
+	color: var(--text-normal);
+	background-color: var(--background-modifier-form-field);
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 6px;
+	box-shadow: none !important;
+}
+
+.qbd-model-manager-input:focus {
+	border-color: var(--interactive-accent);
+	outline: none;
+}
+
+.qbd-model-manager-manual-btn {
+	padding: 4px 12px !important;
+	font-size: 12px;
+	background-color: var(--background-modifier-form-field) !important;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 6px;
+	box-shadow: none !important;
+	color: var(--text-normal);
+	cursor: pointer;
+}
+
+.qbd-model-manager-manual-btn:hover {
+	background-color: var(--background-modifier-hover) !important;
+	border-color: var(--interactive-accent);
+}
+
 /* Trigger : logo + nom + dot */
 .qbd-select-label .qbd-provider-logo {
 	margin-right: 7px;
@@ -150,6 +349,14 @@
 .qbd-select-option .qbd-provider-logo {
 	margin-top: 3px;
 	align-self: flex-start;
+}
+
+/* Coche de l'option active : alignée en haut sur le logo + le nom (1re ligne),
+   pas centrée verticalement sur les deux lignes (name + sub) — sinon elle
+   « tombe » entre le nom et le sous-titre. */
+.qbd-select-option:has(.qbd-provider-option-body) .qbd-select-check {
+	align-self: flex-start;
+	margin-top: 4px;
 }
 
 .qbd-select-option .qbd-status-dot {
@@ -343,6 +550,10 @@
 	transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
+.qbd-ai-composer:hover:not(.qbd-ai-composer--dragover) {
+	border-color: var(--interactive-accent);
+}
+
 .qbd-ai-composer:focus-within {
 	border-color: var(--interactive-accent);
 	box-shadow: 0 0 0 2px color-mix(in srgb, var(--interactive-accent) 16%, transparent);
@@ -381,32 +592,125 @@
 	justify-content: space-between;
 }
 
-/* Bouton « + » — ajouter images / note active */
+/* Bouton « + » — ajouter images / note active.
+   Ghost button (quiet icon button) façon claude.ai : au repos juste
+   l'icône, aucun fond ni bordure. Le fond arrondi (carré arrondi)
+   n'apparaît qu'au survol — on ne « voit » le bouton qu'à ce moment. */
 .qbd-ai-composer-add {
 	display: inline-flex;
 	align-items: center;
 	justify-content: center;
-	width: 30px;
-	height: 30px;
+	width: 32px;
+	height: 32px;
 	padding: 0;
-	border-radius: 50%;
+	border-radius: 9px;
 	background: transparent !important;
-	border: 1px solid var(--background-modifier-border);
+	border: none;
 	box-shadow: none !important;
 	color: var(--text-muted);
 	cursor: pointer;
-	transition: border-color 0.14s ease, color 0.14s ease, background 0.14s ease;
+	flex-shrink: 0;
+	transition: color 0.14s ease, background 0.14s ease;
 }
 
 .qbd-ai-composer-add:hover {
-	border-color: var(--interactive-accent);
-	color: var(--interactive-accent);
-	background: color-mix(in srgb, var(--interactive-accent) 8%, transparent) !important;
+	color: var(--text-normal);
+	background: var(--background-modifier-hover) !important;
 }
 
 .qbd-ai-composer-add svg {
 	width: 16px;
 	height: 16px;
+}
+
+/* Groupe droite du pied : modèle + effort puis bouton d'envoi. */
+.qbd-ai-composer-tools {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	margin-left: auto;
+	min-width: 0;
+}
+
+/* Sélecteur modèle + effort dans le pied : look « texte » subtil façon
+   claude.ai (« Fable 5 Max ⌄ »), pas le look champ bordé de la carte. */
+.qbd-ai-composer-tools .qbd-select {
+	min-height: 30px;
+	padding: 4px 8px;
+	background: transparent !important;
+	border: 1px solid transparent;
+	border-radius: 8px;
+	font-size: 12px;
+}
+
+.qbd-ai-composer-tools .qbd-select:hover {
+	background: var(--background-modifier-hover) !important;
+	border-color: transparent;
+}
+
+.qbd-ai-composer-tools .qbd-select[aria-expanded="true"] {
+	background: var(--background-modifier-hover) !important;
+	border-color: transparent;
+}
+
+/* Bouton générer dans le composer (façon bouton d'envoi claude.ai) —
+   caché par défaut, apparaît dès qu'il y a du contenu. Fond accent
+   (bleu du plugin), icône blanche. */
+.qbd-ai-composer-send {
+	display: none;
+	align-items: center;
+	justify-content: center;
+	width: 32px;
+	height: 32px;
+	padding: 0;
+	border: none;
+	border-radius: 9px;
+	background: var(--interactive-accent) !important;
+	color: #fff;
+	box-shadow: none !important;
+	cursor: pointer;
+	flex-shrink: 0;
+	transition: background 0.14s ease, transform 0.08s ease, opacity 0.14s ease;
+}
+
+.qbd-ai-composer-send.is-visible {
+	display: inline-flex;
+	animation: qbd-send-in 0.16s ease-out;
+}
+
+.qbd-ai-composer-send:hover {
+	background: var(--interactive-accent-hover) !important;
+}
+
+.qbd-ai-composer-send:active {
+	transform: scale(0.93);
+}
+
+.qbd-ai-composer-send--disabled {
+	opacity: 0.45;
+	cursor: not-allowed;
+}
+
+.qbd-ai-composer-send--disabled:hover {
+	background: var(--interactive-accent) !important;
+}
+
+.qbd-ai-composer-send-icon {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	color: #fff;
+}
+
+.qbd-ai-composer-send-icon svg {
+	width: 17px;
+	height: 17px;
+	color: #fff;
+}
+
+@keyframes qbd-send-in {
+	from { opacity: 0; transform: scale(0.7); }
+	to   { opacity: 1; transform: scale(1); }
 }
 
 /* Attachements dans le composer */

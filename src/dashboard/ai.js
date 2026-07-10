@@ -8,7 +8,7 @@
 ══════════════════════════════════════════════════════════ */
 
 const aiProviders = require("./ai-providers");
-const { createSelect, closeAllSelects, openActionMenu } = require("./ui-select");
+const { createSelect, closeAllSelects, openActionMenu, openModelMenu } = require("./ui-select");
 
 function createAiHandlers(ctx) {
 	let composerText = "";
@@ -100,26 +100,150 @@ function createAiHandlers(ctx) {
 			}
 		});
 
-		// Rangée modèle + hint : seulement une fois le fournisseur choisi
+		// Le contrôle Modèle + effort vit désormais dans le pied du composer
+		// (façon claude.ai) : on prépare ici sa fabrique, appelée plus bas.
+		// La zone de hint reste sous le sélecteur de fournisseur.
 		let modelSelect = null;
 		let hintZone = null;
-		if (provider) {
-			const modelRow = modelCard.createDiv({ cls: "qbd-ai-model-row" });
-			modelRow.createEl("span", { cls: "qbd-ai-model-row-label", text: "Modèle" });
-			modelSelect = createSelect(modelRow, {
-				value: currentModel,
-				options: withCurrentOption(aiProviders.getDefaultModels(provider), currentModel),
-				onChange: async (v) => {
-					ctx.plugin.settings.aiModel = v;
-					await ctx.plugin.saveSettings();
-				}
+		let buildModelControl = null;
+		// État partagé du contrôle Ollama : options mutables, derniers modèles
+		// locaux détectés et rafraîchissement du libellé. La liste est reconstruite
+		// à CHAQUE ouverture du menu (et sur détection async) → reflète toujours la
+		// sélection courante des réglages, même éditée après le rendu de la vue.
+		let ollamaCtl = null;
+
+		// Construit les options Ollama depuis la sélection de l'utilisateur
+		// (settings.aiOllamaModels, ordre réglable) + les locaux installés hors
+		// sélection. `detected` = res.models de checkOllama ([{name,capabilities}])
+		// ou null. Renvoie un tableau plat = UNE liste scrollable (façon app
+		// Ollama), jusqu'à OLLAMA_MAX_MODELS.
+		const buildOllamaList = (detected) => {
+			const byNorm = new Map();
+			(detected || []).forEach(m => byNorm.set(m.name.replace(/:latest$/, ""), m));
+			const isInstalled = (v) => byNorm.has(v.replace(/:latest$/, ""));
+			const iconFor = (cloud, installed) => cloud ? "cloud" : (installed ? null : "download");
+			const decorate = (meta) => {
+				const installed = meta.cloud ? true : isInstalled(meta.value);
+				return { value: meta.value, label: meta.label, cloud: meta.cloud,
+					thinking: meta.thinking !== false, installed, icon: iconFor(meta.cloud, installed) };
+			};
+			const catalog = ctx.plugin.settings.aiOllamaCatalog;
+			const list = aiProviders.resolveOllamaSelection(ctx.plugin.settings.aiOllamaModels, catalog).map(decorate);
+			// Modèles locaux installés hors sélection → ajoutés en fin de liste.
+			(detected || []).forEach(m => {
+				const norm = m.name.replace(/:latest$/, "");
+				if (list.some(o => o.value === m.name || o.value.replace(/:latest$/, "") === norm)) return;
+				list.push({ value: m.name, label: m.name.replace(":latest", ""), cloud: false,
+					installed: true, thinking: (m.capabilities || []).includes("thinking"), icon: null });
 			});
-
-			// Zone de hint contextuelle (clé manquante, serveur offline…)
+			// Modèle courant hors liste → placé en tête.
+			const cur = ctx.plugin.settings.aiModel || currentModel;
+			if (cur && !list.some(o => o.value === cur)) {
+				list.unshift(decorate(aiProviders.getOllamaModelMeta(cur, catalog)));
+			}
+			return list;
+		};
+		// Claude Code et Codex (ChatGPT) partagent le même contrôle modèle+effort
+		// (menu façon claude.ai). Seules changent la liste de modèles, la liste
+		// d'efforts et la résolution du modèle (Fable expire côté Claude).
+		if (provider === "claude-code" || provider === "codex") {
 			hintZone = modelCard.createDiv({ cls: "qbd-ai-model-hint" });
+			const isClaude = provider === "claude-code";
+			const models = isClaude ? aiProviders.getClaudeModels() : aiProviders.getDefaultModels("codex");
+			const efforts = aiProviders.getEfforts(provider);
+			const resolveMv = (v) => isClaude ? aiProviders.resolveClaudeModel(v) : v;
+			buildModelControl = (parent) => {
+				const trigger = parent.createEl("button", { cls: "qbd-select qbd-model-trigger" });
+				trigger.type = "button";
+				const trigLabel = trigger.createSpan({ cls: "qbd-select-label" });
+				const trigChev = trigger.createSpan({ cls: "qbd-select-chevron" });
+				obsidian.setIcon(trigChev, "chevron-down");
+				const refreshTrigger = () => {
+					trigLabel.empty();
+					const mv = resolveMv(ctx.plugin.settings.aiModel || currentModel);
+					const cur = models.find(m => m.value === mv) || models[0];
+					trigLabel.createSpan({ cls: "qbd-model-trigger-name", text: cur.label });
+					trigLabel.createSpan({ cls: "qbd-model-trigger-effort", text: aiProviders.getEffortLabel(aiProviders.resolveEffort(provider, ctx.plugin.settings.aiEffort), provider) });
+				};
+				refreshTrigger();
+				trigger.addEventListener("click", () => {
+					openModelMenu(trigger, {
+						models,
+						currentModel: resolveMv(ctx.plugin.settings.aiModel || currentModel),
+						efforts,
+						currentEffort: aiProviders.resolveEffort(provider, ctx.plugin.settings.aiEffort),
+						onPickModel: async (v) => {
+							ctx.plugin.settings.aiModel = v;
+							await ctx.plugin.saveSettings();
+							refreshTrigger();
+						},
+						onPickEffort: async (v) => {
+							ctx.plugin.settings.aiEffort = v;
+							await ctx.plugin.saveSettings();
+							refreshTrigger();
+						}
+					});
+				});
+			};
+		} else if (provider) {
+			hintZone = modelCard.createDiv({ cls: "qbd-ai-model-hint" });
+			// Ollama partage le MÊME contrôle modèle+effort que Claude/Codex
+			// (openModelMenu). L'effort est réel : câblé sur le param `think` de
+			// l'API Ollama (low/medium/high/max). La ligne Effort n'apparaît que
+			// pour un modèle à raisonnement (thinking). Les icônes nuage/
+			// téléchargement/rien reproduisent l'app Ollama.
+			const efforts = aiProviders.getEfforts(provider);
+			// `detected` = derniers modèles locaux vus par checkOllama (pour les
+			// ré-annexer à la reconstruction). La liste est reconstruite à CHAQUE
+			// ouverture du menu → reflète toujours la sélection courante des réglages.
+			ollamaCtl = { options: buildOllamaList(null), detected: null, refreshTrigger: null };
+			buildModelControl = (parent) => {
+				const trigger = parent.createEl("button", { cls: "qbd-select qbd-model-trigger" });
+				trigger.type = "button";
+				const trigLabel = trigger.createSpan({ cls: "qbd-select-label" });
+				const trigChev = trigger.createSpan({ cls: "qbd-select-chevron" });
+				obsidian.setIcon(trigChev, "chevron-down");
+				const curOpt = () => {
+					const mv = ctx.plugin.settings.aiModel || currentModel;
+					return ollamaCtl.options.find(o => o.value === mv) || ollamaCtl.options[0];
+				};
+				const refreshTrigger = () => {
+					trigLabel.empty();
+					const cur = curOpt();
+					const mv = ctx.plugin.settings.aiModel || currentModel;
+					trigLabel.createSpan({ cls: "qbd-model-trigger-name", text: cur ? cur.label : (mv || "").replace(":latest", "") });
+					if (cur && cur.thinking) {
+						trigLabel.createSpan({ cls: "qbd-model-trigger-effort", text: aiProviders.getEffortLabel(aiProviders.resolveEffort(provider, ctx.plugin.settings.aiEffort), provider) });
+					}
+				};
+				refreshTrigger();
+				ollamaCtl.refreshTrigger = refreshTrigger;
+				trigger.addEventListener("click", () => {
+					// Reconstruit à l'ouverture → la liste suit la sélection des
+					// réglages (settings.aiOllamaModels) même modifiée après le rendu.
+					ollamaCtl.options = buildOllamaList(ollamaCtl.detected);
+					refreshTrigger();
+					const cur = curOpt();
+					openModelMenu(trigger, {
+						models: ollamaCtl.options,
+						searchable: true,
+						currentModel: ctx.plugin.settings.aiModel || currentModel,
+						efforts: (cur && cur.thinking) ? efforts : [],
+						currentEffort: aiProviders.resolveEffort(provider, ctx.plugin.settings.aiEffort),
+						onPickModel: async (v) => {
+							ctx.plugin.settings.aiModel = v;
+							await ctx.plugin.saveSettings();
+							refreshTrigger();
+						},
+						onPickEffort: async (v) => {
+							ctx.plugin.settings.aiEffort = v;
+							await ctx.plugin.saveSettings();
+							refreshTrigger();
+						}
+					});
+				});
+			};
 		}
-
-		refreshProviderStatuses({ providerSelect, hintZone, provider, currentModel, modelSelect });
 
 
 		// ── Composer (champ unique + bouton « + » d'attachements) ──
@@ -180,12 +304,35 @@ function createAiHandlers(ctx) {
 		});
 		requestAnimationFrame(autoGrow);
 
-		// Rangée du bas : bouton « + » (ajouter ce dont on a besoin)
+		// Rangée du bas : bouton « + » (gauche), puis à droite le modèle +
+		// effort (façon claude.ai) et le bouton d'envoi.
 		const composerBottom = composer.createDiv({ cls: "qbd-ai-composer-bottom" });
 		const addBtn = composerBottom.createEl("button", { cls: "qbd-ai-composer-add" });
 		addBtn.type = "button";
 		addBtn.setAttribute("aria-label", "Ajouter du contenu");
 		obsidian.setIcon(addBtn, "plus");
+
+		// Groupe droite : sélecteur modèle + effort, puis bouton d'envoi.
+		const composerTools = composerBottom.createDiv({ cls: "qbd-ai-composer-tools" });
+		if (buildModelControl) buildModelControl(composerTools);
+
+		// Bouton générer dans le composer (façon bouton d'envoi claude.ai) :
+		// caché tant que le champ est vide, apparaît dès qu'il y a du contenu,
+		// fond accent (bleu du plugin) + icône blanche.
+		const sendBtn = composerTools.createEl("button", { cls: "qbd-ai-composer-send" });
+		sendBtn.type = "button";
+		sendBtn.setAttribute("aria-label", "Générer le quiz");
+		const sendIcon = sendBtn.createSpan({ cls: "qbd-ai-composer-send-icon" });
+		obsidian.setIcon(sendIcon, "sparkles");
+		sendBtn.addEventListener("click", () => {
+			if (canGenerate()) startGeneration(containerRef);
+		});
+		generateBtnRef = sendBtn;
+		updateGenerateBtn(generateBtnRef);
+
+		// Détections async (statut fournisseur + modèles réels) : après la
+		// création du contrôle modèle, donc modelSelect existe désormais.
+		refreshProviderStatuses({ providerSelect, hintZone, provider, currentModel, modelSelect });
 
 		const fileInput = composer.createEl("input", { type: "file", cls: "qbd-ai-file-input" });
 		fileInput.accept = "image/*";
@@ -200,13 +347,13 @@ function createAiHandlers(ctx) {
 				{
 					icon: "image",
 					label: "Ajouter des images",
-					sub: "PNG · JPG · WEBP — ou glissez / collez",
+					hint: "PNG · JPG · WEBP",
 					onClick: () => fileInput.click()
 				},
 				{
 					icon: "file-text",
 					label: "Utiliser la note active",
-					sub: activeFile ? activeFile.basename : "Aucune note ouverte",
+					hint: activeFile ? activeFile.basename : "Aucune note",
 					disabled: !activeFile,
 					onClick: () => attachActiveNote(activeFile)
 				}
@@ -255,23 +402,6 @@ function createAiHandlers(ctx) {
 			value: questionType,
 			options: TYPES.map(t => ({ value: t, label: t })),
 			onChange: (v) => { questionType = v; }
-		});
-
-		// ── Generate button ──
-		const canGen = canGenerate();
-		const generateBtn = formCol.createEl("button", {
-			cls: `qbd-ai-generate-btn ${canGen ? "qbd-ai-generate-btn--active" : ""}`
-		});
-		generateBtnRef = generateBtn;
-		if (!canGen) generateBtn.setAttribute("disabled", "");
-		const genIcon = generateBtn.createSpan({ cls: "qbd-btn-icon" });
-		obsidian.setIcon(genIcon, "sparkles");
-		generateBtn.createSpan({ cls: "qbd-ai-generate-btn-text", text: "Générer le quiz" });
-		generateBtn.prepend(genIcon);
-
-		generateBtn.addEventListener("click", () => {
-			if (!canGenerate()) return;
-			startGeneration(container);
 		});
 
 		// ── Preview (colonne droite) ──
@@ -366,82 +496,59 @@ function createAiHandlers(ctx) {
 			}
 		});
 
-		aiProviders.checkOllamaLocal(settings.aiOllamaUrl).then(res => {
+		aiProviders.checkCodex().then(res => {
 			if (res.ok) {
+				setStatus("codex", providerSelect, "ok", "Codex v" + res.version);
+			} else if (res.reason === "mobile") {
+				setStatus("codex", providerSelect, "warn", "Desktop uniquement");
+			} else {
+				setStatus("codex", providerSelect, "err", "Codex non installé");
+			}
+			if (provider !== "codex") return;
+			if (res.ok) {
+				renderHint(hintZone, null);
+			} else if (res.reason === "mobile") {
+				renderHint(hintZone, {
+					type: "warn", icon: "monitor",
+					text: "La génération via ChatGPT (Codex) est disponible sur desktop uniquement."
+				});
+			} else {
+				renderHint(hintZone, {
+					type: "err", icon: "download",
+					text: "Codex n'est pas installé. Installez-le puis connectez votre compte ChatGPT avec « codex login ».",
+					action: {
+						label: "Installer Codex", icon: "external-link",
+						onClick: () => window.open("https://www.npmjs.com/package/@openai/codex", "_blank")
+					}
+				});
+			}
+		});
+
+		aiProviders.checkOllama(settings.aiOllamaUrl).then(res => {
+			if (res.ok) {
+				// Affiche la version d'Ollama installée (comme Claude/Codex), ex.
+				// « Ollama v0.31.2 ». Repli sur l'état du cache si version absente.
 				const n = res.models.length;
-				setStatus("ollama", providerSelect, "ok", n + " modèle" + (n > 1 ? "s" : "") + " installé" + (n > 1 ? "s" : ""));
-			} else if (res.reason === "no-models") {
-				setStatus("ollama", providerSelect, "warn", "Aucun modèle installé");
+				const fallback = n > 0 ? (n + " local" + (n > 1 ? "aux" : "") + " + cloud") : "Cloud prêt";
+				setStatus("ollama", providerSelect, "ok", res.version ? ("Ollama v" + res.version) : fallback);
 			} else {
 				setStatus("ollama", providerSelect, "err", "Serveur non détecté");
 			}
 			if (provider !== "ollama") return;
 			if (res.ok) {
-				// Le dropdown liste les modèles réellement installés
-				const options = res.models.map(m => ({
-					value: m.name,
-					label: m.name.replace(":latest", ""),
-					hint: m.size ? (m.size / 1e9).toFixed(1) + " Go" : undefined
-				}));
-				const norm = (currentModel || "").replace(/:latest$/, "");
-				const match = options.find(o => o.value === currentModel || o.value.replace(/:latest$/, "") === norm);
-				if (!match) options.push({ value: currentModel, label: currentModel, hint: "non installé" });
-				modelSelect.setOptions(options, match ? match.value : currentModel);
+				// Reconstruit les options (sélection + locaux réellement installés,
+				// avec capability thinking) et rafraîchit le libellé du contrôle.
+				if (ollamaCtl) {
+					ollamaCtl.detected = res.models;
+					ollamaCtl.options = buildOllamaList(res.models);
+					if (ollamaCtl.refreshTrigger) ollamaCtl.refreshTrigger();
+				}
 				renderHint(hintZone, null);
-			} else if (res.reason === "no-models") {
-				renderHint(hintZone, {
-					type: "warn", icon: "download",
-					text: "Aucun modèle installé. Dans un terminal, exécutez :",
-					code: "ollama pull qwen3:14b"
-				});
 			} else {
 				renderHint(hintZone, {
 					type: "err", icon: "power",
 					text: "Serveur Ollama non détecté. Dans un terminal, lancez :",
 					code: "ollama serve"
-				});
-			}
-		});
-
-		aiProviders.checkOllamaCloud(settings.aiOllamaCloudKey).then(res => {
-			if (res.ok) {
-				setStatus("ollama-cloud", providerSelect, "ok", "Connecté");
-			} else if (res.reason === "no-key") {
-				setStatus("ollama-cloud", providerSelect, "warn", "Clé API requise");
-			} else if (res.reason === "bad-key") {
-				setStatus("ollama-cloud", providerSelect, "err", "Clé invalide");
-			} else {
-				setStatus("ollama-cloud", providerSelect, "err", "Hors ligne");
-			}
-			if (provider !== "ollama-cloud") return;
-			if (res.ok) {
-				if (res.models && res.models.length > 0) {
-					const options = res.models.map(m => ({
-						value: m.name,
-						label: m.name.replace(":latest", "")
-					}));
-					if (!options.some(o => o.value === currentModel)) {
-						options.push({ value: currentModel, label: currentModel, hint: "personnalisé" });
-					}
-					modelSelect.setOptions(options, currentModel);
-				}
-				renderHint(hintZone, null);
-			} else if (res.reason === "no-key") {
-				renderHint(hintZone, {
-					type: "warn", icon: "key-round",
-					text: "Ajoutez votre clé API Ollama Cloud (gratuite) dans les réglages.",
-					action: { label: "Configurer la clé", icon: "settings", onClick: openPluginSettings }
-				});
-			} else if (res.reason === "bad-key") {
-				renderHint(hintZone, {
-					type: "err", icon: "key-round",
-					text: "Clé API Ollama Cloud invalide. Vérifiez-la sur ollama.com/settings/keys.",
-					action: { label: "Corriger la clé", icon: "settings", onClick: openPluginSettings }
-				});
-			} else {
-				renderHint(hintZone, {
-					type: "err", icon: "wifi-off",
-					text: "Impossible de joindre ollama.com. Vérifiez votre connexion."
 				});
 			}
 		});
@@ -563,15 +670,14 @@ function createAiHandlers(ctx) {
 
 	function updateGenerateBtn(btn) {
 		if (!btn) return;
+		// Le bouton d'envoi n'apparaît qu'avec du contenu (texte/image/note),
+		// et reste désactivé tant que la génération n'est pas possible
+		// (aucun fournisseur configuré).
+		const hasContent = !!(composerText.trim() || images.length > 0 || noteAttachment);
 		const canGen = canGenerate();
-
-		if (canGen) {
-			btn.classList.add("qbd-ai-generate-btn--active");
-			btn.removeAttribute("disabled");
-		} else {
-			btn.classList.remove("qbd-ai-generate-btn--active");
-			btn.setAttribute("disabled", "");
-		}
+		btn.classList.toggle("is-visible", hasContent);
+		btn.disabled = !canGen;
+		btn.classList.toggle("qbd-ai-composer-send--disabled", !canGen);
 	}
 
 	async function startGeneration(container) {

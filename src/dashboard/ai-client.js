@@ -10,17 +10,23 @@
 function createAiClient(plugin) {
 	const DEFAULT_MODELS = {
 		"claude-code": "sonnet",
-		ollama: "qwen3:14b",
-		"ollama-cloud": "qwen3:14b",
+		codex: "gpt-5.6-terra",
+		ollama: "glm-5.2:cloud",
 	};
 
 	async function generate(prompt, options = {}) {
 		const { count = 5, type = "Mixte", source = "topic", images = [] } = options;
 		const provider = plugin.settings.aiProvider || "claude-code";
-		const model = plugin.settings.aiModel || DEFAULT_MODELS[provider];
-
-		if (provider === "ollama-cloud" && !(plugin.settings.aiOllamaCloudKey || "").trim()) {
-			throw new Error("Clé API Ollama Cloud non configurée. Allez dans les paramètres du plugin.");
+		let model = plugin.settings.aiModel || DEFAULT_MODELS[provider];
+		// Fable 5 masqué après le 12 juillet → retombe sur le défaut Claude
+		if (provider === "claude-code") {
+			model = require("./ai-providers").resolveClaudeModel(model);
+		}
+		// Codex : si le modèle persisté n'est pas un modèle Codex connu
+		// (ex. bascule récente de provider), retombe sur le défaut Codex.
+		if (provider === "codex") {
+			const { CODEX_MODELS } = require("./ai-providers");
+			if (!CODEX_MODELS.some(m => m.value === model)) model = DEFAULT_MODELS.codex;
 		}
 
 		const typeInstruction = type === "Mixte"
@@ -36,7 +42,7 @@ function createAiClient(plugin) {
 	- prompt: énoncé complet de la question
 	- options: tableau des options (pour choix unique/multiple, 3-5 options)
 	- correctIndex: index de la bonne réponse (pour choix unique)
-	- correctIndexes: tableau des index des bonnes réponses (pour choix multiple)
+	- correctIndices: tableau des index des bonnes réponses (pour choix multiple)
 	- multiSelect: true si choix multiple
 	- type: "text" pour texte libre, absent sinon
 	- answer: réponse attendue (pour texte libre)
@@ -57,14 +63,21 @@ function createAiClient(plugin) {
 			? `Génère un quiz basé sur ce texte :\n\n${prompt}`
 			: `Génère un quiz basé sur les images fournies : ${prompt}`;
 
-		if (provider === "ollama" || provider === "ollama-cloud") {
-			const ollamaUrl = provider === "ollama-cloud"
-				? "https://ollama.com"
-				: (plugin.settings.aiOllamaUrl || "http://localhost:11434").replace(/\/+$/, "");
-			const authHeader = provider === "ollama-cloud"
-				? { "Authorization": "Bearer " + (plugin.settings.aiOllamaCloudKey || "").trim() }
-				: {};
-			return callOllama(model, systemPrompt, userPrompt, ollamaUrl, authHeader, images);
+		if (provider === "ollama") {
+			// Un seul endpoint local : sert les modèles locaux ET cloud (:cloud).
+			// Clé optionnelle (le daemon connecté via `ollama signin` n'en a pas
+			// besoin) ; envoyée en Authorization si l'utilisateur en a défini une.
+			const ollamaUrl = (plugin.settings.aiOllamaUrl || "http://localhost:11434").replace(/\/+$/, "");
+			const key = (plugin.settings.aiOllamaCloudKey || "").trim();
+			const authHeader = key ? { "Authorization": "Bearer " + key } : {};
+			// Effort réel : niveau `think` (low/medium/high/max) passé à l'API
+			// pour les modèles à raisonnement (ignoré sinon, cf. callOllama).
+			const effort = require("./ai-providers").resolveEffort("ollama", plugin.settings.aiEffort);
+			return callOllama(model, systemPrompt, userPrompt, ollamaUrl, authHeader, images, effort);
+		} else if (provider === "codex") {
+			const { resolveEffort } = require("./ai-providers");
+			const effort = resolveEffort("codex", plugin.settings.aiEffort);
+			return callCodex(model, systemPrompt, userPrompt, images, effort);
 		} else {
 			return callClaudeCode(model, systemPrompt, userPrompt, images);
 		}
@@ -179,36 +192,137 @@ function createAiClient(plugin) {
 		return parseQuizResponse(content);
 	}
 
-	async function callOllama(model, systemPrompt, userPrompt, ollamaUrl, authHeaders, images = []) {
+	/* ── ChatGPT via le CLI Codex (abonnement ChatGPT) ──
+	   `codex exec` en non-interactif : prompt par stdin, modèle via -m,
+	   effort de raisonnement via -c model_reasoning_effort=…, réponse finale
+	   écrite dans un fichier (-o) pour un parsing propre. Sandbox read-only et
+	   --ignore-user-config isolent la génération (pas de MCP/hooks perso). */
+	async function callCodex(model, systemPrompt, userPrompt, images = [], effort = "medium") {
+		const { Platform } = require("obsidian");
+		if (!Platform.isDesktopApp) {
+			throw new Error("La génération via ChatGPT (Codex) est disponible sur desktop uniquement.");
+		}
+		if (!/^[a-zA-Z0-9._:-]+$/.test(model)) {
+			throw new Error("Nom de modèle Codex invalide : " + model);
+		}
+		const effortVal = /^[a-z]+$/.test(effort) ? effort : "medium";
+
+		const cp = require("child_process");
+		const os = require("os");
+		const path = require("path");
+		const fs = require("fs");
+		const { buildChildEnv } = require("./ai-providers");
+
+		const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "quiz-blocks-codex-"));
+		const outFile = path.join(tmpDir, "last-message.txt");
+
+		// Images : fichiers temporaires attachés au prompt initial via -i
+		let imageArgs = "";
+		if (images.length > 0) {
+			const paths = images.map((img, i) => {
+				const ext = ((img.mediaType || "image/png").split("/")[1] || "png").replace("jpeg", "jpg");
+				const p = path.join(tmpDir, "image-" + (i + 1) + "." + ext);
+				fs.writeFileSync(p, Buffer.from(img.base64, "base64"));
+				return p;
+			});
+			imageArgs = paths.map(p => ' -i "' + p + '"').join("");
+		}
+
+		const fullPrompt = systemPrompt + "\n\n" + userPrompt;
+		const cmd = "codex exec -m " + model +
+			" -c model_reasoning_effort=" + effortVal +
+			" -s read-only --skip-git-repo-check --ignore-user-config" +
+			" -C \"" + os.homedir() + "\"" +
+			" -o \"" + outFile + "\"" + imageArgs;
+
+		let raw;
+		try {
+			const stdout = await new Promise((resolve, reject) => {
+				const child = cp.exec(cmd, {
+					cwd: os.homedir(),
+					env: buildChildEnv(),
+					timeout: 180000,
+					maxBuffer: 16 * 1024 * 1024,
+					windowsHide: true
+				}, (err, out, stderr) => {
+					if (err) {
+						err.stderr = stderr;
+						err.stdout = out;
+						reject(err);
+					} else {
+						resolve(out);
+					}
+				});
+				child.stdin.write(fullPrompt);
+				child.stdin.end();
+			});
+			// Le fichier -o contient la réponse finale nette ; fallback stdout.
+			raw = fs.existsSync(outFile) ? fs.readFileSync(outFile, "utf8") : (stdout || "");
+		} catch (err) {
+			console.error("[quiz-blocks] Codex error:", err.message, err.stderr || "");
+			const detail = ((err.stderr || "") + " " + (err.stdout || "") + " " + err.message).toLowerCase();
+			if (err.code === "ENOENT" || err.code === 127 || detail.includes("not recognized") || detail.includes("introuvable") || detail.includes("command not found")) {
+				throw new Error("Codex n'est pas installé. Installez-le (npm i -g @openai/codex) puis connectez-vous avec « codex login ».");
+			}
+			if (err.killed || detail.includes("etimedout")) {
+				throw new Error("ChatGPT (Codex) n'a pas répondu dans le délai imparti (3 min). Réessayez.");
+			}
+			if (detail.includes("not logged in") || detail.includes("login") || detail.includes("unauthorized") || detail.includes("401") || detail.includes("credential") || detail.includes("authenticat")) {
+				throw new Error("Compte ChatGPT non connecté. Dans un terminal, lancez « codex login ».");
+			}
+			if (detail.includes("usage limit") || detail.includes("rate limit") || detail.includes("quota")) {
+				throw new Error("Limite d'utilisation de votre abonnement ChatGPT atteinte. Réessayez plus tard.");
+			}
+			throw new Error("Erreur Codex : " + (err.stderr || err.message).trim().slice(0, 300));
+		} finally {
+			try { fs.rmSync(tmpDir, { recursive: true, force: true }); } catch (e) { /* best effort */ }
+		}
+
+		if (!raw || !raw.trim()) {
+			throw new Error("ChatGPT (Codex) n'a retourné aucune réponse. Réessayez ou changez de modèle.");
+		}
+		console.log("[quiz-blocks] Codex success - response length:", raw.length);
+		return parseQuizResponse(raw);
+	}
+
+	async function callOllama(model, systemPrompt, userPrompt, ollamaUrl, authHeaders, images = [], effort = null) {
 		if (!ollamaUrl) {
 			ollamaUrl = (plugin.settings.aiOllamaUrl || "http://localhost:11434").replace(/\/+$/, "");
 		}
 		authHeaders = authHeaders || {};
 
-		// ── Step 1: Check server is running and model is available ──
+		// ── Step 1 : serveur joignable ? Un modèle cloud (:cloud) tourne à la
+		// demande via le daemon connecté (absent de /api/tags) → on ne vérifie
+		// PAS qu'il est installé ; un modèle local, si. ──
+		const providers = require("./ai-providers");
+		const isCloud = providers.isOllamaCloudModel(model);
 		let installedModels = [];
+		let tagModels = [];
 		try {
 			const tagsResp = await fetch(`${ollamaUrl}/api/tags`, { method: "GET", headers: authHeaders });
 			if (!tagsResp.ok) {
 				throw new Error("ollama_unreachable");
 			}
 			const tagsData = await tagsResp.json();
-			installedModels = (tagsData?.models || []).map(m => m.name);
+			tagModels = tagsData?.models || [];
+			installedModels = tagModels.map(m => m.name);
 			console.log("[quiz-blocks] Ollama installed models:", installedModels.join(", "));
 
-			// Check if model is installed — Ollama model names may include :latest
-			const modelBase = model.replace(/:latest$/, "");
-			const isInstalled = installedModels.some(m => {
-				const mBase = m.replace(/:latest$/, "");
-				return mBase === modelBase || mBase.startsWith(modelBase + ":");
-			});
+			if (!isCloud) {
+				// Check if model is installed — Ollama model names may include :latest
+				const modelBase = model.replace(/:latest$/, "");
+				const isInstalled = installedModels.some(m => {
+					const mBase = m.replace(/:latest$/, "");
+					return mBase === modelBase || mBase.startsWith(modelBase + ":");
+				});
 
-			if (!isInstalled) {
-				throw new Error(
-					"Le modèle \"" + model + "\" n'est pas installé.\n" +
-					"Exécutez dans un terminal : ollama pull " + model + "\n" +
-					"Modèles disponibles : " + (installedModels.length > 0 ? installedModels.join(", ") : "aucun")
-				);
+				if (!isInstalled) {
+					throw new Error(
+						"Le modèle \"" + model + "\" n'est pas installé.\n" +
+						"Exécutez dans un terminal : ollama pull " + model + "\n" +
+						"Modèles disponibles : " + (installedModels.length > 0 ? installedModels.join(", ") : "aucun")
+					);
+				}
 			}
 		} catch (err) {
 			if (err.message === "ollama_unreachable" || !err.message.startsWith("Le modèle")) {
@@ -219,6 +333,23 @@ function createAiClient(plugin) {
 			}
 			throw err;
 		}
+
+		// Le modèle expose-t-il un raisonnement (`think`) ? Cloud → oui (le param
+		// est ignoré sans erreur si le modèle ne raisonne pas, vérifié) ; local →
+		// capability « thinking » lue de /api/tags. Statut prix jamais figé ici.
+		let supportsThinking;
+		if (isCloud) {
+			supportsThinking = true;
+		} else {
+			const norm = model.replace(/:latest$/, "");
+			const found = tagModels.find(m => {
+				const mb = m.name.replace(/:latest$/, "");
+				return mb === norm || mb.startsWith(norm + ":");
+			});
+			supportsThinking = !!(found && (found.capabilities || []).includes("thinking"));
+		}
+		const thinkLevel = (supportsThinking && effort) ? effort : null;
+		if (thinkLevel) console.log("[quiz-blocks] Ollama think level:", thinkLevel);
 
 		// ── Step 2: Call /api/chat for better instruction following ──
 		// Use fetch() to read error response bodies (requestUrl hides them)
@@ -241,6 +372,7 @@ function createAiClient(plugin) {
 						userMessage
 					],
 					stream: false,
+					...(thinkLevel ? { think: thinkLevel } : {}),
 					format: {
 						type: "object",
 						properties: {
@@ -253,7 +385,7 @@ function createAiClient(plugin) {
 										prompt: { type: "string" },
 										options: { type: "array", items: { type: "string" } },
 										correctIndex: { type: "number" },
-										correctIndexes: { type: "array", items: { type: "number" } },
+										correctIndices: { type: "array", items: { type: "number" } },
 										multiSelect: { type: "boolean" },
 										type: { type: "string" },
 										answer: { type: "string" },
@@ -284,10 +416,18 @@ function createAiClient(plugin) {
 				if (errLower.includes("not found") || errLower.includes("model not found")) {
 					throw new Error("Le modèle \"" + model + "\" n\u2019est pas installé.\nExécutez : ollama pull " + model);
 				}
+				// Modèle cloud réservé à un abonnement (Ollama Pro/Max) : 403
+				// « requires a subscription ». Distinct d'un défaut de connexion.
+				if (errLower.includes("subscription") || errLower.includes("upgrade for access")) {
+					throw new Error("Ce modèle nécessite un abonnement Ollama : https://ollama.com/upgrade");
+				}
+				if (isCloud && (resp.status === 401 || resp.status === 403 || errLower.includes("sign in") || errLower.includes("signin") || errLower.includes("unauthorized") || errLower.includes("authenticat") || errLower.includes("api key"))) {
+					throw new Error("Modèle cloud Ollama : le daemon n'est pas connecté à votre compte.\nDans un terminal : ollama signin");
+				}
 				throw new Error("Erreur Ollama (" + resp.status + ") : " + errMsg);
 			}
 		} catch (err) {
-			if (err.message.startsWith("Le modèle") || err.message.startsWith("Mémoire insuffisante") || err.message.startsWith("Erreur Ollama") || err.message.startsWith("Impossible de contacter")) {
+			if (err.message.startsWith("Le modèle") || err.message.startsWith("Mémoire insuffisante") || err.message.startsWith("Erreur Ollama") || err.message.startsWith("Impossible de contacter") || err.message.startsWith("Modèle cloud") || err.message.startsWith("Ce modèle nécessite")) {
 				throw err;
 			}
 			throw new Error("Impossible de contacter Ollama sur " + ollamaUrl + ". Vérifiez que le serveur est démarré.");

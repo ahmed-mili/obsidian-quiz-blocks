@@ -16,8 +16,16 @@ const DEFAULT_SETTINGS = {
 	quizStats: {},
 	aiProvider: "",
 	aiModel: "",
+	aiEffort: "high",
 	aiOllamaUrl: "http://localhost:11434",
 	aiOllamaCloudKey: "",
+	// Modèles Ollama affichés dans le menu (ordre réglable, max 7) : les
+	// OLLAMA_PRIMARY_COUNT premiers = liste principale, le reste = « Plus de
+	// modèles ». null → sélection par défaut (cf. aiProviders.resolveOllamaSelection).
+	aiOllamaModels: null,
+	// Cache du catalogue cloud récupéré de ollama.com ([{value,label}]) : liste
+	// des modèles récents proposés à l'ajout. null → repli embarqué.
+	aiOllamaCatalog: null,
 };
 
 function createLogger() {
@@ -211,7 +219,6 @@ class QuizBlocksSettingTab extends obsidian.PluginSettingTab {
 		const aiProviders = require("./dashboard/ai-providers");
 		const CLAUDE_CODE_MODELS = aiProviders.CLAUDE_CODE_MODELS;
 		const OLLAMA_MODELS = aiProviders.OLLAMA_MODELS;
-		const OLLAMA_CLOUD_MODELS = aiProviders.OLLAMA_CLOUD_MODELS;
 
 		const TUTORIALS = {
 			"claude-code": {
@@ -237,7 +244,7 @@ class QuizBlocksSettingTab extends obsidian.PluginSettingTab {
 				docsLink: { label: "Documentation Claude Code", url: "https://code.claude.com/docs" }
 			},
 			ollama: {
-				title: "Comment configurer Ollama",
+				title: "Comment configurer Ollama (local + cloud)",
 				sections: [
 					{
 						heading: "1. Installer Ollama",
@@ -245,52 +252,27 @@ class QuizBlocksSettingTab extends obsidian.PluginSettingTab {
 						link: { label: "Télécharger Ollama", url: "https://ollama.com/download" }
 					},
 					{
-						heading: "2. Télécharger un modèle",
-						text: "Ouvrez un terminal et lancez : ollama pull qwen3:14b",
-						link: { label: "Voir tous les modèles", url: "https://ollama.com/models" }
+						heading: "2a. Modèles cloud (recommandé sans GPU)",
+						text: "Connectez le daemon à votre compte : ollama signin. Les modèles « :cloud » tournent sur le cloud Ollama, sans téléchargement ni clé API. Le forfait gratuit donne accès aux modèles gpt-oss et minimax-m3 ; les plus gros (glm, kimi, qwen3.5…) nécessitent un abonnement Pro/Max.",
+						link: { label: "Voir les modèles cloud", url: "https://ollama.com/search?c=cloud" }
 					},
 					{
-						heading: "3. Démarrer Ollama",
-						text: "Ollama démarre automatiquement. Le serveur est sur http://localhost:11434",
-						link: null
-					},
-					{
-						heading: "4. Configurer ici",
-						text: "Choisissez le modèle téléchargé dans la liste ci-dessus. Pour Ollama en cloud, changez l'URL du serveur.",
-						link: null
-					}
-				],
-				warning: "Ollama fonctionne localement et ne nécessite pas de clé API. Votre données restent sur votre machine.",
-				docsLink: { label: "Documentation Ollama", url: "https://github.com/ollama/ollama" },
-				tips: [
-					"💡 Installez d'autres modèles avec : ollama pull <nom-du-modele>",
-					"💡 Pour Ollama en cloud, changez l'URL pour celle de votre serveur distant."
-				]
-			},
-			"ollama-cloud": {
-				title: "Comment configurer Ollama Cloud",
-				sections: [
-					{
-						heading: "1. Créer un compte",
-						text: "Allez sur ollama.com et créez un compte gratuit.",
-						link: { label: "Ouvrir ollama.com", url: "https://ollama.com" }
-					},
-					{
-						heading: "2. Obtenir une clé API",
-						text: "Accédez à ollama.com/settings/keys et créez une clé API.",
-						link: { label: "Créer une clé", url: "https://ollama.com/settings/keys" }
+						heading: "2b. Modèles locaux (nécessite un GPU / de la RAM)",
+						text: "Téléchargez un modèle : ollama pull qwen3.5:9b. Il tourne sur votre machine.",
+						link: { label: "Voir tous les modèles", url: "https://ollama.com/search" }
 					},
 					{
 						heading: "3. Configurer ici",
-						text: "Collez votre clé API ci-dessus et choisissez un modèle.",
+						text: "Choisissez un modèle dans la liste ci-dessus. Les « :cloud » = cloud, les autres = local. Serveur par défaut : http://localhost:11434",
 						link: null
 					}
 				],
-				warning: "Ollama Cloud héberge les modèles sur des serveurs NVIDIA. Vos données ne sont jamais utilisées pour l'entraînement.",
-				docsLink: { label: "Documentation Ollama Cloud", url: "https://docs.ollama.com/cloud" },
+				warning: "Un seul serveur Ollama (localhost) sert local ET cloud : le suffixe « :cloud » distingue les deux. Les modèles cloud passent par votre compte Ollama connecté ; les locaux restent sur votre machine.",
+				docsLink: { label: "Documentation Ollama", url: "https://github.com/ollama/ollama" },
 				tips: [
-					"Outil gratuit : 1 modèle à la fois. Pro (20$/mois) : 3 modèles simultanés.",
-					"Les modèles Cloud n’ont pas de limite de mémoire — même les grands modèles fonctionnent."
+					"💡 Sans GPU : utilisez un modèle « :cloud » gratuit (ex. gpt-oss:120b-cloud).",
+					"💡 Modèles cloud : pas de limite de mémoire — même les très grands modèles fonctionnent.",
+					"💡 Erreur « requires a subscription » : le modèle cloud choisi est réservé au forfait Pro/Max. Prenez un gpt-oss gratuit ou abonnez-vous."
 				]
 			}
 		};
@@ -299,56 +281,45 @@ class QuizBlocksSettingTab extends obsidian.PluginSettingTab {
 		new obsidian.Setting(containerEl)
 			.setName("Fournisseur IA")
 			.setDesc("Choisissez le fournisseur pour la génération de quiz")
-			.addDropdown(dropdown => dropdown
-				.addOption("", "Aucun (à choisir)")
-				.addOption("claude-code", "Claude (abonnement)")
-				.addOption("ollama", "Ollama (local)")
-					.addOption("ollama-cloud", "Ollama Cloud")
-				.setValue(this.plugin.settings.aiProvider || "")
-				.onChange(async (value) => {
-					this.plugin.settings.aiProvider = value;
-					// Reset model to default when switching provider
-					const defaults = { "claude-code": "opus", ollama: "qwen3:14b", "ollama-cloud": "qwen3:14b" };
-					this.plugin.settings.aiModel = defaults[value] || "";
-					await this.plugin.saveSettings();
-					// Re-render settings but preserve scroll position
-					const scrollTop = containerEl.closest(".modal-content")?.scrollTop ?? 0;
-					this.display();
-					requestAnimationFrame(() => {
-						const modal = containerEl.closest(".modal-content");
-						if (modal) modal.scrollTop = scrollTop;
+			.addDropdown(dropdown => {
+				dropdown.addOption("", "Aucun (à choisir)");
+				for (const p of aiProviders.PROVIDERS) {
+					dropdown.addOption(p.id, p.name + (p.sub ? " — " + p.sub : ""));
+				}
+				dropdown.setValue(this.plugin.settings.aiProvider || "")
+					.onChange(async (value) => {
+						this.plugin.settings.aiProvider = value;
+						// Reset model + effort to the new provider's defaults
+						const prov = aiProviders.getProvider(value);
+						this.plugin.settings.aiModel = value ? prov.defaultModel : "";
+						if (value) this.plugin.settings.aiEffort = aiProviders.getDefaultEffort(value);
+						await this.plugin.saveSettings();
+						// Re-render settings but preserve scroll position
+						const scrollTop = containerEl.closest(".modal-content")?.scrollTop ?? 0;
+						this.display();
+						requestAnimationFrame(() => {
+							const modal = containerEl.closest(".modal-content");
+							if (modal) modal.scrollTop = scrollTop;
+						});
 					});
-				}));
+			});
 
 		const currentProvider = this.plugin.settings.aiProvider || "";
-
-		// API Key (Ollama Cloud only)
-		if (currentProvider === "ollama-cloud") {
-			new obsidian.Setting(containerEl)
-				.setName("Clé API Ollama Cloud")
-				.setDesc("Créez une clé sur ollama.com/settings/keys")
-				.addText(text => {
-					text.setPlaceholder("ollama-…")
-						.setValue(this.plugin.settings.aiOllamaCloudKey || "")
-						.onChange(async (value) => {
-							this.plugin.settings.aiOllamaCloudKey = value;
-							await this.plugin.saveSettings();
-						});
-				});
-		}
 
 		// Model dropdown (provider-specific) — masqué tant qu'aucun
 		// fournisseur n'est choisi
 		if (currentProvider) {
-			const models = currentProvider === "ollama-cloud" ? OLLAMA_CLOUD_MODELS : currentProvider === "ollama" ? OLLAMA_MODELS : CLAUDE_CODE_MODELS;
-			const currentModel = this.plugin.settings.aiModel || models[0].value;
+			const models = currentProvider === "claude-code" ? aiProviders.getClaudeModels() : aiProviders.getDefaultModels(currentProvider);
+			const currentModel = currentProvider === "claude-code"
+				? aiProviders.resolveClaudeModel(this.plugin.settings.aiModel || models[0].value)
+				: (this.plugin.settings.aiModel || models[0].value);
 
 			new obsidian.Setting(containerEl)
 				.setName("Modèle")
 				.setDesc(currentProvider === "ollama"
-					? "Modèle Ollama à utiliser. Assurez-vous de l'avoir téléchargé avec ollama pull."
-					: currentProvider === "ollama-cloud"
-					? "Modèle Ollama Cloud à utiliser pour la génération."
+					? "Modèle Ollama. Les « :cloud » tournent sur le cloud (compte connecté via ollama signin) ; les autres en local (ollama pull)."
+					: currentProvider === "codex"
+					? "Modèle Codex (ChatGPT) à utiliser pour la génération."
 					: "Modèle Claude à utiliser (mêmes noms que dans Claude Code).")
 				.addDropdown(dropdown => {
 					for (const m of models) {
@@ -378,6 +349,120 @@ class QuizBlocksSettingTab extends obsidian.PluginSettingTab {
 						this.plugin.settings.aiOllamaUrl = value;
 						await this.plugin.saveSettings();
 					}));
+
+			// Modèles affichés dans le menu (sélection + ordre réglable, façon
+			// claude.ai) : les N premiers = liste principale, le reste = flyout
+			// « Plus de modèles ». Glisser-déposer pour réordonner.
+			const MAX = aiProviders.OLLAMA_MAX_MODELS;
+			const VISIBLE = aiProviders.OLLAMA_VISIBLE_COUNT;
+			const getCatalog = () => aiProviders.getOllamaCatalog(this.plugin.settings.aiOllamaCatalog);
+			const getSel = () => aiProviders.resolveOllamaSelection(this.plugin.settings.aiOllamaModels, getCatalog()).map(m => m.value);
+			const saveSel = async (arr) => {
+				this.plugin.settings.aiOllamaModels = arr.slice(0, MAX);
+				await this.plugin.saveSettings();
+			};
+
+			const setting = new obsidian.Setting(containerEl)
+				.setName("Modèles affichés dans le menu")
+				.setDesc("Glissez pour réordonner. Le menu affiche une liste défilante ; les " + VISIBLE + " premiers sont visibles sans défiler (max " + MAX + "). Certains modèles cloud nécessitent un abonnement Ollama Pro/Max (erreur 403 à la génération).");
+			setting.settingEl.style.display = "block";
+			// Bouton « rafraîchir » : récupère le catalogue récent depuis ollama.com.
+			setting.addExtraButton(b => b
+				.setIcon("refresh-cw")
+				.setTooltip("Rafraîchir la liste depuis ollama.com")
+				.onClick(async () => {
+					b.setDisabled(true);
+					try {
+						const cat = await aiProviders.fetchOllamaCloudCatalog();
+						this.plugin.settings.aiOllamaCatalog = cat;
+						await this.plugin.saveSettings();
+						new obsidian.Notice("Catalogue Ollama à jour (" + cat.length + " modèles).");
+					} catch (e) {
+						new obsidian.Notice("Échec du rafraîchissement (ollama.com injoignable).");
+					}
+					b.setDisabled(false);
+					render();
+				}));
+			const listEl = setting.controlEl.createDiv({ cls: "qbd-model-manager" });
+			setting.controlEl.style.width = "100%";
+
+			const render = () => {
+				listEl.empty();
+				const catalog = getCatalog();
+				const sel = getSel();
+				sel.forEach((val, idx) => {
+					const meta = aiProviders.getOllamaModelMeta(val, catalog);
+					if (idx === VISIBLE) listEl.createDiv({ cls: "qbd-model-manager-sep", text: "Accessible en défilant" });
+					const row = listEl.createDiv({ cls: "qbd-model-manager-row" });
+					row.setAttribute("draggable", "true");
+					const handle = row.createSpan({ cls: "qbd-model-manager-handle" });
+					obsidian.setIcon(handle, "grip-vertical");
+					const icon = row.createSpan({ cls: "qbd-model-manager-icon" });
+					obsidian.setIcon(icon, meta.cloud ? "cloud" : "hard-drive");
+					row.createSpan({ cls: "qbd-model-manager-label", text: meta.label });
+					const rm = row.createEl("button", { cls: "qbd-model-manager-remove" });
+					obsidian.setIcon(rm, "x");
+					rm.setAttribute("aria-label", "Retirer");
+					rm.addEventListener("click", async () => {
+						const a = getSel(); a.splice(idx, 1); await saveSel(a); render();
+					});
+					row.addEventListener("dragstart", (e) => {
+						e.dataTransfer.setData("text/plain", String(idx));
+						e.dataTransfer.effectAllowed = "move";
+						row.classList.add("is-dragging");
+					});
+					row.addEventListener("dragend", () => row.classList.remove("is-dragging"));
+					row.addEventListener("dragover", (e) => { e.preventDefault(); row.classList.add("is-drop-target"); });
+					row.addEventListener("dragleave", () => row.classList.remove("is-drop-target"));
+					row.addEventListener("drop", async (e) => {
+						e.preventDefault(); row.classList.remove("is-drop-target");
+						const from = parseInt(e.dataTransfer.getData("text/plain"), 10);
+						if (isNaN(from) || from === idx) return;
+						const a = getSel();
+						const [moved] = a.splice(from, 1);
+						a.splice(idx, 0, moved);
+						await saveSel(a); render();
+					});
+				});
+				if (sel.length >= MAX) {
+					listEl.createDiv({ cls: "qbd-model-manager-note", text: "Maximum " + MAX + " modèles. Retirez-en un pour en ajouter un autre." });
+				} else {
+					const avail = catalog.filter(m => !sel.includes(m.value));
+					if (avail.length) {
+						const addWrap = listEl.createDiv({ cls: "qbd-model-manager-add" });
+						addWrap.createSpan({ cls: "qbd-model-manager-add-label", text: "Ajouter :" });
+						avail.forEach(m => {
+							const chip = addWrap.createEl("button", { cls: "qbd-model-manager-chip" });
+							const ci = chip.createSpan({ cls: "qbd-model-manager-chip-icon" });
+							obsidian.setIcon(ci, "plus");
+							chip.createSpan({ text: m.label });
+							chip.addEventListener("click", async () => {
+								const a = getSel();
+								if (a.length < MAX) { a.push(m.value); await saveSel(a); render(); }
+							});
+						});
+					}
+					// Ajout manuel : n'importe quel tag de modèle (futur-proof).
+					const manualWrap = listEl.createDiv({ cls: "qbd-model-manager-manual" });
+					const input = manualWrap.createEl("input", { cls: "qbd-model-manager-input", attr: { type: "text", placeholder: "Autre modèle (ex. glm-5.3:cloud)" } });
+					const addManual = async () => {
+						const v = (input.value || "").trim();
+						if (!v) return;
+						const a = getSel();
+						if (!a.includes(v) && a.length < MAX) { a.push(v); await saveSel(a); render(); }
+					};
+					const addBtn = manualWrap.createEl("button", { cls: "qbd-model-manager-manual-btn", text: "Ajouter" });
+					addBtn.addEventListener("click", addManual);
+					input.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); addManual(); } });
+				}
+			};
+			render();
+
+			// Rafraîchit le catalogue en tâche de fond à l'ouverture (best-effort).
+			aiProviders.fetchOllamaCloudCatalog().then(cat => {
+				this.plugin.settings.aiOllamaCatalog = cat;
+				return this.plugin.saveSettings();
+			}).then(() => render()).catch(() => { /* hors-ligne → repli */ });
 		}
 
 		// ─── Contextual Tutorial ───
@@ -389,7 +474,7 @@ class QuizBlocksSettingTab extends obsidian.PluginSettingTab {
 			const tutorialHeader = tutorialEl.createDiv({ cls: "qb-ai-tutorial-header" });
 			tutorialHeader.style.cssText = "display: flex; align-items: center; gap: 0.5em; margin-bottom: 0.8em;";
 			const headerIcon = tutorialHeader.createSpan({ cls: "qb-ai-tutorial-icon" });
-			obsidian.setIcon(headerIcon, currentProvider === "claude-code" ? "sparkles" : currentProvider === "ollama-cloud" ? "cloud" : "cpu");
+			obsidian.setIcon(headerIcon, currentProvider === "ollama" ? "cpu" : "sparkles");
 			headerIcon.style.cssText = "display: flex; align-items: center; color: var(--interactive-accent);";
 			tutorialHeader.createEl("h4", {
 				text: tutorial.title,
@@ -576,6 +661,14 @@ module.exports = class InteractiveQuizPlugin extends obsidian.Plugin {
 			QUIZ_BLOCK_LANGUAGE,
 			async (source, el, ctx) => {
 				const host = el.createDiv({ cls: "quiz-blocks-host" });
+
+				// Lie la destruction de l'instance au cycle de vie du bloc : à chaque
+				// re-render/unload, Obsidian appelle onunload → destroyQuiz, ce qui retire
+				// les listeners document/window, ResizeObservers et timers. Sans ça, chaque
+				// re-render (édition de note, toggle mode) fuit une instance complète.
+				const renderChild = new obsidian.MarkdownRenderChild(host);
+				renderChild.onunload = () => { try { host.__quizDestroy?.(); } catch (_) {} };
+				ctx.addChild(renderChild);
 
 				try {
 					const quiz = parseQuizSource(source);
