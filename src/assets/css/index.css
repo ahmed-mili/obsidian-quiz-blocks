@@ -25,6 +25,7 @@
 @import url('./components/resource-btn.css');
 @import url('./components/settings-code.css');
 @import url('./components/ui-select.css');
+@import url('./components/effort-slider.css');
 
 /* Pages */
 @import url('./pages/results.css');

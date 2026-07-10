@@ -17,8 +17,11 @@ function closeAllSelects() {
 /*
  * createSelect(parent, {
  *   value, options: [{ value, label, hint? }],
- *   onChange(value), disabled?, placeholder?
- * }) → { el, setValue, setOptions, setDisabled }
+ *   onChange(value), onOpen?, disabled?, placeholder?
+ * }) → { el, setValue, setOptions, setDisabled, refreshMenu }
+ * onOpen : appelé à chaque ouverture du menu (rafraîchissements async) ;
+ * refreshMenu : redessine les options du menu s'il est ouvert (les données
+ * lues par renderOption ont pu changer entre-temps).
  */
 function createSelect(parent, opts) {
 	let options = opts.options || [];
@@ -77,26 +80,12 @@ function createSelect(parent, opts) {
 		closeMenu();
 	}
 
-	function openMenu() {
-		if (disabled || options.length === 0 || !trigger.isConnected) return;
-		closeAllSelects();
-
-		const rect = trigger.getBoundingClientRect();
-		menuEl = document.body.createDiv({ cls: "qbd-select-menu" });
-		menuEl.setAttribute("role", "listbox");
-		// Hauteur max bornée par la place du meilleur côté. Un select bas
-		// sur écran mobile a peu de place en dessous → on ouvrira vers le
-		// haut (openUp) plutôt que de déborder sous le pli (le menu est
-		// position:fixed, la partie hors écran serait inatteignable).
-		const spaceBelow = window.innerHeight - rect.bottom - 8;
-		const spaceAbove = rect.top - 8;
-		const openUp = spaceBelow < 160 && spaceAbove > spaceBelow;
-		const maxH = Math.max(Math.min(openUp ? spaceAbove : spaceBelow, 320), 120);
-		menuEl.style.top = rect.bottom + 4 + "px";
-		menuEl.style.left = rect.left + "px";
-		menuEl.style.minWidth = rect.width + "px";
-		menuEl.style.maxHeight = maxH + "px";
-
+	/* (Re)construit les options du menu ouvert. Séparé d'openMenu pour que
+	   refreshMenu puisse redessiner en place quand un statut async arrive
+	   pendant que le menu est ouvert (ex. version d'un CLI re-détectée). */
+	function renderMenuOptions() {
+		if (!menuEl) return;
+		menuEl.empty();
 		for (const o of options) {
 			const optBtn = menuEl.createEl("button", {
 				cls: "qbd-select-option" + (o.value === value ? " is-active" : "")
@@ -120,6 +109,30 @@ function createSelect(parent, opts) {
 				if (changed && opts.onChange) opts.onChange(o.value);
 			});
 		}
+	}
+
+	function openMenu() {
+		if (disabled || options.length === 0 || !trigger.isConnected) return;
+		closeAllSelects();
+		if (opts.onOpen) opts.onOpen();
+
+		const rect = trigger.getBoundingClientRect();
+		menuEl = document.body.createDiv({ cls: "qbd-select-menu" });
+		menuEl.setAttribute("role", "listbox");
+		// Hauteur max bornée par la place du meilleur côté. Un select bas
+		// sur écran mobile a peu de place en dessous → on ouvrira vers le
+		// haut (openUp) plutôt que de déborder sous le pli (le menu est
+		// position:fixed, la partie hors écran serait inatteignable).
+		const spaceBelow = window.innerHeight - rect.bottom - 8;
+		const spaceAbove = rect.top - 8;
+		const openUp = spaceBelow < 160 && spaceAbove > spaceBelow;
+		const maxH = Math.max(Math.min(openUp ? spaceAbove : spaceBelow, 320), 120);
+		menuEl.style.top = rect.bottom + 4 + "px";
+		menuEl.style.left = rect.left + "px";
+		menuEl.style.minWidth = rect.width + "px";
+		menuEl.style.maxHeight = maxH + "px";
+
+		renderMenuOptions();
 
 		// Positionnement vertical définitif : au-dessus si le bas manque
 		// de place (openUp), sinon en dessous (défaut déjà posé).
@@ -155,7 +168,8 @@ function createSelect(parent, opts) {
 			if (nextValue !== undefined) value = nextValue;
 			refreshLabel();
 		},
-		setDisabled(d) { disabled = !!d; refreshLabel(); }
+		setDisabled(d) { disabled = !!d; refreshLabel(); },
+		refreshMenu: renderMenuOptions
 	};
 }
 
@@ -556,5 +570,462 @@ function openModelMenu(anchorEl, opts) {
 	return { close: closeMenu };
 }
 
+/*
+ * openEffortSlider(anchorEl, {
+ *   variant: "claude" | "codex",
+ *   efforts: [{ value, label, accent? }], currentEffort,
+ *   onPickEffort(value)
+ * })
+ * Popover slider d'effort — réplique du contrôle natif de chaque outil :
+ * — claude : carte « Effort <Niveau> » + aide (?) au survol, libellés
+ *   « Plus rapide / Plus intelligent », piste à points, remplissage violet
+ *   étoilé au niveau accent (ultracode) ;
+ * — codex : carte « Advanced › » + éclair (tooltip « 1.5x speed / More
+ *   usage » au survol, non cliquable), piste à remplissage dégradé bleu
+ *   étoilé, violette au niveau accent (ultra), tooltip « Consumes usage
+ *   limits faster » au survol de la piste au niveau max/ultra.
+ * Le popover reste ouvert pendant l'ajustement (comme les originaux) ;
+ * onPickEffort est notifié à chaque niveau retenu (relâchement/clavier).
+ */
+function openEffortSlider(anchorEl, opts) {
+	closeAllSelects();
+
+	const efforts = opts.efforts || [];
+	if (!efforts.length) return null;
+	const variant = opts.variant === "codex" ? "codex" : "claude";
+	const n = efforts.length;
+	let idx = Math.max(0, efforts.findIndex(e => e.value === opts.currentEffort));
+	let committed = efforts[idx].value;
+
+	const menuEl = document.body.createDiv({
+		cls: "qbd-select-menu qbd-effort-pop qbd-effort-pop--" + variant
+	});
+	menuEl.setAttribute("role", "menu");
+
+	// ── Tooltips au survol (aide, éclair, piste) ──
+	// Portalés au <body> ; suivis dans `tips` pour être retirés à la fermeture
+	// du popover (l'ancre disparaît sans mouseleave). pointer-events: none →
+	// jamais cliquables, conformes à la référence (« juste on le survole »).
+	const tips = new Set();
+	function attachTip(anchor, build, shouldShow) {
+		let tip = null;
+		const hide = () => { if (tip) { tip.remove(); tips.delete(tip); tip = null; } };
+		anchor.addEventListener("mouseenter", () => {
+			if (tip || (shouldShow && !shouldShow())) return;
+			tip = document.body.createDiv({ cls: "qbd-hover-tip" });
+			tips.add(tip);
+			build(tip);
+			const r = anchor.getBoundingClientRect();
+			tip.style.visibility = "hidden";
+			const tr = tip.getBoundingClientRect();
+			let left = r.left + r.width / 2 - tr.width / 2;
+			left = Math.min(Math.max(8, left), window.innerWidth - tr.width - 8);
+			let top = r.top - tr.height - 8;
+			if (top < 8) top = r.bottom + 8;
+			tip.style.left = left + "px";
+			tip.style.top = top + "px";
+			tip.style.visibility = "";
+		});
+		anchor.addEventListener("mouseleave", hide);
+		return hide;
+	}
+
+	// ── En-tête + échelle (claude uniquement — codex n'a que la rangée
+	// slider + éclair Fast, sans titre « Advanced ») ──
+	let valueEl = null;
+	if (variant === "claude") {
+		const head = menuEl.createDiv({ cls: "qbd-effort-pop-head" });
+		const title = head.createSpan({ cls: "qbd-effort-pop-title" });
+		title.createSpan({ text: "Effort" }); // gap 5px via CSS (handoff)
+		valueEl = title.createSpan({ cls: "qbd-effort-pop-value" });
+		// Aide « ? » : cercle custom du handoff (15×15, bordure #56565c),
+		// PAS une icône Lucide — imposé par la référence validée.
+		const help = head.createSpan({ cls: "qbd-effort-pop-icon qbd-effort-pop-help" });
+		help.setAttribute("aria-hidden", "true");
+		help.setText("?");
+		attachTip(help, (tip) => {
+			tip.addClass("qbd-hover-tip--card");
+			tip.createDiv({ cls: "qbd-hover-tip-title", text: "Effort" });
+			tip.createDiv({
+				cls: "qbd-hover-tip-body",
+				text: "Un effort plus élevé génère des réponses plus complètes, mais prend plus de temps et utilise vos limites plus rapidement."
+			});
+		});
+		const scale = menuEl.createDiv({ cls: "qbd-effort-pop-scale" });
+		scale.createSpan({ text: "Plus rapide" });
+		scale.createSpan({ text: "Plus intelligent" });
+	}
+
+	// ── Slider discret (codex : sur une rangée avec l'éclair Fast) ──
+	const sliderHost = variant === "codex" ? menuEl.createDiv({ cls: "qbd-effort-pop-row" }) : menuEl;
+	const slider = sliderHost.createDiv({ cls: "qbd-effort-slider" });
+	slider.tabIndex = 0;
+	slider.setAttribute("role", "slider");
+	slider.setAttribute("aria-label", "Effort");
+	slider.setAttribute("aria-valuemin", "0");
+	slider.setAttribute("aria-valuemax", String(n - 1));
+	const track = slider.createDiv({ cls: "qbd-effort-track" });
+	const fill = track.createDiv({ cls: "qbd-effort-fill" });
+	// Overlay violet (codex) : opacité pilotée par --qbd-p → le fill vire
+	// progressivement du bleu au violet, comme la source ChatGPT.
+	if (variant === "codex") fill.createDiv({ cls: "qbd-effort-fill-ultra" });
+	const rail = track.createDiv({ cls: "qbd-effort-rail" });
+	const dots = [];
+	for (let i = 0; i < n; i++) {
+		// Le point du niveau accent (ultracode) est TOUJOURS violet dans la
+		// carte Claude Code (notchUltracode), même au repos.
+		const dot = rail.createDiv({
+			cls: "qbd-effort-dot" + (efforts[i].accent ? " qbd-effort-dot--ultra" : "")
+		});
+		dot.style.left = (n > 1 ? (i / (n - 1)) * 100 : 0) + "%";
+		dots.push(dot);
+	}
+	// Pouce claude : dans la PISTE (pas le rail) — piloté en transform par
+	// effort-canvas.js (formule du handoff : 1 + v·(W−17)) ; codex : rail
+	// + left % (inchangé).
+	const thumb = (variant === "claude" ? track : rail).createDiv({ cls: "qbd-effort-thumb" });
+	// Piste claude : mosaïque de pixels animés en canvas (handoff validé
+	// « design_handoff_effort_slider ») — visible au niveau ultracode.
+	const trackFx = variant === "claude"
+		? createEffortTrackFx(track, thumb, {
+			accent: "#a78bfa", // accent validé du handoff
+			speed: 0.3,        // vitesse validée
+			value: n > 1 ? idx / (n - 1) : 1
+		})
+		: null;
+
+	// ── Éclair Fast (codex) : VRAI toggle du service tier « priority »
+	// (1.5x speed, more usage), persisté via opts.fast.onToggle. Le tooltip
+	// reste au survol ; absent si le modèle n'expose pas le tier Fast. ──
+	if (variant === "codex" && opts.fast) {
+		const zap = sliderHost.createEl("button", { cls: "qbd-effort-fast qbd-effort-pop-zap" });
+		zap.type = "button";
+		zap.setAttribute("aria-label", "Fast (1.5x speed)");
+		obsidian.setIcon(zap, "zap");
+		const refreshZap = () => {
+			zap.classList.toggle("is-on", !!opts.fast.on);
+			zap.setAttribute("aria-pressed", opts.fast.on ? "true" : "false");
+			// Fast ON → étoiles animées sur le fill bleu (référence ChatGPT).
+			menuEl.classList.toggle("is-fast", !!opts.fast.on);
+		};
+		refreshZap();
+		zap.addEventListener("click", () => {
+			opts.fast.on = !opts.fast.on;
+			refreshZap();
+			if (opts.fast.onToggle) opts.fast.onToggle(opts.fast.on);
+		});
+		attachTip(zap, (tip) => {
+			tip.createDiv({ cls: "qbd-hover-tip-title", text: "1.5x speed" });
+			tip.createDiv({ cls: "qbd-hover-tip-body", text: "More usage" });
+		});
+	}
+
+	// Aux niveaux qui consomment le plus (max/ultra), Codex prévient au survol
+	// de la piste (référence : tooltip au-dessus du slider en état ultra).
+	if (variant === "codex") {
+		attachTip(slider, (tip) => {
+			tip.createDiv({ cls: "qbd-hover-tip-title", text: "Consumes usage limits faster" });
+		}, () => idx >= n - 1 || ["max", "ultra"].includes(efforts[idx].value));
+	}
+
+	const capitalize = (s) => s ? s.charAt(0).toUpperCase() + s.slice(1) : s;
+
+	// En-tête de la carte Claude Code : niveaux en ANGLAIS (demande
+	// explicite). Un niveau inconnu retombe sur son label capitalisé.
+	const CLAUDE_EFFORT_EN = {
+		low: "Low", medium: "Medium", high: "High",
+		xhigh: "Extra", max: "Max", ultracode: "Ultracode"
+	};
+
+	// Transition « ticker » du niveau : l'ancien texte glisse vers le HAUT
+	// en fondant, le nouveau monte depuis le BAS. Le sortant passe en
+	// absolute pour ne pas fausser la largeur ; nettoyage par animationend
+	// + minuterie de secours (reduced-motion ne déclenche pas animationend).
+	function rollValue(label) {
+		const cur = valueEl.querySelector(".qbd-effort-pop-value-text:not(.is-out)");
+		if (cur && cur.textContent === label) return;
+		if (cur) {
+			// Changements rapides : un seul sortant à la fois (les précédents
+			// sont purgés) → une tache floue douce, pas un empilement lisible.
+			valueEl.querySelectorAll(".qbd-effort-pop-value-text.is-out").forEach(e => e.remove());
+			cur.classList.remove("is-in");
+			cur.classList.add("is-out");
+			const drop = () => cur.remove();
+			cur.addEventListener("animationend", drop, { once: true });
+			setTimeout(drop, 350);
+			const next = valueEl.createSpan({ cls: "qbd-effort-pop-value-text is-in", text: label });
+			next.addEventListener("animationend", () => next.classList.remove("is-in"), { once: true });
+		} else {
+			valueEl.createSpan({ cls: "qbd-effort-pop-value-text", text: label });
+		}
+	}
+
+	// Squish du pouce à chaque changement de niveau (source ChatGPT :
+	// scale [1,.93,1,1], times [0,.1309,.6354,1], .3s linear) — la classe
+	// est retirée puis reposée pour rejouer l'animation CSS.
+	let lastIdx = null;
+	function squishThumb() {
+		thumb.classList.remove("is-squish");
+		void thumb.offsetWidth; // reflow → l'animation peut se rejouer
+		thumb.classList.add("is-squish");
+	}
+
+	function update() {
+		const ef = efforts[idx];
+		// Squish : signature ChatGPT (codex) uniquement — le handoff claude
+		// n'en a pas, et son pouce est piloté en transform (conflit).
+		if (variant === "codex" && lastIdx !== null && idx !== lastIdx) squishThumb();
+		const animate = lastIdx !== null; // 1er rendu : pouce posé sans tween
+		lastIdx = idx;
+		slider.style.setProperty("--qbd-p", String(n > 1 ? idx / (n - 1) : 1));
+		slider.setAttribute("aria-valuenow", String(idx));
+		slider.setAttribute("aria-valuetext", ef.label);
+		// Rungs de la zone remplie (source ChatGPT : blancs/30 si i <= idx,
+		// les « étoiles » de la référence).
+		dots.forEach((d, i) => d.classList.toggle("is-filled", i <= idx));
+		// Niveau accent (ultracode / ultra) → état violet.
+		menuEl.classList.toggle("is-ultra", !!ef.accent);
+		if (trackFx) {
+			trackFx.setValue(n > 1 ? idx / (n - 1) : 1, animate);
+			// (Ré)entrer en ultracode rejoue le chargement droite→gauche.
+			trackFx.setUltra(!!ef.accent);
+		}
+		if (valueEl) {
+			rollValue(CLAUDE_EFFORT_EN[ef.value] || capitalize(ef.label));
+			valueEl.classList.toggle("is-ultra", !!ef.accent);
+		}
+	}
+
+	function commit() {
+		const v = efforts[idx].value;
+		if (v === committed) return;
+		committed = v;
+		opts.currentEffort = v;
+		if (opts.onPickEffort) opts.onPickEffort(v);
+	}
+
+	function idxFromPointer(e) {
+		const r = rail.getBoundingClientRect();
+		const p = Math.min(Math.max((e.clientX - r.left) / r.width, 0), 1);
+		return Math.round(p * (n - 1));
+	}
+
+	let dragging = false;
+	slider.addEventListener("pointerdown", (e) => {
+		e.preventDefault();
+		slider.focus();
+		// capture best-effort : un pointerId déjà relâché (stylet, synthèse)
+		// jette InvalidPointerId — le drag suit alors les pointermove simples.
+		try { slider.setPointerCapture(e.pointerId); } catch (err) { /* best effort */ }
+		dragging = true;
+		slider.classList.add("is-dragging"); // press : scale(.94) du pouce (codex)
+		idx = idxFromPointer(e);
+		update();
+	});
+	slider.addEventListener("pointermove", (e) => {
+		if (!dragging) return;
+		const next = idxFromPointer(e);
+		if (next !== idx) { idx = next; update(); }
+	});
+	slider.addEventListener("pointerup", (e) => {
+		if (!dragging) return;
+		dragging = false;
+		slider.classList.remove("is-dragging");
+		try { slider.releasePointerCapture(e.pointerId); } catch (err) { /* best effort */ }
+		commit();
+	});
+	slider.addEventListener("pointercancel", () => { dragging = false; slider.classList.remove("is-dragging"); });
+	slider.addEventListener("keydown", (e) => {
+		let next = idx;
+		if (e.key === "ArrowRight" || e.key === "ArrowUp") next = Math.min(n - 1, idx + 1);
+		else if (e.key === "ArrowLeft" || e.key === "ArrowDown") next = Math.max(0, idx - 1);
+		else if (e.key === "Home") next = 0;
+		else if (e.key === "End") next = n - 1;
+		else return;
+		e.preventDefault();
+		if (next !== idx) { idx = next; update(); commit(); }
+	});
+
+	update();
+
+	// ── Position (au-dessus de l'ancre si le bas manque de place) ──
+	const rect = anchorEl.getBoundingClientRect();
+	menuEl.style.visibility = "hidden";
+	menuEl.style.top = "0px";
+	menuEl.style.left = "0px";
+	const mr = menuEl.getBoundingClientRect();
+	let left = Math.min(Math.max(8, rect.left), window.innerWidth - mr.width - 8);
+	const below = rect.bottom + 4;
+	const top = (below + mr.height <= window.innerHeight - 8 || rect.top - 4 - mr.height < 8)
+		? below : rect.top - 4 - mr.height;
+	menuEl.style.left = left + "px";
+	menuEl.style.top = top + "px";
+	menuEl.style.visibility = "";
+
+	function closeMenu() {
+		if (trackFx) trackFx.destroy(); // stoppe la boucle rAF du canvas
+		for (const t of tips) t.remove();
+		tips.clear();
+		menuEl.remove();
+		openMenus.delete(closeMenu);
+		document.removeEventListener("mousedown", onDocDown, true);
+		document.removeEventListener("keydown", onKeyDown, true);
+		window.removeEventListener("scroll", onScroll, true);
+		window.removeEventListener("resize", closeMenu);
+	}
+
+	function onDocDown(e) {
+		if (anchorEl.contains(e.target) || menuEl.contains(e.target)) return;
+		closeMenu();
+	}
+
+	function onKeyDown(e) {
+		if (e.key === "Escape") closeMenu();
+	}
+
+	function onScroll(e) {
+		if (menuEl.contains(e.target)) return;
+		closeMenu();
+	}
+
+	openMenus.add(closeMenu);
+	document.addEventListener("mousedown", onDocDown, true);
+	document.addEventListener("keydown", onKeyDown, true);
+	window.addEventListener("scroll", onScroll, true);
+	window.addEventListener("resize", closeMenu);
+	setTimeout(() => slider.focus(), 0);
+
+	return { close: closeMenu };
+}
+
+/*
+ * openNotePicker(anchorEl, {
+ *   openFiles: TFile[],   // notes actuellement ouvertes (ordre des onglets)
+ *   allFiles: TFile[],    // toutes les notes du vault (pour la recherche)
+ *   onPick(file)
+ * })
+ * Sélecteur de note (« Insérer dans une note ») : les notes OUVERTES en
+ * tête, et une recherche qui fouille tout le vault en dessous.
+ */
+function openNotePicker(anchorEl, opts) {
+	closeAllSelects();
+
+	const menuEl = document.body.createDiv({
+		cls: "qbd-select-menu qbd-model-menu qbd-model-menu--searchable qbd-note-picker"
+	});
+	menuEl.setAttribute("role", "listbox");
+
+	const searchWrap = menuEl.createDiv({ cls: "qbd-model-menu-search" });
+	const input = searchWrap.createEl("input", {
+		cls: "qbd-model-menu-search-input",
+		attr: { type: "text", placeholder: "Rechercher une note…", spellcheck: "false" }
+	});
+	const listEl = menuEl.createDiv({ cls: "qbd-model-menu-list" });
+
+	function addFile(file) {
+		const b = listEl.createEl("button", { cls: "qbd-select-option qbd-note-picker-item" });
+		b.type = "button";
+		b.setAttribute("role", "option");
+		const ic = b.createSpan({ cls: "qbd-action-menu-icon" });
+		obsidian.setIcon(ic, "file-text");
+		const body = b.createDiv({ cls: "qbd-action-menu-body" });
+		body.createSpan({ cls: "qbd-select-option-label", text: file.basename });
+		const folder = file.parent && file.parent.path && file.parent.path !== "/" ? file.parent.path : "";
+		if (folder) body.createSpan({ cls: "qbd-action-menu-sub", text: folder });
+		b.addEventListener("click", () => {
+			closeMenu();
+			if (opts.onPick) opts.onPick(file);
+		});
+	}
+
+	function paint(query) {
+		listEl.empty();
+		const f = (query || "").trim().toLowerCase();
+		const match = (file) => !f
+			|| file.basename.toLowerCase().includes(f)
+			|| file.path.toLowerCase().includes(f);
+		const open = (opts.openFiles || []).filter(match);
+		// La recherche fouille TOUT le vault ; sans requête, seules les
+		// notes ouvertes sont proposées (référence : « uniquement celles
+		// ouvertes, et on peut surtout chercher »).
+		let rest = [];
+		if (f) {
+			const openPaths = new Set(open.map(x => x.path));
+			rest = (opts.allFiles || []).filter(x => !openPaths.has(x.path) && match(x)).slice(0, 30);
+		}
+		if (open.length) {
+			listEl.createDiv({ cls: "qbd-note-picker-section", text: "Notes ouvertes" });
+			open.forEach(addFile);
+		}
+		if (rest.length) {
+			listEl.createDiv({ cls: "qbd-note-picker-section", text: "Toutes les notes" });
+			rest.forEach(addFile);
+		}
+		if (!open.length && !rest.length) {
+			listEl.createDiv({
+				cls: "qbd-model-menu-empty",
+				text: f ? "Aucune note trouvée" : "Aucune note ouverte — tapez pour chercher"
+			});
+		}
+	}
+
+	paint("");
+	input.addEventListener("input", () => paint(input.value));
+	input.addEventListener("keydown", (e) => {
+		if (e.key === "Escape") {
+			e.stopPropagation();
+			if (input.value) { input.value = ""; paint(""); }
+			else closeMenu();
+		}
+	});
+	setTimeout(() => input.focus(), 0);
+
+	// ── Position (au-dessus de l'ancre si le bas manque de place) ──
+	const rect = anchorEl.getBoundingClientRect();
+	menuEl.style.visibility = "hidden";
+	menuEl.style.top = "0px";
+	menuEl.style.left = "0px";
+	const mr = menuEl.getBoundingClientRect();
+	const left = Math.min(Math.max(8, rect.left), window.innerWidth - mr.width - 8);
+	const below = rect.bottom + 4;
+	const top = (below + mr.height <= window.innerHeight - 8 || rect.top - 4 - mr.height < 8)
+		? below : rect.top - 4 - mr.height;
+	menuEl.style.left = left + "px";
+	menuEl.style.top = top + "px";
+	menuEl.style.visibility = "";
+
+	function closeMenu() {
+		menuEl.remove();
+		openMenus.delete(closeMenu);
+		document.removeEventListener("mousedown", onDocDown, true);
+		document.removeEventListener("keydown", onKeyDown, true);
+		window.removeEventListener("scroll", onScroll, true);
+		window.removeEventListener("resize", closeMenu);
+	}
+
+	function onDocDown(e) {
+		if (anchorEl.contains(e.target) || menuEl.contains(e.target)) return;
+		closeMenu();
+	}
+
+	function onKeyDown(e) {
+		if (e.key === "Escape") closeMenu();
+	}
+
+	function onScroll(e) {
+		if (menuEl.contains(e.target)) return;
+		closeMenu();
+	}
+
+	openMenus.add(closeMenu);
+	document.addEventListener("mousedown", onDocDown, true);
+	document.addEventListener("keydown", onKeyDown, true);
+	window.addEventListener("scroll", onScroll, true);
+	window.addEventListener("resize", closeMenu);
+
+	return { close: closeMenu };
+}
+
 const obsidian = require("obsidian");
-module.exports = { createSelect, closeAllSelects, openActionMenu, openModelMenu };
+const { createEffortTrackFx } = require("./effort-canvas");
+module.exports = { createSelect, closeAllSelects, openActionMenu, openModelMenu, openEffortSlider, openNotePicker };

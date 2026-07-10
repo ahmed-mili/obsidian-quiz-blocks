@@ -1,0 +1,632 @@
+/* ═════════════════════════════════════════════════════════
+   EFFORT SLIDER — Popover d'effort (référence claude.ai / ChatGPT)
+   Dimensions, transitions et structure RELEVÉES DANS LES SOURCES :
+   — Claude Code (webview, module CSS P1HaRA) : piste 18px rayon 9,
+     overflow hidden ; fill `transition: width .15s` ; notches 4px
+     ronds à 40 % ; pouce ROND 14px inset 2px, `transition: left .15s`,
+     ombre 0 1px 2px #0003 ; ultracode = fill violet (charts-purple).
+   — ChatGPT (model-and-reasoning-dropdown) : racine h-5 (20px) ;
+     piste h-4 (16px) rounded-md (6px) bg foreground/5 + inner shadow
+     0 0 2px rgba(0,0,0,.18) ; fill bleu plat animé en largeur
+     `calc(p% + (1-p)*16px)`, overlay violet dont l'OPACITÉ = p
+     (bleu → violet progressif) ; rungs 4px rounded-sm — blancs/30
+     dans la zone remplie (ce sont les « étoiles »), muted/50 au-delà ;
+     pouce 14px rayon 4px blanc, halo violet 0 0 6px + 0 0 16px
+     d'opacité p, press scale(.94) ; durée .3s cubic-bezier(.23,1,.32,1).
+   Couleurs pipettées sur la référence : bleu #658FF2, violet #9678D2.
+   — Panneau + piste CLAUDE : handoff validé « design_handoff_
+     effort_slider » (2026-07-10, reproduit au pixel contre
+     l'animation d'origine) — il SUPPLANTE les métriques P1HaRA
+     ci-dessus pour cette variante ; la mosaïque ultracode est
+     dessinée en canvas (src/dashboard/effort-canvas.js).
+   ═════════════════════════════════════════════════════════ */
+
+.qbd-effort-pop {
+	padding: 12px;
+	gap: 0;
+	overflow: visible;
+	/* Champ d'étoiles des hauts niveaux : DEUX tuiles (56px, repeat-x) aux
+	   positions distinctes, posées sur des pseudo-éléments animés (dérive
+	   horizontale à vitesses opposées + scintillement) — cf. keyframes
+	   qbd-stars-drift / qbd-stars-twinkle. */
+	--qbd-stars:
+		radial-gradient(circle at 12% 32%, rgba(255, 255, 255, 0.5) 0 1px, transparent 1.6px),
+		radial-gradient(circle at 30% 72%, rgba(255, 255, 255, 0.35) 0 0.8px, transparent 1.3px),
+		radial-gradient(circle at 52% 22%, rgba(255, 255, 255, 0.45) 0 1px, transparent 1.6px),
+		radial-gradient(circle at 71% 62%, rgba(255, 255, 255, 0.3) 0 0.8px, transparent 1.3px),
+		radial-gradient(circle at 89% 38%, rgba(255, 255, 255, 0.45) 0 1px, transparent 1.6px);
+	--qbd-stars-b:
+		radial-gradient(circle at 8% 68%, rgba(255, 255, 255, 0.4) 0 0.8px, transparent 1.3px),
+		radial-gradient(circle at 24% 28%, rgba(255, 255, 255, 0.5) 0 1px, transparent 1.6px),
+		radial-gradient(circle at 45% 75%, rgba(255, 255, 255, 0.3) 0 0.8px, transparent 1.3px),
+		radial-gradient(circle at 63% 35%, rgba(255, 255, 255, 0.45) 0 1px, transparent 1.6px),
+		radial-gradient(circle at 82% 65%, rgba(255, 255, 255, 0.35) 0 0.8px, transparent 1.3px),
+		radial-gradient(circle at 95% 25%, rgba(255, 255, 255, 0.5) 0 1px, transparent 1.6px);
+	--qbd-ultra: #a684ff;      /* violet des tiers ultracode/ultra (menu) */
+	--qbd-codex-blue: #658ff2; /* fill Codex (pipette référence) */
+	--qbd-codex-purple: #8866b7; /* violet médian du dégradé ultra (pipette) */
+	/* easing ChatGPT (framer-motion ease:[.23,1,.32,1], duration .3) */
+	--qbd-ease: cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+/* Panneau claude (handoff validé, au pixel) : 232px, fond #1c1c1f
+   SOLIDE (pas de glass), bordure blanche 9 %, rayon 13, ombre
+   profonde, police système. */
+.qbd-effort-pop--claude {
+	width: 232px;
+	padding: 12px 12px 14px;
+	background: #1c1c1f;
+	backdrop-filter: none;
+	-webkit-backdrop-filter: none;
+	border: 1px solid rgba(255, 255, 255, 0.09);
+	border-radius: 13px;
+	box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+	user-select: none;
+	font-family: -apple-system, "SF Pro Text", "Segoe UI", Helvetica, Arial, sans-serif;
+	--qbd-ultra: #a78bfa; /* accent validé du handoff (scope panneau) */
+}
+
+.qbd-effort-pop--codex  { width: 252px; }
+
+/* ── En-tête (claude uniquement — specs du handoff) ── */
+.qbd-effort-pop-head {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 8px;
+	margin-bottom: 12px;
+}
+
+.qbd-effort-pop-title {
+	display: inline-flex;
+	align-items: baseline;
+	gap: 5px;
+	font-size: 13.5px;
+	font-weight: 600;
+	letter-spacing: 0.1px;
+	color: #ececef;
+}
+
+.qbd-effort-pop-value {
+	font-weight: 600;
+	display: inline-flex;
+	position: relative;
+	overflow: hidden; /* fenêtre du ticker : les textes glissent dedans */
+}
+
+.qbd-effort-pop-value.is-ultra {
+	color: var(--qbd-ultra);
+}
+
+/* Ticker du niveau : l'ancien texte sort vers le HAUT en fondant
+   (absolute → ne fausse pas la largeur), le nouveau monte depuis le BAS. */
+.qbd-effort-pop-value-text {
+	display: inline-block;
+	white-space: pre;
+}
+
+.qbd-effort-pop-value-text.is-in {
+	animation: qbd-roll-in 0.2s ease-out both;
+}
+
+.qbd-effort-pop-value-text.is-out {
+	position: absolute;
+	left: 0;
+	top: 0;
+	animation: qbd-roll-out 0.2s ease-in both;
+}
+
+/* Motion blur (référence : pendant un changement rapide le texte est une
+   tache floue douce, jamais deux libellés lisibles superposés). */
+@keyframes qbd-roll-in {
+	from { transform: translateY(90%); opacity: 0; filter: blur(3px); }
+	60%  { filter: blur(1px); }
+	to   { transform: translateY(0);   opacity: 1; filter: blur(0); }
+}
+
+@keyframes qbd-roll-out {
+	from { transform: translateY(0);    opacity: 1; filter: blur(0); }
+	40%  { filter: blur(2px); }
+	to   { transform: translateY(-90%); opacity: 0; filter: blur(4px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.qbd-effort-pop-value-text.is-in { animation: none; }
+	.qbd-effort-pop-value-text.is-out { display: none; }
+}
+
+/* Rangée codex : slider (flex) + éclair Fast à droite, sans en-tête */
+.qbd-effort-pop-row {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+
+.qbd-effort-pop-row .qbd-effort-slider {
+	flex: 1;
+	min-width: 0;
+}
+
+/* Éclair Fast : VRAI toggle (service tier priority). Reset du chrome
+   natif des <button> d'Obsidian, états off/hover/on. */
+.qbd-effort-fast {
+	appearance: none;
+	-webkit-appearance: none;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 26px;
+	height: 26px;
+	padding: 0;
+	flex-shrink: 0;
+	background: transparent !important;
+	border: none;
+	box-shadow: none !important;
+	border-radius: 7px;
+	color: var(--text-muted);
+	cursor: pointer;
+}
+
+.qbd-effort-fast:hover {
+	background: var(--background-modifier-hover) !important;
+	color: #7d8cff;
+}
+
+/* États du bouton Fast (référence annotée) : désactivé = contour gris
+   (même en ultra) ; activé = éclair REMPLI bleu #658FF2 ; activé en
+   ultra = éclair REMPLI violet clair #CBA6F7. Pas de fond plein — le
+   fond du bouton reste neutre (hover léger uniquement). */
+.qbd-effort-fast.is-on {
+	color: var(--qbd-codex-blue);
+}
+
+.qbd-effort-fast.is-on svg {
+	fill: currentColor;
+}
+
+.qbd-effort-pop.is-ultra .qbd-effort-fast.is-on {
+	color: #cba6f7;
+}
+
+/* Aide « ? » (handoff validé) : cercle custom 15×15, bordure 1.3px
+   #56565c, « ? » 9.5px 600 #8e8e95 — survol seulement, jamais
+   cliquable (référence) → cursor par défaut. */
+.qbd-effort-pop-icon {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 15px;
+	height: 15px;
+	border-radius: 50%;
+	border: 1.3px solid #56565c;
+	color: #8e8e95;
+	font-size: 9.5px;
+	font-weight: 600;
+	line-height: 1;
+	cursor: default;
+	flex-shrink: 0;
+}
+
+.qbd-effort-pop-help:hover {
+	color: #ececef;
+}
+
+/* ── Échelle « Plus rapide / Plus intelligent » (claude) ──
+   Handoff validé : 12px, 500, #a5a5ad, 8px au-dessus de la piste. */
+.qbd-effort-pop-scale {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	margin-bottom: 8px;
+	font-size: 12px;
+	font-weight: 500;
+	color: #a5a5ad;
+}
+
+/* ── Slider discret (structure commune, métriques par variante) ── */
+.qbd-effort-slider {
+	position: relative;
+	margin-top: 8px;
+	cursor: pointer;
+	outline: none;
+	touch-action: none; /* le drag du pouce ne doit pas scroller la page */
+}
+
+.qbd-effort-track {
+	position: absolute;
+	left: 0;
+	right: 0;
+	top: 50%;
+	transform: translateY(-50%);
+	height: var(--qbd-track-h);
+	border-radius: var(--qbd-track-r);
+}
+
+.qbd-effort-fill {
+	position: absolute;
+	left: 0;
+	top: 0;
+	bottom: 0;
+	border-radius: var(--qbd-track-r);
+}
+
+/* Rail : zone utile inset du rayon du pouce → positions extrêmes aux
+   bords sans que le pouce déborde de la piste */
+.qbd-effort-rail {
+	position: absolute;
+	left: var(--qbd-edge);
+	right: var(--qbd-edge);
+	top: 0;
+	bottom: 0;
+}
+
+.qbd-effort-dot {
+	position: absolute;
+	top: 50%;
+	transform: translate(-50%, -50%);
+	pointer-events: none;
+}
+
+.qbd-effort-thumb {
+	position: absolute;
+	top: 50%;
+	left: calc(var(--qbd-p, 0) * 100%);
+	transform: translate(-50%, -50%);
+	pointer-events: none;
+}
+
+/* Focus clavier : anneau sur le slider entier (le pouce Claude vit dans
+   une piste overflow:hidden qui rognerait un ring posé sur lui). */
+.qbd-effort-slider:focus-visible {
+	outline: 2px solid color-mix(in srgb, var(--interactive-accent) 60%, transparent);
+	outline-offset: 3px;
+	border-radius: var(--qbd-track-r);
+}
+
+/* ── Variante CLAUDE (handoff validé) : piste 22px rayon 6 fond
+   #3f3f3e, mosaïque canvas au niveau ultracode, pouce 15px piloté
+   en transform, points de niveau fins (ultracode toujours violet). ── */
+.qbd-effort-pop--claude {
+	--qbd-track-h: 22px; /* hauteur du handoff — NE JAMAIS l'augmenter */
+	--qbd-track-r: 6px;
+	--qbd-edge: 8px; /* demi-course → formule du handoff (x−8)/(W−16) */
+}
+
+.qbd-effort-pop--claude .qbd-effort-slider {
+	height: 22px;
+	margin-top: 0; /* l'échelle porte les 8px du handoff */
+}
+
+.qbd-effort-pop--claude .qbd-effort-track {
+	background: #3f3f3e; /* fond de piste du handoff */
+	overflow: hidden; /* le pouce vit DANS la piste */
+}
+
+/* Fill neutre : les niveaux déjà parcourus (avant le pouce) sont
+   légèrement éclaircis, comme la référence (fill gris subtil ~+9 % de
+   luminosité sur la piste creusée). Largeur = jusque sous le pouce. */
+.qbd-effort-pop--claude .qbd-effort-fill {
+	width: calc(2 * var(--qbd-edge) + var(--qbd-p, 0) * (100% - 2 * var(--qbd-edge)));
+	background: color-mix(in srgb, var(--text-normal) 9%, transparent);
+	transition: width 0.15s; /* source : transition:width .15s */
+}
+
+/* ── Ultracode (handoff validé) : la piste devient une MOSAÏQUE de
+   pixels violets animés dessinée en canvas (effort-canvas.js) —
+   chargement droite→gauche à l'ouverture, 4 mini-vagues continues,
+   pixels « afk » qui pulsent. Le fill gris et les points de niveau
+   s'effacent sous la mosaïque (la référence n'en montre aucun). ── */
+.qbd-effort-canvas {
+	position: absolute;
+	inset: 0;
+	width: 100%;
+	height: 100%;
+	display: none;
+}
+
+.qbd-effort-pop--claude.is-ultra .qbd-effort-canvas {
+	display: block;
+}
+
+.qbd-effort-pop--claude.is-ultra .qbd-effort-fill,
+.qbd-effort-pop--claude.is-ultra .qbd-effort-dot {
+	display: none;
+}
+
+/* Points : 3px ronds discrets ; celui du niveau ultracode est TOUJOURS
+   violet (notchUltracode de la source, visible sur la référence). */
+.qbd-effort-pop--claude .qbd-effort-dot {
+	width: 3px;
+	height: 3px;
+	border-radius: 50%;
+	background: color-mix(in srgb, var(--text-muted) 55%, transparent);
+}
+
+.qbd-effort-pop--claude .qbd-effort-dot--ultra {
+	background: var(--qbd-ultra);
+}
+
+/* Pouce (handoff validé) : 15px de large, inset vertical 2px, rayon 5,
+   gris très clair #f4f4f6, ombre 0 1px 3px. Piloté en transform par
+   effort-canvas.js (formule 1 + v·(W−17), tween .15s JS — pas de
+   transition CSS, le canvas doit rester synchrone du pouce). */
+.qbd-effort-pop--claude .qbd-effort-thumb {
+	top: 2px;
+	bottom: 2px;
+	left: 0;
+	width: 15px;
+	height: auto;
+	border-radius: 5px;
+	background: #f4f4f6;
+	box-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+	transform: none;
+	will-change: transform;
+}
+
+/* ── Variante CODEX (pixels de la référence : fill bleu #658FF2, piste
+   pilule 24px avec le pouce blanc INSCRIT dedans — la « grande » taille
+   est la taille permanente, à tous les niveaux ; violet et étoiles
+   UNIQUEMENT au niveau ultra) ── */
+.qbd-effort-pop--codex {
+	--qbd-track-h: 24px;
+	--qbd-track-r: 12px;   /* pilule */
+	--qbd-edge: 12px;      /* le pouce 20px s'arrête aux bords, inset 2px */
+}
+
+.qbd-effort-pop--codex .qbd-effort-slider {
+	height: 26px;
+	margin-top: 8px;
+}
+
+.qbd-effort-pop--codex .qbd-effort-track {
+	background: color-mix(in srgb, var(--text-normal) 10%, transparent); /* piste vide visible (réf #3D3E53) */
+	box-shadow: 0 0 2px 0 rgba(0, 0, 0, 0.18) inset;
+}
+
+/* Fill : bleu PLAT ; largeur = calc(p% + (1-p)·h) (formule source, h =
+   hauteur de piste → moignon rond complet à p=0), animée en .3s bezier. */
+.qbd-effort-pop--codex .qbd-effort-fill {
+	width: calc(var(--qbd-p, 0) * (100% - var(--qbd-track-h)) + var(--qbd-track-h));
+	background: var(--qbd-codex-blue);
+	transition: width 0.3s var(--qbd-ease);
+}
+
+/* Overlay ultra : INVISIBLE sous ultra (référence : tous les niveaux
+   inférieurs restent bleu uni, sans étoiles ni animation) ; fondu .3s
+   quand ultra est atteint. DÉGRADÉ multicolore pipetté sur la référence
+   (bleu-lavande → lilas clair → violet → violet sombre). */
+.qbd-effort-fill-ultra {
+	position: absolute;
+	inset: 0;
+	border-radius: inherit;
+	background: linear-gradient(90deg, #9298f3 0%, #ad9bf1 35%, #8866b7 68%, #6e57ab 100%);
+	opacity: 0;
+	transition: opacity 0.3s var(--qbd-ease);
+}
+
+.qbd-effort-pop--codex.is-ultra .qbd-effort-fill-ultra {
+	opacity: 1;
+}
+
+/* Rungs : 3px ronds (référence) ; blancs/30 dans la zone remplie,
+   muted au-delà. */
+.qbd-effort-pop--codex .qbd-effort-dot {
+	width: 3px;
+	height: 3px;
+	border-radius: 50%;
+	background: color-mix(in srgb, var(--text-muted) 50%, transparent);
+}
+
+.qbd-effort-pop--codex .qbd-effort-dot.is-filled {
+	background: rgba(255, 255, 255, 0.3);
+}
+
+/* Pouce : GRAND CERCLE BLANC 20px (référence — déborde de la piste),
+   ombre portée douce ; halo violet seulement au niveau ultra. */
+.qbd-effort-pop--codex .qbd-effort-thumb {
+	width: 20px;
+	height: 20px;
+	border-radius: 50%;
+	background: #fff;
+	box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+	transition: left 0.3s var(--qbd-ease), transform 0.14s var(--qbd-ease);
+}
+
+.qbd-effort-pop--codex .qbd-effort-thumb::before {
+	content: "";
+	position: absolute;
+	inset: 0;
+	border-radius: inherit;
+	box-shadow:
+		0 0 6px 1px color-mix(in srgb, var(--qbd-codex-purple) 55%, transparent),
+		0 0 16px color-mix(in srgb, var(--qbd-codex-purple) 32%, transparent);
+	opacity: 0;
+	transition: opacity 0.3s var(--qbd-ease);
+}
+
+.qbd-effort-pop--codex.is-ultra .qbd-effort-thumb::before {
+	opacity: 1;
+}
+
+/* Press : scale(.94) le temps du drag (source : duration .14) */
+.qbd-effort-pop--codex .qbd-effort-slider.is-dragging .qbd-effort-thumb {
+	transform: translate(-50%, -50%) scale(0.94);
+}
+
+/* ── Champ d'étoiles ANIMÉ — UNIQUEMENT au niveau ultra/ultracode
+   (référence : aucun violet, étoile ni animation en dessous).
+   Deux régimes côté Codex :
+   — Fast DÉSACTIVÉ : quasi statique — les points flottent LENTEMENT de
+     haut en bas (bob) et scintillent, aucun défilement latéral ;
+   — Fast ACTIVÉ : dérive horizontale continue (sur le fill bleu à tous
+     les niveaux, et sur l'overlay violet à ultra).
+   (L'ultracode Claude a ses propres règles : grille de points + ripple.) */
+.qbd-effort-pop--codex.is-ultra .qbd-effort-fill-ultra::before,
+.qbd-effort-pop--codex.is-ultra .qbd-effort-fill-ultra::after,
+.qbd-effort-pop--codex.is-fast .qbd-effort-fill::before,
+.qbd-effort-pop--codex.is-fast .qbd-effort-fill::after {
+	content: "";
+	position: absolute;
+	inset: 0;
+	border-radius: inherit;
+	background-image: var(--qbd-stars);
+	background-size: 56px 100%;
+	background-repeat: repeat-x;
+	animation:
+		qbd-stars-bob 6s ease-in-out infinite,
+		qbd-stars-twinkle 3.8s ease-in-out infinite;
+}
+
+.qbd-effort-pop--codex.is-ultra .qbd-effort-fill-ultra::after,
+.qbd-effort-pop--codex.is-fast .qbd-effort-fill::after {
+	background-image: var(--qbd-stars-b);
+	animation:
+		qbd-stars-bob 7.5s ease-in-out infinite -2.4s reverse,
+		qbd-stars-twinkle 4.6s ease-in-out infinite -1.8s;
+}
+
+/* Fast ACTIVÉ → les points filent RAPIDEMENT de droite à gauche
+   (effet vitesse ; deux couches à vitesses différentes = parallaxe,
+   toutes dans le même sens). Fill bleu à tout niveau, overlay violet
+   à ultra. */
+.qbd-effort-pop--codex.is-fast .qbd-effort-fill::before,
+.qbd-effort-pop--codex.is-ultra.is-fast .qbd-effort-fill-ultra::before {
+	animation:
+		qbd-stars-drift 1.3s linear infinite,
+		qbd-stars-twinkle 2.4s ease-in-out infinite;
+}
+
+.qbd-effort-pop--codex.is-fast .qbd-effort-fill::after,
+.qbd-effort-pop--codex.is-ultra.is-fast .qbd-effort-fill-ultra::after {
+	animation:
+		qbd-stars-drift 2s linear infinite,
+		qbd-stars-twinkle 3.1s ease-in-out infinite -1.3s;
+}
+
+@keyframes qbd-stars-drift {
+	to { background-position: -56px 0; }
+}
+
+/* Flottement vertical doux (Fast désactivé) : ±3px, aucun latéral. */
+@keyframes qbd-stars-bob {
+	0%, 100% { background-position: 0 -3px; }
+	50% { background-position: 0 3px; }
+}
+
+@keyframes qbd-stars-twinkle {
+	0%, 100% { opacity: 1; }
+	50% { opacity: 0.35; }
+}
+
+/* Squish du pouce à chaque changement de niveau (source ChatGPT :
+   scale [1,.93,1,1], times [0,.1309,.6354,1], duration .3s linear). */
+.qbd-effort-thumb.is-squish {
+	animation: qbd-thumb-squish 0.3s linear;
+}
+
+@keyframes qbd-thumb-squish {
+	0% { transform: translate(-50%, -50%) scale(1); }
+	13.09% { transform: translate(-50%, -50%) scale(0.93); }
+	63.54%, 100% { transform: translate(-50%, -50%) scale(1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.qbd-effort-thumb,
+	.qbd-effort-fill,
+	.qbd-effort-fill-ultra { transition: none !important; }
+	.qbd-effort-pop--codex.is-ultra .qbd-effort-fill-ultra::before,
+	.qbd-effort-pop--codex.is-ultra .qbd-effort-fill-ultra::after,
+	.qbd-effort-pop--codex.is-fast .qbd-effort-fill::before,
+	.qbd-effort-pop--codex.is-fast .qbd-effort-fill::after,
+	.qbd-effort-thumb.is-squish { animation: none !important; }
+	/* Mosaïque canvas claude : effort-canvas.js détecte reduced-motion
+	   lui-même (frame statique, pas de boucle rAF). */
+}
+
+/* ── Tooltips de survol (aide, éclair, piste) ──
+   Jamais cliquables : pointer-events none (référence : « juste on le
+   survole »). Même surface glass que les menus. */
+.qbd-hover-tip {
+	position: fixed;
+	z-index: 1200;
+	pointer-events: none;
+	padding: 7px 10px;
+	max-width: 240px;
+	background: color-mix(in srgb, var(--background-primary) 96%, transparent);
+	backdrop-filter: blur(12px);
+	-webkit-backdrop-filter: blur(12px);
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 8px;
+	box-shadow: 0 8px 20px -6px rgba(0, 0, 0, 0.45);
+	animation: qbd-select-in 0.12s ease-out;
+}
+
+.qbd-hover-tip-title {
+	font-size: 12px;
+	font-weight: 600;
+	color: var(--text-normal);
+	white-space: nowrap;
+	line-height: 1.35;
+}
+
+.qbd-hover-tip-body {
+	font-size: 11px;
+	color: var(--text-muted);
+	white-space: nowrap;
+	line-height: 1.4;
+}
+
+/* Carte d'aide (claude) : plus large, texte multi-lignes */
+.qbd-hover-tip--card {
+	max-width: 252px;
+	padding: 10px 12px;
+}
+
+.qbd-hover-tip--card .qbd-hover-tip-body {
+	white-space: normal;
+	margin-top: 3px;
+}
+
+/* ── Éclair « Fast » à gauche du nom du modèle (bouton composer),
+   comme la pill ChatGPT — visible seulement quand Fast est actif. ── */
+.qbd-model-trigger-zap {
+	display: inline-flex;
+	align-items: center;
+	align-self: center;
+	color: var(--text-normal);
+	flex-shrink: 0;
+}
+
+.qbd-model-trigger-zap svg {
+	width: 12px;
+	height: 12px;
+	fill: currentColor;
+}
+
+/* ── Boutons modèle + effort du composer (référence Claude Code :
+   « Opus 4.8  Max » — libellés nus, sans chevron ni bordure,
+   rapprochés, hover léger) ── */
+.qbd-composer-plain {
+	border: none;
+	background: transparent !important;
+	padding: 5px 7px;
+	min-height: 28px;
+}
+
+.qbd-composer-plain:hover {
+	background: var(--background-modifier-hover) !important;
+}
+
+.qbd-effort-trigger.qbd-composer-plain {
+	margin-left: -6px; /* resserre l'écart modèle ↔ effort */
+}
+
+.qbd-effort-trigger-label {
+	font-weight: 500;
+	color: var(--text-muted);
+}
+
+.qbd-effort-trigger.is-ultra .qbd-effort-trigger-label {
+	color: var(--qbd-ultra, #a684ff);
+	font-weight: 600;
+}
