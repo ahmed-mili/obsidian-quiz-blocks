@@ -343,13 +343,14 @@
 	background: var(--qbd-ultra);
 }
 
-/* Pouce (handoff validé) : 15px de large, inset vertical 2px, rayon 5,
-   gris très clair #f4f4f6, ombre 0 1px 3px. Piloté en transform par
-   effort-canvas.js (formule 1 + v·(W−17), tween .15s JS — pas de
-   transition CSS, le canvas doit rester synchrone du pouce). */
+/* Pouce (handoff amendé par Ahmed 2026-07-10) : 15px de large, PLEINE
+   hauteur de piste (l'inset vertical 2px du handoff est retiré), rayon 5,
+   ombre 0 1px 3px. Piloté en transform par effort-canvas.js (formule
+   1 + v·(W−17), tween .15s JS — pas de transition CSS, le canvas doit
+   rester synchrone du pouce). */
 .qbd-effort-pop--claude .qbd-effort-thumb {
-	top: 2px;
-	bottom: 2px;
+	top: 0;
+	bottom: 0;
 	left: 0;
 	width: 15px;
 	height: auto;
