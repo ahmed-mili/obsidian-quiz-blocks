@@ -65,31 +65,6 @@
 	line-height: 1.4;
 }
 
-/* ── Model card ── */
-.qbd-ai-model-card {
-	background: var(--background-secondary);
-	border: 1px solid var(--background-modifier-border);
-	border-radius: var(--radius-l, 12px);
-	padding: 12px 14px;
-	display: flex;
-	flex-direction: column;
-	gap: 10px;
-}
-
-.qbd-ai-model-header {
-	display: flex;
-	align-items: center;
-	justify-content: space-between;
-}
-
-.qbd-ai-model-label {
-	font-size: 10px;
-	font-weight: 600;
-	color: var(--text-faint);
-	text-transform: uppercase;
-	letter-spacing: 0.08em;
-}
-
 /* ── Sélecteur de fournisseur (logos + statut) ── */
 .qbd-provider-logo {
 	display: inline-flex;
@@ -307,19 +282,11 @@
 	border-color: var(--interactive-accent);
 }
 
-/* Trigger : logo + nom + dot */
+/* Trigger : logo (le nom et le dot de statut vivent dans le menu et le
+   tooltip depuis le passage au bouton logo-seul) */
 .qbd-select-label .qbd-provider-logo {
 	margin-right: 7px;
 	vertical-align: -4px;
-}
-
-.qbd-provider-trigger-name {
-	font-weight: 600;
-}
-
-.qbd-select-label .qbd-status-dot {
-	margin-left: 8px;
-	vertical-align: 1px;
 }
 
 /* Option du menu : logo + (nom / statut) + dot */
@@ -402,27 +369,36 @@
 	background: var(--color-red, #f87171);
 }
 
-/* ── Rangée modèle ── */
-.qbd-ai-model-row {
-	display: flex;
-	align-items: center;
-	gap: 12px;
-}
-
-.qbd-ai-model-row-label {
-	font-size: 12px;
-	color: var(--text-muted);
-	font-weight: 500;
+/* ── Fournisseur dans le pied du composer : bouton LOGO SEUL (la carte
+   « Modèle IA » est supprimée). Chevron masqué, hover léger — le menu
+   portalé conserve logos + statut + sous-titre. ── */
+/* Spécificité 0,3,0 : doit battre « .qbd-ai-composer-tools .qbd-select »
+   (padding 4px 8px), déclaré plus bas — sinon le logo est rogné. */
+.qbd-ai-composer-tools .qbd-select.qbd-provider-trigger-logo {
+	width: 24px;
+	min-width: 24px;
+	height: 30px;
+	padding: 0;
+	justify-content: center;
 	flex-shrink: 0;
-	width: 72px;
+	/* Annule le gap du groupe : le nom du modèle se cale contre le logo
+	   (l'espace visuel restant = padding gauche 7px du bouton modèle,
+	   soit ~11px du glyphe au texte — comme un logo intégré au label). */
+	margin-right: -6px;
 }
 
-/* Largeur contenue : le sélecteur épouse son contenu au lieu
-   d'occuper toute la carte */
-.qbd-ai-model-row .qbd-select {
-	flex: 0 1 auto;
-	min-width: 240px;
-	max-width: 320px;
+.qbd-provider-trigger-logo .qbd-select-chevron {
+	display: none;
+}
+
+.qbd-provider-trigger-logo .qbd-select-label {
+	display: inline-flex;
+	justify-content: center;
+}
+
+/* Le logo du trigger n'a pas de texte à côté : pas de marge héritée. */
+.qbd-provider-trigger-logo .qbd-select-label .qbd-provider-logo {
+	margin-right: 0;
 }
 
 /* ── Hint contextuel (clé manquante, offline, CLI absent) ── */
@@ -1315,10 +1291,6 @@
 		width: 100%;
 	}
 
-	.qbd-ai-model-row .qbd-select {
-		max-width: 100%;
-	}
-
 	.qbd-ai-result-list {
 		max-height: 280px;
 	}
@@ -1331,10 +1303,6 @@
 
 	.qbd-ai-subtitle {
 		font-size: 12px;
-	}
-
-	.qbd-ai-model-row {
-		flex-wrap: wrap;
 	}
 
 	.qbd-ai-hint {

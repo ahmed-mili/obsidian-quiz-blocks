@@ -65,57 +65,77 @@ function createAiHandlers(ctx) {
 		titleRow.createEl("h2", { cls: "qbd-ai-title", text: "Générer un quiz" });
 		formCol.createEl("p", { cls: "qbd-ai-subtitle", text: "Créez un quiz à partir d'un sujet, d'images ou d'un texte." });
 
-		// ── Carte Modèle IA : sélecteur de fournisseur + modèle ──
-		// Aucun fournisseur par défaut : le choix est la première étape,
-		// la rangée Modèle n'apparaît qu'une fois le fournisseur choisi.
+		// ── Fournisseur : bouton LOGO SEUL dans le pied du composer (la
+		// carte « Modèle IA » est supprimée) — le menu garde logos, statut
+		// et sous-titre ; le tooltip au survol porte nom + statut.
+		// Aucun fournisseur par défaut : le choix reste la première étape,
+		// le contrôle Modèle n'apparaît qu'une fois le fournisseur choisi.
 		const provider = ctx.plugin.settings.aiProvider || "";
 		const currentModel = provider
 			? (ctx.plugin.settings.aiModel || aiProviders.getProvider(provider).defaultModel)
 			: "";
 
-		const modelCard = formCol.createDiv({ cls: "qbd-ai-model-card" });
-		const modelHeader = modelCard.createDiv({ cls: "qbd-ai-model-header" });
-		modelHeader.createEl("span", { cls: "qbd-ai-model-label", text: "Modèle IA" });
-
-		// Rangée fournisseur — un seul sélecteur, options avec logos + statut
-		const providerRow = modelCard.createDiv({ cls: "qbd-ai-model-row" });
-		providerRow.createEl("span", { cls: "qbd-ai-model-row-label", text: "Fournisseur" });
-		const providerSelect = createSelect(providerRow, {
-			value: provider || undefined,
-			placeholder: "Choisir un fournisseur…",
-			options: aiProviders.PROVIDERS.map(p => ({ value: p.id, label: p.name, logo: p.logo, sub: p.sub })),
-			renderTrigger: (el, o) => {
-				if (!o) {
-					el.setText("Choisir un fournisseur…");
-					return;
-				}
-				const logo = el.createSpan({ cls: "qbd-provider-logo qbd-provider-logo--" + o.logo });
-				aiProviders.setBrandLogo(logo, o.logo);
-				el.createSpan({ cls: "qbd-provider-trigger-name", text: o.label });
-				const st = providerStatus[o.value];
-				el.createSpan({ cls: "qbd-status-dot qbd-status-dot--" + (st ? st.dot : "checking") });
-			},
-			renderOption: (el, o) => {
-				const logo = el.createSpan({ cls: "qbd-provider-logo qbd-provider-logo--" + o.logo });
-				aiProviders.setBrandLogo(logo, o.logo);
-				const body = el.createDiv({ cls: "qbd-provider-option-body" });
-				body.createSpan({ cls: "qbd-select-option-label", text: o.label });
-				const st = providerStatus[o.value];
-				body.createSpan({ cls: "qbd-provider-option-sub", text: st ? st.text : o.sub });
-				el.createSpan({ cls: "qbd-status-dot qbd-status-dot--" + (st ? st.dot : "checking") });
-			},
-			onChange: async (id) => {
-				ctx.plugin.settings.aiProvider = id;
-				ctx.plugin.settings.aiModel = aiProviders.getProvider(id).defaultModel;
-				await ctx.plugin.saveSettings();
-				render(container);
-			},
-			// Re-vérifie les CLI à CHAQUE ouverture du menu (force = sans TTL) :
-			// après un « claude/codex update », la version affichée se met à
-			// jour toute seule, le menu ouvert est redessiné à l'arrivée des
-			// résultats (setStatus → refreshMenu).
-			onOpen: () => refreshProviderStatuses({ providerSelect, hintZone, provider, currentModel, modelSelect, ollamaCtl, buildOllamaList, force: true })
-		});
+		let providerSelect = null;
+		const buildProviderControl = (parent) => {
+			providerSelect = createSelect(parent, {
+				value: provider || undefined,
+				options: aiProviders.PROVIDERS.map(p => ({ value: p.id, label: p.name, logo: p.logo, sub: p.sub })),
+				renderTrigger: (el, o) => {
+					if (!o) {
+						// Aucun fournisseur : slot vide, le tooltip guide.
+						const ic = el.createSpan({ cls: "qbd-provider-logo" });
+						obsidian.setIcon(ic, "circle-dashed");
+						return;
+					}
+					const logo = el.createSpan({ cls: "qbd-provider-logo qbd-provider-logo--" + o.logo });
+					aiProviders.setBrandLogo(logo, o.logo);
+				},
+				renderOption: (el, o) => {
+					const logo = el.createSpan({ cls: "qbd-provider-logo qbd-provider-logo--" + o.logo });
+					aiProviders.setBrandLogo(logo, o.logo);
+					const body = el.createDiv({ cls: "qbd-provider-option-body" });
+					body.createSpan({ cls: "qbd-select-option-label", text: o.label });
+					const st = providerStatus[o.value];
+					body.createSpan({ cls: "qbd-provider-option-sub", text: st ? st.text : o.sub });
+					el.createSpan({ cls: "qbd-status-dot qbd-status-dot--" + (st ? st.dot : "checking") });
+				},
+				onChange: async (id) => {
+					ctx.plugin.settings.aiProvider = id;
+					ctx.plugin.settings.aiModel = aiProviders.getProvider(id).defaultModel;
+					await ctx.plugin.saveSettings();
+					render(container);
+				},
+				// Re-vérifie les CLI à CHAQUE ouverture du menu (force = sans TTL) :
+				// après un « claude/codex update », la version affichée se met à
+				// jour toute seule, le menu ouvert est redessiné à l'arrivée des
+				// résultats (setStatus → refreshMenu).
+				onOpen: () => refreshProviderStatuses({ providerSelect, hintZone, provider, currentModel, modelSelect, ollamaCtl, buildOllamaList, force: true })
+			});
+			providerSelect.el.addClass("qbd-provider-trigger-logo");
+			// Tooltip : nom + statut, relus à chaque survol (les détections
+			// async peuvent arriver après le rendu).
+			let tip = null;
+			const hide = () => { if (tip) { tip.remove(); tip = null; } };
+			providerSelect.el.addEventListener("mouseenter", () => {
+				if (tip) return;
+				tip = document.body.createDiv({ cls: "qbd-hover-tip" });
+				const p = aiProviders.PROVIDERS.find(x => x.id === (ctx.plugin.settings.aiProvider || ""));
+				tip.createDiv({ cls: "qbd-hover-tip-title", text: p ? p.name : "Choisir un fournisseur" });
+				const st = p && providerStatus[p.id];
+				if (st) tip.createDiv({ cls: "qbd-hover-tip-body", text: st.text });
+				const r = providerSelect.el.getBoundingClientRect();
+				tip.style.visibility = "hidden";
+				const tr = tip.getBoundingClientRect();
+				const left = Math.min(Math.max(8, r.left + r.width / 2 - tr.width / 2), window.innerWidth - tr.width - 8);
+				let top = r.top - tr.height - 8;
+				if (top < 8) top = r.bottom + 8;
+				tip.style.left = left + "px";
+				tip.style.top = top + "px";
+				tip.style.visibility = "";
+			});
+			providerSelect.el.addEventListener("mouseleave", hide);
+			providerSelect.el.addEventListener("click", hide);
+		};
 
 		// Le contrôle Modèle + effort vit désormais dans le pied du composer
 		// (façon claude.ai) : on prépare ici sa fabrique, appelée plus bas.
@@ -164,7 +184,6 @@ function createAiHandlers(ctx) {
 		// (menu façon claude.ai). Seules changent la liste de modèles, la liste
 		// d'efforts et la résolution du modèle (Fable expire côté Claude).
 		if (provider === "claude-code" || provider === "codex") {
-			hintZone = modelCard.createDiv({ cls: "qbd-ai-model-hint" });
 			const isClaude = provider === "claude-code";
 			// Liste relue à CHAQUE usage (trigger + ouverture du menu) : côté
 			// Claude, Fable expire à date ; côté Codex, la liste suit
@@ -255,7 +274,6 @@ function createAiHandlers(ctx) {
 				});
 			};
 		} else if (provider) {
-			hintZone = modelCard.createDiv({ cls: "qbd-ai-model-hint" });
 			// Ollama partage le MÊME contrôle modèle+effort que Claude/Codex
 			// (openModelMenu). L'effort est réel : câblé sur le param `think` de
 			// l'API Ollama (low/medium/high/max). La ligne Effort n'apparaît que
@@ -383,8 +401,10 @@ function createAiHandlers(ctx) {
 		addBtn.setAttribute("aria-label", "Ajouter du contenu");
 		obsidian.setIcon(addBtn, "plus");
 
-		// Groupe droite : sélecteur modèle + effort, puis bouton d'envoi.
+		// Groupe droite : logo fournisseur, sélecteur modèle + effort, puis
+		// bouton options et bouton d'envoi.
 		const composerTools = composerBottom.createDiv({ cls: "qbd-ai-composer-tools" });
+		buildProviderControl(composerTools);
 		if (buildModelControl) buildModelControl(composerTools);
 
 		// Bouton Options (questions + type) : remplace l'ancienne carte
@@ -493,6 +513,11 @@ function createAiHandlers(ctx) {
 			composer.classList.remove("qbd-ai-composer--dragover");
 			if (e.dataTransfer?.files?.length) addImageFiles(Array.from(e.dataTransfer.files));
 		});
+
+		// Hint contextuel du fournisseur (CLI absent, serveur offline…) :
+		// sous le composer depuis la suppression de la carte « Modèle IA ».
+		// :empty → masqué ; rempli par refreshProviderStatuses/renderHint.
+		if (provider) hintZone = formCol.createDiv({ cls: "qbd-ai-model-hint" });
 
 		// (Les options Questions/Type vivent dans le popover du bouton
 		// sliders du composer — l'ancienne carte « Options » est supprimée.)
