@@ -8,7 +8,7 @@
 ══════════════════════════════════════════════════════════ */
 
 const aiProviders = require("./ai-providers");
-const { createSelect, closeAllSelects, openActionMenu, openModelMenu } = require("./ui-select");
+const { createSelect, closeAllSelects, openActionMenu, openModelMenu, openEffortSlider, openNotePicker } = require("./ui-select");
 
 function createAiHandlers(ctx) {
 	let composerText = "";
@@ -17,6 +17,14 @@ function createAiHandlers(ctx) {
 	let questionType = "Mixte";
 	let images = [];
 	let phase = "idle"; // idle | loading | result | error
+	// Client IA de la génération en cours — permet au bouton stop (et à
+	// la touche Esc) d'annuler réellement (kill du CLI / abort du fetch).
+	let activeClient = null;
+	// Éditeur de quiz EMBARQUÉ dans la colonne droite après génération
+	// (référence : l'éditeur complet remplace l'aperçu, pas de nouvel
+	// onglet). generationId invalide l'instance à chaque nouvelle génération.
+	let embedEditor = null;
+	let generationId = 0;
 	let generatedQuestions = [];
 	let errorMessage = "";
 
@@ -38,6 +46,9 @@ function createAiHandlers(ctx) {
 	async function render(container) {
 		containerRef = container;
 		closeAllSelects();
+		// Tooltips portalés au <body> (stop, effort) : un re-render détruit
+		// leur ancre sans mouseleave → purge pour éviter les orphelins.
+		document.querySelectorAll(".qbd-hover-tip").forEach(t => t.remove());
 		container.empty();
 
 		// ── Layout 2 colonnes ──
@@ -97,7 +108,12 @@ function createAiHandlers(ctx) {
 				ctx.plugin.settings.aiModel = aiProviders.getProvider(id).defaultModel;
 				await ctx.plugin.saveSettings();
 				render(container);
-			}
+			},
+			// Re-vérifie les CLI à CHAQUE ouverture du menu (force = sans TTL) :
+			// après un « claude/codex update », la version affichée se met à
+			// jour toute seule, le menu ouvert est redessiné à l'arrivée des
+			// résultats (setStatus → refreshMenu).
+			onOpen: () => refreshProviderStatuses({ providerSelect, hintZone, provider, currentModel, modelSelect, ollamaCtl, buildOllamaList, force: true })
 		});
 
 		// Le contrôle Modèle + effort vit désormais dans le pied du composer
@@ -149,38 +165,90 @@ function createAiHandlers(ctx) {
 		if (provider === "claude-code" || provider === "codex") {
 			hintZone = modelCard.createDiv({ cls: "qbd-ai-model-hint" });
 			const isClaude = provider === "claude-code";
-			const models = isClaude ? aiProviders.getClaudeModels() : aiProviders.getDefaultModels("codex");
-			const efforts = aiProviders.getEfforts(provider);
-			const resolveMv = (v) => isClaude ? aiProviders.resolveClaudeModel(v) : v;
+			// Liste relue à CHAQUE usage (trigger + ouverture du menu) : côté
+			// Claude, Fable expire à date ; côté Codex, la liste suit
+			// ~/.codex/models_cache.json (nouveau modèle du compte → présent au
+			// prochain clic, sans mise à jour manuelle du plugin).
+			const getModels = () => isClaude ? aiProviders.getClaudeModels() : aiProviders.getDefaultModels("codex");
+			const resolveMv = (v) => isClaude ? aiProviders.resolveClaudeModel(v) : aiProviders.resolveCodexModel(v);
+			// Modèle et effort = DEUX boutons séparés (référence claude.ai /
+			// ChatGPT). Le modèle ouvre le menu de modèles (sans ligne Effort) ;
+			// l'effort ouvre le popover slider (openEffortSlider), variante
+			// claude ou codex. Les efforts Codex dépendent du modèle courant
+			// (supported_reasoning_levels) → tout est relu à chaque usage.
 			buildModelControl = (parent) => {
-				const trigger = parent.createEl("button", { cls: "qbd-select qbd-model-trigger" });
+				const currentMv = () => resolveMv(ctx.plugin.settings.aiModel || currentModel);
+				const currentEfforts = () => aiProviders.getEfforts(provider, currentMv());
+				const currentEv = () => aiProviders.resolveEffort(provider, ctx.plugin.settings.aiEffort, currentMv());
+
+				// Référence Claude Code : « Opus 4.8  Max » — libellés nus,
+				// SANS chevrons, rapprochés (l'effort en Capitalisé).
+				const trigger = parent.createEl("button", { cls: "qbd-select qbd-model-trigger qbd-composer-plain" });
 				trigger.type = "button";
 				const trigLabel = trigger.createSpan({ cls: "qbd-select-label" });
-				const trigChev = trigger.createSpan({ cls: "qbd-select-chevron" });
-				obsidian.setIcon(trigChev, "chevron-down");
-				const refreshTrigger = () => {
-					trigLabel.empty();
-					const mv = resolveMv(ctx.plugin.settings.aiModel || currentModel);
-					const cur = models.find(m => m.value === mv) || models[0];
-					trigLabel.createSpan({ cls: "qbd-model-trigger-name", text: cur.label });
-					trigLabel.createSpan({ cls: "qbd-model-trigger-effort", text: aiProviders.getEffortLabel(aiProviders.resolveEffort(provider, ctx.plugin.settings.aiEffort), provider) });
+
+				const effortBtn = parent.createEl("button", { cls: "qbd-select qbd-effort-trigger qbd-composer-plain" });
+				effortBtn.type = "button";
+				const effortLabel = effortBtn.createSpan({ cls: "qbd-select-label qbd-effort-trigger-label" });
+
+				const EFFORT_DISPLAY = {
+					low: "Low", medium: "Medium", high: "High",
+					xhigh: "Extra", max: "Max", ultracode: "Ultracode", ultra: "Ultra"
 				};
-				refreshTrigger();
+
+				const refreshTriggers = () => {
+					trigLabel.empty();
+					const models = getModels();
+					const cur = models.find(m => m.value === currentMv()) || models[0];
+					// Fast actif (codex) → éclair à gauche du nom du modèle,
+					// comme la pill du composer ChatGPT.
+					if (!isClaude && ctx.plugin.settings.aiCodexFast && cur.fast) {
+						const z = trigLabel.createSpan({ cls: "qbd-model-trigger-zap" });
+						obsidian.setIcon(z, "zap");
+					}
+					trigLabel.createSpan({ cls: "qbd-model-trigger-name", text: cur.label });
+					const ev = currentEv();
+					const ef = currentEfforts().find(e => e.value === ev);
+					effortLabel.setText(EFFORT_DISPLAY[ev] || (ef ? ef.label : ev));
+					effortBtn.classList.toggle("is-ultra", !!(ef && ef.accent));
+				};
+				refreshTriggers();
+
 				trigger.addEventListener("click", () => {
 					openModelMenu(trigger, {
-						models,
-						currentModel: resolveMv(ctx.plugin.settings.aiModel || currentModel),
-						efforts,
-						currentEffort: aiProviders.resolveEffort(provider, ctx.plugin.settings.aiEffort),
+						models: getModels(),
+						currentModel: currentMv(),
+						// L'effort a son propre bouton → pas de ligne Effort ici.
+						efforts: [],
 						onPickModel: async (v) => {
 							ctx.plugin.settings.aiModel = v;
 							await ctx.plugin.saveSettings();
-							refreshTrigger();
-						},
+							refreshTriggers();
+						}
+					});
+				});
+
+				effortBtn.addEventListener("click", () => {
+					// Éclair Fast (codex) : seulement si CE modèle expose le tier
+					// « priority » (models_cache) — toggle persisté aiCodexFast.
+					const curModel = getModels().find(m => m.value === currentMv());
+					const fast = (!isClaude && curModel && curModel.fast) ? {
+						on: !!ctx.plugin.settings.aiCodexFast,
+						onToggle: async (v) => {
+							ctx.plugin.settings.aiCodexFast = v;
+							await ctx.plugin.saveSettings();
+							refreshTriggers(); // éclair du bouton modèle
+						}
+					} : null;
+					openEffortSlider(effortBtn, {
+						variant: isClaude ? "claude" : "codex",
+						efforts: currentEfforts(),
+						currentEffort: currentEv(),
+						fast,
 						onPickEffort: async (v) => {
 							ctx.plugin.settings.aiEffort = v;
 							await ctx.plugin.saveSettings();
-							refreshTrigger();
+							refreshTriggers();
 						}
 					});
 				});
@@ -317,22 +385,36 @@ function createAiHandlers(ctx) {
 		if (buildModelControl) buildModelControl(composerTools);
 
 		// Bouton générer dans le composer (façon bouton d'envoi claude.ai) :
-		// caché tant que le champ est vide, apparaît dès qu'il y a du contenu,
-		// fond accent (bleu du plugin) + icône blanche.
+		// caché tant que le champ est vide, flèche ↑ blanche sur fond accent.
+		// Pendant la génération il devient le bouton STOP (carré + tooltip
+		// « Arrêter Esc ») qui annule réellement la génération.
 		const sendBtn = composerTools.createEl("button", { cls: "qbd-ai-composer-send" });
 		sendBtn.type = "button";
-		sendBtn.setAttribute("aria-label", "Générer le quiz");
 		const sendIcon = sendBtn.createSpan({ cls: "qbd-ai-composer-send-icon" });
-		obsidian.setIcon(sendIcon, "sparkles");
-		sendBtn.addEventListener("click", () => {
-			if (canGenerate()) startGeneration(containerRef);
-		});
+		if (phase === "loading") {
+			sendBtn.addClass("is-stop");
+			// Pas d'aria-label ici : Obsidian en fait un tooltip natif,
+			// redondant avec le tooltip custom « Arrêter Esc ».
+			// Carré dessiné en CSS (l'icône Lucide est trop fine/petite).
+			sendIcon.createDiv({ cls: "qbd-ai-stop-square" });
+			attachStopTip(sendBtn);
+			sendBtn.addEventListener("click", () => { if (activeClient) activeClient.abort(); });
+		} else {
+			sendBtn.setAttribute("aria-label", "Générer le quiz");
+			obsidian.setIcon(sendIcon, "arrow-up");
+			sendBtn.addEventListener("click", () => {
+				if (canGenerate()) startGeneration(containerRef);
+			});
+		}
 		generateBtnRef = sendBtn;
 		updateGenerateBtn(generateBtnRef);
 
 		// Détections async (statut fournisseur + modèles réels) : après la
 		// création du contrôle modèle, donc modelSelect existe désormais.
-		refreshProviderStatuses({ providerSelect, hintZone, provider, currentModel, modelSelect });
+		// ollamaCtl et buildOllamaList sont locaux à render → passés en
+		// paramètres (les référencer directement depuis la fonction sœur
+		// refreshProviderStatuses lançait un ReferenceError, statut Ollama gelé).
+		refreshProviderStatuses({ providerSelect, hintZone, provider, currentModel, modelSelect, ollamaCtl, buildOllamaList });
 
 		const fileInput = composer.createEl("input", { type: "file", cls: "qbd-ai-file-input" });
 		fileInput.accept = "image/*";
@@ -424,9 +506,11 @@ function createAiHandlers(ctx) {
 
 	function setStatus(id, providerSelect, dot, text) {
 		providerStatus[id] = { dot, text };
-		// Redessine le trigger (dot de statut du fournisseur choisi)
+		// Redessine le trigger (dot de statut du fournisseur choisi) et les
+		// options du menu s'il est ouvert (versions re-détectées à l'ouverture).
 		if (providerSelect && providerSelect.el.isConnected) {
 			providerSelect.setValue(ctx.plugin.settings.aiProvider || undefined);
+			if (providerSelect.refreshMenu) providerSelect.refreshMenu();
 		}
 	}
 
@@ -465,10 +549,10 @@ function createAiHandlers(ctx) {
 	/* Détections async : statut de chaque provider (trigger + menu du
 	   sélecteur), et pour le provider actif, hint contextuel + liste
 	   réelle de modèles. */
-	function refreshProviderStatuses({ providerSelect, hintZone, provider, currentModel, modelSelect }) {
+	function refreshProviderStatuses({ providerSelect, hintZone, provider, currentModel, modelSelect, ollamaCtl, buildOllamaList, force }) {
 		const settings = ctx.plugin.settings;
 
-		aiProviders.checkClaudeCode().then(res => {
+		aiProviders.checkClaudeCode(force).then(res => {
 			if (res.ok) {
 				setStatus("claude-code", providerSelect, "ok", "Claude Code v" + res.version);
 			} else if (res.reason === "mobile") {
@@ -496,7 +580,7 @@ function createAiHandlers(ctx) {
 			}
 		});
 
-		aiProviders.checkCodex().then(res => {
+		aiProviders.checkCodex(force).then(res => {
 			if (res.ok) {
 				setStatus("codex", providerSelect, "ok", "Codex v" + res.version);
 			} else if (res.reason === "mobile") {
@@ -579,11 +663,16 @@ function createAiHandlers(ctx) {
 
 	function renderPreview(container) {
 		container.empty();
+		container.classList.toggle("qbd-ai-preview--editor", phase === "result");
 
-		const label = container.createEl("p", {
-			cls: "qbd-ai-preview-label",
-			text: phase === "idle" ? "Aperçu" : phase === "loading" ? "Génération en cours…" : phase === "error" ? "Erreur" : "Résultat"
-		});
+		// En phase résultat, l'éditeur embarqué remplace tout l'aperçu
+		// (pas de label « Résultat »).
+		if (phase !== "result") {
+			container.createEl("p", {
+				cls: "qbd-ai-preview-label",
+				text: phase === "idle" ? "Aperçu" : phase === "loading" ? "Génération en cours…" : "Erreur"
+			});
+		}
 
 		if (phase === "idle") {
 			const empty = container.createDiv({ cls: "qbd-ai-preview-empty" });
@@ -617,67 +706,117 @@ function createAiHandlers(ctx) {
 				render(container.parentElement.parentElement);
 			});
 		} else if (phase === "result") {
-			const header = container.createDiv({ cls: "qbd-ai-result-header" });
-			const countWrap = header.createDiv({ cls: "qbd-ai-result-count-wrap" });
+			// ── Barre compacte : compte + Insérer dans une note + Recommencer ──
+			const bar = container.createDiv({ cls: "qbd-ai-embed-bar" });
+			const countWrap = bar.createDiv({ cls: "qbd-ai-result-count-wrap" });
 			const checkIcon = countWrap.createSpan({ cls: "qbd-ai-result-check" });
 			obsidian.setIcon(checkIcon, "check-circle");
 			countWrap.createSpan({ cls: "qbd-ai-result-count", text: `${generatedQuestions.length} questions générées` });
 
-			const restartBtn = header.createEl("button", { cls: "qbd-btn qbd-btn--ghost" });
+			const insertBtn = bar.createEl("button", {
+				cls: "qbd-btn qbd-btn--primary",
+				text: "Insérer dans une note"
+			});
+			const insertIcon = insertBtn.createSpan({ cls: "qbd-btn-icon" });
+			obsidian.setIcon(insertIcon, "plus");
+			insertBtn.prepend(insertIcon);
+			// Picker : notes OUVERTES en tête + recherche dans tout le vault.
+			insertBtn.addEventListener("click", () => {
+				const seen = new Set();
+				const openFiles = [];
+				for (const leaf of ctx.app.workspace.getLeavesOfType("markdown")) {
+					const f = leaf.view && leaf.view.file;
+					if (f && !seen.has(f.path)) { seen.add(f.path); openFiles.push(f); }
+				}
+				openNotePicker(insertBtn, {
+					openFiles,
+					allFiles: ctx.app.vault.getMarkdownFiles(),
+					onPick: (file) => insertIntoNote(file)
+				});
+			});
+
+			const restartBtn = bar.createEl("button", { cls: "qbd-btn qbd-btn--ghost" });
 			const restartIcon = restartBtn.createSpan({ cls: "qbd-btn-icon" });
 			obsidian.setIcon(restartIcon, "rotate-ccw");
 			restartBtn.createSpan({ text: "Recommencer" });
 			restartBtn.addEventListener("click", () => {
 				phase = "idle";
 				generatedQuestions = [];
+				embedEditor = null;
 				composerText = "";
 				noteAttachment = null;
 				images = [];
 				render(container.parentElement.parentElement);
 			});
 
-			const resultList = container.createDiv({ cls: "qbd-ai-result-list" });
-			for (let i = 0; i < generatedQuestions.length; i++) {
-				const q = generatedQuestions[i];
-				const item = resultList.createDiv({ cls: "qbd-ai-result-item" });
-				const num = item.createDiv({ cls: "qbd-ai-result-num" });
-				num.textContent = String(i + 1);
-				item.createSpan({ cls: "qbd-ai-result-text", text: q.prompt || q.title || `Question ${i + 1}` });
-				item.createSpan({ cls: "qbd-ai-result-type-badge", text: q.type || "Choix unique" });
-			}
-
-			// Action buttons
-			const actions = container.createDiv({ cls: "qbd-ai-result-actions" });
-			const insertBtn = actions.createEl("button", {
-				cls: "qbd-btn qbd-btn--primary",
-				text: "Insérer dans la note"
-			});
-			const insertIcon = insertBtn.createSpan({ cls: "qbd-btn-icon" });
-			obsidian.setIcon(insertIcon, "plus");
-			insertBtn.prepend(insertIcon);
-			insertBtn.addEventListener("click", () => insertIntoNote());
-
-			const editBtn = actions.createEl("button", {
-				cls: "qbd-btn qbd-btn--ghost",
-				text: "Ouvrir dans l'éditeur"
-			});
-			const editIcon = editBtn.createSpan({ cls: "qbd-btn-icon" });
-			obsidian.setIcon(editIcon, "pencil");
-			editBtn.prepend(editIcon);
-			editBtn.addEventListener("click", () => openInEditor());
+			// ── L'ÉDITEUR COMPLET, embarqué à la place de l'aperçu ──
+			const host = container.createDiv({ cls: "qbd-ai-editor-embed qb-root" });
+			mountEmbedEditor(host);
 		}
+	}
+
+	/* Monte l'éditeur de quiz complet dans `host` (colonne droite de la
+	   page). L'instance survit aux re-renders de la page : les questions en
+	   cours d'édition sont reprises tant que la génération n'a pas changé. */
+	function mountEmbedEditor(host) {
+		const { attachQuizEditorCore } = require("../editor");
+		const prev = embedEditor;
+		const inst = attachQuizEditorCore({}, host, ctx.app, ctx.plugin);
+		inst.buildUI();
+		if (prev && prev._genId === generationId) {
+			// Re-render de la page → reprendre l'édition en cours, en place.
+			inst.questions.length = 0;
+			prev.questions.forEach(q => inst.questions.push(q));
+			Object.assign(inst.examOptions, prev.examOptions);
+			inst.render();
+		} else {
+			inst.render();
+			const JSON5 = require("json5");
+			// silent : pas de Notice d'import à chaque montage. Pas de
+			// sourceFile → aucune sauvegarde automatique vers une note.
+			inst.importQuizSource(JSON5.stringify(generatedQuestions, null, 2), null, { silent: true });
+		}
+		inst._genId = generationId;
+		embedEditor = inst;
 	}
 
 	function updateGenerateBtn(btn) {
 		if (!btn) return;
 		// Le bouton d'envoi n'apparaît qu'avec du contenu (texte/image/note),
 		// et reste désactivé tant que la génération n'est pas possible
-		// (aucun fournisseur configuré).
+		// (aucun fournisseur configuré). Pendant la génération il devient le
+		// bouton stop → toujours visible et cliquable.
+		const loading = phase === "loading";
 		const hasContent = !!(composerText.trim() || images.length > 0 || noteAttachment);
 		const canGen = canGenerate();
-		btn.classList.toggle("is-visible", hasContent);
-		btn.disabled = !canGen;
-		btn.classList.toggle("qbd-ai-composer-send--disabled", !canGen);
+		btn.classList.toggle("is-visible", hasContent || loading);
+		btn.disabled = loading ? false : !canGen;
+		btn.classList.toggle("qbd-ai-composer-send--disabled", !loading && !canGen);
+	}
+
+	/* Tooltip du bouton stop (référence Claude Code : « Arrêter  Esc »),
+	   au survol uniquement. */
+	function attachStopTip(btn) {
+		let tip = null;
+		const hide = () => { if (tip) { tip.remove(); tip = null; } };
+		btn.addEventListener("mouseenter", () => {
+			if (tip) return;
+			tip = document.body.createDiv({ cls: "qbd-hover-tip" });
+			const row = tip.createDiv({ cls: "qbd-hover-tip-row" });
+			row.createSpan({ cls: "qbd-hover-tip-title", text: "Arrêter" });
+			row.createSpan({ cls: "qbd-hover-tip-esc", text: "Esc" });
+			const r = btn.getBoundingClientRect();
+			tip.style.visibility = "hidden";
+			const tr = tip.getBoundingClientRect();
+			const left = Math.min(Math.max(8, r.left + r.width / 2 - tr.width / 2), window.innerWidth - tr.width - 8);
+			let top = r.top - tr.height - 8;
+			if (top < 8) top = r.bottom + 8;
+			tip.style.left = left + "px";
+			tip.style.top = top + "px";
+			tip.style.visibility = "";
+		});
+		btn.addEventListener("mouseleave", hide);
+		btn.addEventListener("click", hide);
 	}
 
 	async function startGeneration(container) {
@@ -685,9 +824,16 @@ function createAiHandlers(ctx) {
 		errorMessage = "";
 		render(container);
 
+		const aiClient = require("./ai-client");
+		const client = aiClient(ctx.plugin);
+		activeClient = client;
+		// Esc annule la génération (référence : tooltip « Arrêter  Esc »)
+		const onEsc = (e) => {
+			if (e.key === "Escape") { e.preventDefault(); client.abort(); }
+		};
+		document.addEventListener("keydown", onEsc);
+
 		try {
-			const aiClient = require("./ai-client");
-			const client = aiClient(ctx.plugin);
 
 			// Source déduite du contenu du composer :
 			// images → vision ; note attachée → texte source ; sinon sujet
@@ -720,72 +866,65 @@ function createAiHandlers(ctx) {
 				images: imageData
 			});
 		} catch (err) {
+			if (err && err.aborted) {
+				// Annulation volontaire (bouton stop / Esc) → retour à l'état
+				// initial, sans écran d'erreur.
+				document.removeEventListener("keydown", onEsc);
+				activeClient = null;
+				generatedQuestions = [];
+				phase = "idle";
+				render(container);
+				return;
+			}
 			errorMessage = err.message || "Vérifiez vos paramètres IA dans les paramètres du plugin.";
 			generatedQuestions = [];
 		}
 
-		phase = generatedQuestions.length > 0 ? "result" : "error";
+		document.removeEventListener("keydown", onEsc);
+		activeClient = null;
+		if (generatedQuestions.length > 0) {
+			// Nouvelle génération → l'éditeur embarqué repart des questions
+			// fraîches (renderPreview le monte dans la colonne droite).
+			generationId++;
+			embedEditor = null;
+			phase = "result";
+		} else {
+			phase = "error";
+		}
 		render(container);
 	}
 
-	async function insertIntoNote() {
-		if (generatedQuestions.length === 0) return;
-
-		const activeFile = ctx.app.workspace.getActiveFile();
-		if (!activeFile) {
-			new obsidian.Notice("Aucune note active");
+	/* Insère le quiz dans la note choisie via le picker (« Insérer dans une
+	   note »). L'état ÉDITÉ de l'éditeur embarqué prime sur les questions
+	   générées brutes (les retouches faites dans l'éditeur sont insérées). */
+	async function insertIntoNote(file) {
+		if (!file) return;
+		let quizJson;
+		if (embedEditor && embedEditor.questions.length) {
+			const { exportAll } = require("../editor/export");
+			quizJson = exportAll(embedEditor.questions, embedEditor.examOptions);
+		} else if (generatedQuestions.length) {
+			quizJson = require("json5").stringify(generatedQuestions, null, 2);
+		} else {
 			return;
 		}
 
 		try {
-			const JSON5 = require("json5");
-			let content = await ctx.app.vault.read(activeFile);
+			let content = await ctx.app.vault.read(file);
 
-			const quizBlock = "```quiz-blocks\n" + JSON5.stringify(generatedQuestions, null, 2) + "\n```";
+			const quizBlock = "```quiz-blocks\n" + quizJson + "\n```";
 
 			// Vérifier s'il y a déjà un bloc quiz-blocks
 			if (content.includes("```quiz-blocks")) {
-				new obsidian.Notice("Un bloc quiz-blocks existe déjà dans cette note. Ouvrez l'éditeur pour le modifier.");
+				new obsidian.Notice("Un bloc quiz-blocks existe déjà dans « " + file.basename + " ». Ouvrez l'éditeur pour le modifier.");
 				return;
 			}
 
 			content += "\n\n" + quizBlock;
-			await ctx.app.vault.modify(activeFile, content);
-			new obsidian.Notice("Quiz inséré dans la note");
+			await ctx.app.vault.modify(file, content);
+			new obsidian.Notice("Quiz inséré dans « " + file.basename + " »");
 		} catch (err) {
 			new obsidian.Notice("Erreur lors de l'insertion");
-		}
-	}
-
-	async function openInEditor() {
-		if (generatedQuestions.length === 0) return;
-		const activeFile = ctx.app.workspace.getActiveFile();
-		if (!activeFile) {
-			new obsidian.Notice("Aucune note active");
-			return;
-		}
-
-		try {
-			const { QuizBuilderView, VIEW_TYPE } = require("../editor");
-			const existing = ctx.app.workspace.getLeavesOfType(VIEW_TYPE);
-			let leaf;
-			if (existing.length > 0) {
-				leaf = existing[0];
-				ctx.app.workspace.revealLeaf(leaf);
-			} else {
-				leaf = ctx.app.workspace.getLeaf("tab");
-				await leaf.setViewState({ type: VIEW_TYPE, active: true });
-				ctx.app.workspace.revealLeaf(leaf);
-			}
-
-			const JSON5 = require("json5");
-			const source = JSON5.stringify(generatedQuestions, null, 2);
-			const view = leaf.view;
-			if (view && view.openQuizFile) {
-				await view.openQuizFile(activeFile, source);
-			}
-		} catch (err) {
-			new obsidian.Notice("Erreur lors de l'ouverture dans l'éditeur");
 		}
 	}
 

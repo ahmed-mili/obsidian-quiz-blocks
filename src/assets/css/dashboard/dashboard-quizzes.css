@@ -39,7 +39,9 @@
 	height: 14px;
 }
 
-.qbd-quizzes-search-input {
+/* `.qbd-root` préfixe pour passer devant le chrome natif input/button d'Obsidian
+   (`.theme-dark input`, `button:not(.clickable-icon)`, spécificité ≥ 0,1,1). */
+.qbd-root .qbd-quizzes-search-input {
 	width: 100%;
 	background: var(--background-secondary);
 	border: 1px solid var(--background-modifier-border);
@@ -48,17 +50,18 @@
 	color: var(--text-normal);
 	font-size: 12px;
 	outline: none;
+	box-shadow: none;
 	box-sizing: border-box;
 	font-family: var(--font-interface, inherit);
 	transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
-.qbd-quizzes-search-input:focus {
+.qbd-root .qbd-quizzes-search-input:focus {
 	border-color: var(--interactive-accent);
 	box-shadow: 0 0 0 2px color-mix(in srgb, var(--interactive-accent) 20%, transparent);
 }
 
-.qbd-quizzes-search-input::placeholder {
+.qbd-root .qbd-quizzes-search-input::placeholder {
 	color: var(--text-faint);
 }
 
@@ -70,7 +73,7 @@
 	margin-bottom: 16px;
 }
 
-.qbd-filter-pill {
+.qbd-root .qbd-filter-pill {
 	padding: 5px 12px;
 	border-radius: 20px;
 	font-size: 11px;
@@ -84,12 +87,12 @@
 	line-height: 1.3;
 }
 
-.qbd-filter-pill:hover {
+.qbd-root .qbd-filter-pill:hover {
 	border-color: var(--background-modifier-border-hover);
 	background: var(--background-modifier-hover);
 }
 
-.qbd-filter-pill--active {
+.qbd-root .qbd-filter-pill--active {
 	background: var(--interactive-accent);
 	border-color: var(--interactive-accent);
 	color: var(--text-on-accent);

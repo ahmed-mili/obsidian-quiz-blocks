@@ -713,6 +713,67 @@
 	to   { opacity: 1; transform: scale(1); }
 }
 
+/* Bouton STOP pendant la génération (référence Claude Code : fond GRIS
+   NEUTRE discret — pas teinté par l'accent —, petit carré en contour
+   clair, tooltip « Arrêter  Esc » au survol). */
+.qbd-ai-composer-send.is-stop {
+	background: rgba(255, 255, 255, 0.07) !important;
+}
+
+.qbd-ai-composer-send.is-stop:hover {
+	background: rgba(255, 255, 255, 0.12) !important;
+}
+
+/* Carré du stop : dessiné en CSS — GRAND (14px), trait épais (2.5px),
+   coins arrondis, comme la référence. */
+.qbd-ai-stop-square {
+	width: 14px;
+	height: 14px;
+	border: 2.5px solid currentColor;
+	border-radius: 4px;
+}
+
+/* Raccourci dans le tooltip du stop (« Arrêter  Esc ») */
+.qbd-hover-tip-row {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+
+.qbd-hover-tip-esc {
+	font-size: 11px;
+	color: var(--text-faint);
+}
+
+/* ── Éditeur de quiz EMBARQUÉ après génération (référence : l'éditeur
+   complet remplace l'aperçu, dans la page — pas de nouvel onglet) ── */
+.qbd-ai-preview--editor {
+	display: flex;
+	flex-direction: column;
+}
+
+.qbd-ai-embed-bar {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	margin-bottom: 10px;
+}
+
+.qbd-ai-embed-bar .qbd-ai-result-count-wrap {
+	flex: 1;
+	min-width: 0;
+}
+
+.qbd-ai-editor-embed {
+	flex: 1;
+	min-height: 0;
+	position: relative;
+	overflow: hidden;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 12px;
+	background: var(--background-primary);
+}
+
 /* Attachements dans le composer */
 .qbd-ai-composer-attachments {
 	display: flex;

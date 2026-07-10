@@ -110,7 +110,7 @@ function createDetailHandlers(ctx) {
 				const item = wrapper.createDiv({ cls: "qbd-detail-question-item" });
 				const num = item.createDiv({ cls: "qbd-detail-question-num" });
 				num.textContent = String(i + 1);
-				item.createSpan({ cls: "qbd-detail-question-text", text: q.title || q.prompt || `Question ${i + 1}` });
+				item.createSpan({ cls: "qbd-detail-question-text", text: q.prompt || q.title || `Question ${i + 1}` });
 
 				if (quizStat.questionsDone > i) {
 					const check = item.createSpan({ cls: "qbd-detail-question-check" });

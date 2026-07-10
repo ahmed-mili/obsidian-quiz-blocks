@@ -15,6 +15,7 @@ const QUIZ_FENCE_END = "```";
 function createScanner(app) {
 	const cache = new Map(); // path → { title, questions, types, mtime }
 	const listeners = [];
+	const vaultEventRefs = []; // EventRef des app.vault.on(...) pour les retirer au destroy
 	let scanning = false;
 
 	/* ── Parse un bloc quiz-blocks pour extraire les métadonnées ── */
@@ -50,11 +51,9 @@ function createScanner(app) {
 			else if (typeSet.has("matching")) quizType = "Association";
 			else quizType = "Mixte";
 
-			// Premier titre comme titre du quiz
-			const title = questions[0]?.title || questions[0]?.prompt?.slice(0, 50) || "Quiz sans titre";
-
+			// Le titre affiché vient du nom de la note (défini au niveau du cache),
+			// pas de la 1re question (qui vaut souvent « Question 1 »).
 			return {
-				title: title.slice(0, 80),
 				questions: questions.length,
 				types: Array.from(typeSet),
 				quizType
@@ -90,7 +89,7 @@ function createScanner(app) {
 
 		for (const file of markdownFiles) {
 			try {
-				const content = await app.vault.read(file);
+				const content = await app.vault.cachedRead(file);
 				const quizSource = extractQuizSource(content);
 				if (!quizSource) continue;
 
@@ -100,6 +99,7 @@ function createScanner(app) {
 				cache.set(file.path, {
 					path: file.path,
 					basename: file.basename,
+					title: file.basename,
 					...meta,
 					mtime: file.stat?.mtime || 0
 				});
@@ -115,7 +115,7 @@ function createScanner(app) {
 	/* ── Scan incrémental d'un seul fichier ── */
 	async function scanFile(file) {
 		try {
-			const content = await app.vault.read(file);
+			const content = await app.vault.cachedRead(file);
 			const quizSource = extractQuizSource(content);
 
 			if (!quizSource) {
@@ -182,33 +182,33 @@ function createScanner(app) {
 
 	/* ── Setup des events vault ── */
 	function setupVaultListeners() {
-		app.vault.on("create", (file) => {
+		vaultEventRefs.push(app.vault.on("create", (file) => {
 			if (file.extension === "md" && !scanning) {
 				scanFile(file);
 			}
-		});
+		}));
 
-		app.vault.on("modify", (file) => {
+		vaultEventRefs.push(app.vault.on("modify", (file) => {
 			if (file.extension === "md" && !scanning) {
 				scanFile(file);
 			}
-		});
+		}));
 
-		app.vault.on("delete", (file) => {
+		vaultEventRefs.push(app.vault.on("delete", (file) => {
 			if (cache.has(file.path)) {
 				cache.delete(file.path);
 				notifyListeners();
 			}
-		});
+		}));
 
-		app.vault.on("rename", (file, oldPath) => {
+		vaultEventRefs.push(app.vault.on("rename", (file, oldPath) => {
 			if (cache.has(oldPath)) {
 				cache.delete(oldPath);
 				scanFile(file);
 			} else if (file.extension === "md" && !scanning) {
 				scanFile(file);
 			}
-		});
+		}));
 	}
 
 	/* ── Initialisation ── */
@@ -218,6 +218,10 @@ function createScanner(app) {
 	}
 
 	function destroy() {
+		for (const ref of vaultEventRefs) {
+			try { app.vault.offref(ref); } catch (_) { /* ignore */ }
+		}
+		vaultEventRefs.length = 0;
 		listeners.length = 0;
 		cache.clear();
 	}

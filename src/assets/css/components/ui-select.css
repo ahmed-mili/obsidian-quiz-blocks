@@ -526,3 +526,27 @@
 .qbd-model-menu-back .qbd-select-check {
 	color: var(--text-muted);
 }
+
+/* ── Sélecteur de note (« Insérer dans une note ») ──
+   Notes ouvertes en tête, recherche vault entière en dessous. */
+.qbd-note-picker {
+	min-width: 300px;
+}
+
+.qbd-note-picker-section {
+	padding: 6px 8px 3px;
+	font-size: 10px;
+	font-weight: 600;
+	letter-spacing: 0.06em;
+	text-transform: uppercase;
+	color: var(--text-faint);
+}
+
+.qbd-note-picker-item {
+	align-items: center;
+	gap: 10px;
+}
+
+.qbd-note-picker-item .qbd-action-menu-sub {
+	max-width: 280px;
+}

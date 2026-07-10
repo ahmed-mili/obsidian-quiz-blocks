@@ -80,16 +80,91 @@ const CLAUDE_EFFORTS = [
 ];
 
 /* ── Modèles Codex (ChatGPT) ──
-   Source : ~/.codex/models_cache.json (récupéré du compte OpenAI). Labels et
-   descriptions FR alignés sur le picker /model de Codex. Le modèle interne
-   « codex-auto-review » est volontairement exclu. */
-const CODEX_MODELS = [
-	{ value: "gpt-5.5", label: "GPT-5.5", hint: "frontier", desc: "Pour le code complexe et la recherche" },
-	{ value: "gpt-5.6-terra", label: "GPT-5.6 Terra", hint: "recommandé", desc: "Équilibré pour le travail quotidien" },
-	{ value: "gpt-5.6-luna", label: "GPT-5.6 Luna", hint: "rapide", desc: "Rapide et économique" },
-	{ value: "gpt-5.4", label: "GPT-5.4", hint: "solide", desc: "Solide pour le code au quotidien" },
-	{ value: "gpt-5.4-mini", label: "GPT-5.4 Mini", hint: "léger", desc: "Léger et rapide pour les tâches simples" }
+   Liste DYNAMIQUE : lue depuis ~/.codex/models_cache.json, que le CLI Codex
+   rafraîchit lui-même depuis le compte OpenAI (visibility "list" = picker
+   /model, priority = ordre du picker, "hide" exclut codex-auto-review).
+   Le tableau ci-dessous n'est qu'un repli embarqué (cache absent/illisible,
+   mobile) et la source des labels/hints/descriptions FR curés. */
+/* `efforts`/`defaultEffort` = supported_reasoning_levels/default_reasoning_level
+   du cache Codex (répliqués ici pour que le repli hors-ligne ait le même
+   comportement de clamp que la liste dynamique). `fast` = le modèle expose le
+   service tier « priority » (Fast, 1.5x speed) — tous sauf gpt-5.4-mini. */
+const CODEX_FALLBACK_MODELS = [
+	{ value: "gpt-5.6-sol", label: "GPT-5.6 Sol", hint: "le plus puissant", desc: "Dernier modèle frontière pour le code agentique", efforts: ["low", "medium", "high", "xhigh", "max", "ultra"], defaultEffort: "low", fast: true },
+	{ value: "gpt-5.6-terra", label: "GPT-5.6 Terra", hint: "recommandé", desc: "Équilibré pour le travail quotidien", efforts: ["low", "medium", "high", "xhigh", "max", "ultra"], defaultEffort: "medium", fast: true },
+	{ value: "gpt-5.6-luna", label: "GPT-5.6 Luna", hint: "rapide", desc: "Rapide et économique", efforts: ["low", "medium", "high", "xhigh", "max"], defaultEffort: "medium", fast: true },
+	{ value: "gpt-5.5", label: "GPT-5.5", hint: "frontier", desc: "Pour le code complexe et la recherche", efforts: ["low", "medium", "high", "xhigh"], defaultEffort: "medium", fast: true },
+	{ value: "gpt-5.4", label: "GPT-5.4", hint: "solide", desc: "Solide pour le code au quotidien", efforts: ["low", "medium", "high", "xhigh"], defaultEffort: "medium", fast: true },
+	{ value: "gpt-5.4-mini", label: "GPT-5.4 Mini", hint: "léger", desc: "Léger et rapide pour les tâches simples", efforts: ["low", "medium", "high", "xhigh"], defaultEffort: "medium", fast: false }
 ];
+
+/* Traductions FR des descriptions du cache Codex — un nouveau modèle dont la
+   description est inconnue garde sa description anglaise d'origine. */
+const CODEX_DESC_FR = {
+	"Latest frontier agentic coding model.": "Dernier modèle frontière pour le code agentique",
+	"Balanced agentic coding model for everyday work.": "Équilibré pour le travail quotidien",
+	"Fast and affordable agentic coding model.": "Rapide et économique",
+	"Frontier model for complex coding, research, and real-world work.": "Pour le code complexe et la recherche",
+	"Strong model for everyday coding.": "Solide pour le code au quotidien",
+	"Small, fast, and cost-efficient model for simpler coding tasks.": "Léger et rapide pour les tâches simples"
+};
+
+/* Modèles Codex réels : ~/.codex/models_cache.json (ou $CODEX_HOME), relu
+   uniquement quand le fichier change (mtime) — donc toujours à jour après un
+   « codex update » ou l'arrivée d'un nouveau modèle, sans re-parse inutile.
+   Les slugs connus gardent leur entrée FR curée ; les inconnus reçoivent un
+   label dérivé du display_name (« GPT-5.7-Nova » → « GPT-5.7 Nova ») et la
+   description du cache (traduite si connue). Ordre = priority du cache. */
+let codexModelsCache = null; // { mtimeMs, models }
+
+function getCodexModels() {
+	try {
+		const fs = require("fs");
+		const os = require("os");
+		const path = require("path");
+		const file = path.join(process.env.CODEX_HOME || path.join(os.homedir(), ".codex"), "models_cache.json");
+		const mtimeMs = fs.statSync(file).mtimeMs;
+		if (codexModelsCache && codexModelsCache.mtimeMs === mtimeMs) return codexModelsCache.models;
+		const data = JSON.parse(fs.readFileSync(file, "utf8"));
+		const models = (data.models || [])
+			.filter(m => m && m.slug && m.visibility === "list")
+			.sort((a, b) => (a.priority || 0) - (b.priority || 0))
+			.map(m => {
+				const curated = CODEX_FALLBACK_MODELS.find(f => f.value === m.slug);
+				const base = curated || {
+					value: m.slug,
+					label: String(m.display_name || m.slug).replace(/(\d)-(?=[A-Za-z])/g, "$1 "),
+					desc: CODEX_DESC_FR[m.description] || m.description || ""
+				};
+				// Efforts supportés + effort par défaut + tier Fast : toujours ceux
+				// du cache (source de vérité, prime sur le repli curé — un modèle
+				// peut gagner/perdre un niveau côté OpenAI sans mise à jour du plugin).
+				const efforts = (m.supported_reasoning_levels || []).map(l => l && l.effort).filter(Boolean);
+				const fast = (m.additional_speed_tiers || []).includes("fast")
+					|| (m.service_tiers || []).some(t => t && t.id === "priority");
+				return Object.assign({}, base,
+					efforts.length ? { efforts } : {},
+					m.default_reasoning_level ? { defaultEffort: m.default_reasoning_level } : {},
+					{ fast });
+			});
+		if (!models.length) return CODEX_FALLBACK_MODELS;
+		codexModelsCache = { mtimeMs, models };
+		return models;
+	} catch (e) {
+		// mobile (pas de fs), cache absent ou JSON invalide → repli embarqué
+		return CODEX_FALLBACK_MODELS;
+	}
+}
+
+/* Modèle Codex effectif : si le modèle persisté n'existe plus dans le cache
+   (slug retiré, bascule de provider), retombe sur le défaut du provider,
+   sinon sur le premier modèle du picker (priority 1). */
+function resolveCodexModel(value) {
+	const models = getCodexModels();
+	if (models.some(m => m.value === value)) return value;
+	const def = getProvider("codex").defaultModel;
+	return models.some(m => m.value === def) ? def : models[0].value;
+}
 
 /* Niveaux de reasoning effort de Codex (`model_reasoning_effort`), du plus
    faible au plus élevé — xhigh tout en bas. Contrairement à Claude Code, cet
@@ -116,25 +191,51 @@ const OLLAMA_EFFORTS = [
 	{ value: "max", label: "max" }
 ];
 
-/* Tableau d'efforts d'un provider (Claude Code, Codex ou Ollama). */
-function getEfforts(providerId) {
-	if (providerId === "codex") return CODEX_EFFORTS;
+/* Tableau d'efforts d'un provider (Claude Code, Codex ou Ollama).
+   Codex : si `modelValue` est fourni, filtré aux niveaux réellement supportés
+   par CE modèle (supported_reasoning_levels du cache — gpt-5.5 s'arrête à
+   xhigh, luna à max, sol/terra vont jusqu'à ultra). */
+function getEfforts(providerId, modelValue) {
+	if (providerId === "codex") {
+		if (modelValue) {
+			const m = getCodexModels().find(x => x.value === modelValue);
+			if (m && Array.isArray(m.efforts) && m.efforts.length) {
+				const filtered = CODEX_EFFORTS.filter(e => m.efforts.includes(e.value));
+				if (filtered.length) return filtered;
+			}
+		}
+		return CODEX_EFFORTS;
+	}
 	if (providerId === "ollama") return OLLAMA_EFFORTS;
 	return CLAUDE_EFFORTS;
 }
 
-/* Effort par défaut d'un provider (celui marqué isDefault, sinon le premier). */
-function getDefaultEffort(providerId) {
-	const efforts = getEfforts(providerId);
+/* Effort par défaut d'un provider (celui marqué isDefault, sinon le premier).
+   Codex + modèle : le default_reasoning_level du cache prime (sol → low). */
+function getDefaultEffort(providerId, modelValue) {
+	const efforts = getEfforts(providerId, modelValue);
+	if (providerId === "codex" && modelValue) {
+		const m = getCodexModels().find(x => x.value === modelValue);
+		if (m && m.defaultEffort && efforts.some(e => e.value === m.defaultEffort)) return m.defaultEffort;
+	}
 	const def = efforts.find(e => e.isDefault);
 	return (def || efforts[0]).value;
 }
 
-/* Renvoie value si c'est un effort valide pour le provider, sinon son défaut.
-   Sert quand on bascule de provider (les ensembles d'efforts diffèrent). */
-function resolveEffort(providerId, value) {
-	const efforts = getEfforts(providerId);
-	return efforts.some(e => e.value === value) ? value : getDefaultEffort(providerId);
+/* Renvoie value si c'est un effort valide pour le provider (et le modèle le
+   cas échéant). Sinon : niveau connu du provider mais pas de CE modèle
+   (ex. ultra sur gpt-5.5) → clamp au niveau supporté le plus proche EN
+   DESSOUS — le réglage persisté n'est pas réécrit, revenir à un modèle qui
+   le supporte le restaure. Valeur inconnue → défaut. */
+function resolveEffort(providerId, value, modelValue) {
+	const efforts = getEfforts(providerId, modelValue);
+	if (efforts.some(e => e.value === value)) return value;
+	const all = getEfforts(providerId);
+	const idx = all.findIndex(e => e.value === value);
+	for (let i = idx - 1; i >= 0; i--) {
+		if (efforts.some(e => e.value === all[i].value)) return all[i].value;
+	}
+	return getDefaultEffort(providerId, modelValue);
 }
 
 function getEffortLabel(value, providerId) {
@@ -349,7 +450,7 @@ async function fetchOllamaCloudCatalog() {
 
 function getDefaultModels(providerId) {
 	if (providerId === "claude-code") return CLAUDE_CODE_MODELS;
-	if (providerId === "codex") return CODEX_MODELS;
+	if (providerId === "codex") return getCodexModels();
 	return dedupeOllamaLatest(OLLAMA_FALLBACK_CATALOG);
 }
 
@@ -376,13 +477,15 @@ function buildChildEnv() {
 let claudeCodeCache = null; // { at, result }
 const CLAUDE_CODE_TTL = 60000;
 
-/* Claude Code CLI installé ? → { ok, version?, reason? } */
-async function checkClaudeCode() {
+/* Claude Code CLI installé ? → { ok, version?, reason? }
+   `force` ignore le TTL (relance le CLI) — sert à re-vérifier la version
+   à l'ouverture du menu fournisseur, après un éventuel update. */
+async function checkClaudeCode(force) {
 	const { Platform } = require("obsidian");
 	if (!Platform.isDesktopApp) {
 		return { ok: false, reason: "mobile" };
 	}
-	if (claudeCodeCache && Date.now() - claudeCodeCache.at < CLAUDE_CODE_TTL) {
+	if (!force && claudeCodeCache && Date.now() - claudeCodeCache.at < CLAUDE_CODE_TTL) {
 		return claudeCodeCache.result;
 	}
 	const result = await new Promise((resolve) => {
@@ -411,13 +514,14 @@ async function checkClaudeCode() {
 let codexCache = null; // { at, result }
 
 /* Codex CLI (ChatGPT) installé ? → { ok, version?, reason? }
-   `codex --version` sort « codex-cli 0.139.0 » → on garde le dernier token. */
-async function checkCodex() {
+   `codex --version` sort « codex-cli 0.139.0 » → on garde le dernier token.
+   `force` ignore le TTL (même logique que checkClaudeCode). */
+async function checkCodex(force) {
 	const { Platform } = require("obsidian");
 	if (!Platform.isDesktopApp) {
 		return { ok: false, reason: "mobile" };
 	}
-	if (codexCache && Date.now() - codexCache.at < CLAUDE_CODE_TTL) {
+	if (!force && codexCache && Date.now() - codexCache.at < CLAUDE_CODE_TTL) {
 		return codexCache.result;
 	}
 	const result = await new Promise((resolve) => {
@@ -486,7 +590,9 @@ module.exports = {
 	getClaudeModels,
 	resolveClaudeModel,
 	CLAUDE_CODE_MODELS,
-	CODEX_MODELS,
+	CODEX_FALLBACK_MODELS,
+	getCodexModels,
+	resolveCodexModel,
 	OLLAMA_FALLBACK_CATALOG,
 	OLLAMA_MAX_MODELS,
 	OLLAMA_VISIBLE_COUNT,

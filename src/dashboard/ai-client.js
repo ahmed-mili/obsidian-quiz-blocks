@@ -14,7 +14,43 @@ function createAiClient(plugin) {
 		ollama: "glm-5.2:cloud",
 	};
 
+	// ── Annulation (bouton stop / Esc) ──
+	// Chaque appel CLI/HTTP enregistre sa fonction d'arrêt ici ; abort()
+	// l'invoque. L'erreur qui en résulte (process tué, fetch avorté) est
+	// traduite en erreur marquée `aborted` que l'UI traite comme un retour
+	// à l'état initial, pas comme une erreur.
+	let abortCurrent = null;
+	let aborted = false;
+
+	function killTree(child) {
+		// Windows : taskkill /T /F sur le PID précis tue tout l'arbre
+		// (codex/claude spawnent des enfants) ; ailleurs SIGTERM suffit.
+		try {
+			if (process.platform === "win32") {
+				require("child_process").exec("taskkill /pid " + child.pid + " /T /F", { windowsHide: true });
+			} else {
+				child.kill("SIGTERM");
+			}
+		} catch (e) { /* best effort */ }
+	}
+
 	async function generate(prompt, options = {}) {
+		aborted = false;
+		try {
+			return await generateInner(prompt, options);
+		} catch (err) {
+			if (aborted) {
+				const e = new Error("Génération annulée");
+				e.aborted = true;
+				throw e;
+			}
+			throw err;
+		} finally {
+			abortCurrent = null;
+		}
+	}
+
+	async function generateInner(prompt, options = {}) {
 		const { count = 5, type = "Mixte", source = "topic", images = [] } = options;
 		const provider = plugin.settings.aiProvider || "claude-code";
 		let model = plugin.settings.aiModel || DEFAULT_MODELS[provider];
@@ -22,11 +58,11 @@ function createAiClient(plugin) {
 		if (provider === "claude-code") {
 			model = require("./ai-providers").resolveClaudeModel(model);
 		}
-		// Codex : si le modèle persisté n'est pas un modèle Codex connu
-		// (ex. bascule récente de provider), retombe sur le défaut Codex.
+		// Codex : si le modèle persisté n'est pas dans la liste réelle du
+		// compte (~/.codex/models_cache.json — ex. bascule récente de
+		// provider, slug retiré), retombe sur le défaut Codex.
 		if (provider === "codex") {
-			const { CODEX_MODELS } = require("./ai-providers");
-			if (!CODEX_MODELS.some(m => m.value === model)) model = DEFAULT_MODELS.codex;
+			model = require("./ai-providers").resolveCodexModel(model);
 		}
 
 		const typeInstruction = type === "Mixte"
@@ -75,9 +111,15 @@ function createAiClient(plugin) {
 			const effort = require("./ai-providers").resolveEffort("ollama", plugin.settings.aiEffort);
 			return callOllama(model, systemPrompt, userPrompt, ollamaUrl, authHeader, images, effort);
 		} else if (provider === "codex") {
-			const { resolveEffort } = require("./ai-providers");
-			const effort = resolveEffort("codex", plugin.settings.aiEffort);
-			return callCodex(model, systemPrompt, userPrompt, images, effort);
+			// Effort clampé aux niveaux supportés par CE modèle (ex. ultra
+			// persisté + gpt-5.5 → xhigh), sinon le CLI rejetterait la valeur.
+			const { resolveEffort, getCodexModels } = require("./ai-providers");
+			const effort = resolveEffort("codex", plugin.settings.aiEffort, model);
+			// Mode Fast (éclair du popover effort) : service tier « priority »,
+			// seulement si CE modèle l'expose (cf. models_cache service_tiers).
+			const m = getCodexModels().find(x => x.value === model);
+			const fast = !!plugin.settings.aiCodexFast && !!(m && m.fast);
+			return callCodex(model, systemPrompt, userPrompt, images, effort, fast);
 		} else {
 			return callClaudeCode(model, systemPrompt, userPrompt, images);
 		}
@@ -142,6 +184,7 @@ function createAiClient(plugin) {
 						resolve(out);
 					}
 				});
+				abortCurrent = () => { aborted = true; killTree(child); };
 				child.stdin.write(fullPrompt);
 				child.stdin.end();
 			});
@@ -197,7 +240,7 @@ function createAiClient(plugin) {
 	   effort de raisonnement via -c model_reasoning_effort=…, réponse finale
 	   écrite dans un fichier (-o) pour un parsing propre. Sandbox read-only et
 	   --ignore-user-config isolent la génération (pas de MCP/hooks perso). */
-	async function callCodex(model, systemPrompt, userPrompt, images = [], effort = "medium") {
+	async function callCodex(model, systemPrompt, userPrompt, images = [], effort = "medium", fast = false) {
 		const { Platform } = require("obsidian");
 		if (!Platform.isDesktopApp) {
 			throw new Error("La génération via ChatGPT (Codex) est disponible sur desktop uniquement.");
@@ -231,6 +274,9 @@ function createAiClient(plugin) {
 		const fullPrompt = systemPrompt + "\n\n" + userPrompt;
 		const cmd = "codex exec -m " + model +
 			" -c model_reasoning_effort=" + effortVal +
+			// Fast (1.5x speed, more usage) : service tier « priority » — la
+			// valeur vient de models_cache.json (service_tiers[].id).
+			(fast ? " -c service_tier=priority" : "") +
 			" -s read-only --skip-git-repo-check --ignore-user-config" +
 			" -C \"" + os.homedir() + "\"" +
 			" -o \"" + outFile + "\"" + imageArgs;
@@ -253,6 +299,7 @@ function createAiClient(plugin) {
 						resolve(out);
 					}
 				});
+				abortCurrent = () => { aborted = true; killTree(child); };
 				child.stdin.write(fullPrompt);
 				child.stdin.end();
 			});
@@ -291,6 +338,10 @@ function createAiClient(plugin) {
 		}
 		authHeaders = authHeaders || {};
 
+		// Annulation : un AbortController couvre les fetch de ce call.
+		const ac = new AbortController();
+		abortCurrent = () => { aborted = true; try { ac.abort(); } catch (e) { /* déjà avorté */ } };
+
 		// ── Step 1 : serveur joignable ? Un modèle cloud (:cloud) tourne à la
 		// demande via le daemon connecté (absent de /api/tags) → on ne vérifie
 		// PAS qu'il est installé ; un modèle local, si. ──
@@ -299,7 +350,7 @@ function createAiClient(plugin) {
 		let installedModels = [];
 		let tagModels = [];
 		try {
-			const tagsResp = await fetch(`${ollamaUrl}/api/tags`, { method: "GET", headers: authHeaders });
+			const tagsResp = await fetch(`${ollamaUrl}/api/tags`, { method: "GET", headers: authHeaders, signal: ac.signal });
 			if (!tagsResp.ok) {
 				throw new Error("ollama_unreachable");
 			}
@@ -364,6 +415,7 @@ function createAiClient(plugin) {
 		try {
 			const resp = await fetch(`${ollamaUrl}/api/chat`, {
 				method: "POST",
+				signal: ac.signal,
 				headers: { "Content-Type": "application/json", ...authHeaders },
 				body: JSON.stringify({
 					model,
@@ -496,7 +548,7 @@ function createAiClient(plugin) {
 		return parsed;
 	}
 
-	return { generate };
+	return { generate, abort: () => { if (abortCurrent) abortCurrent(); } };
 }
 
 module.exports = createAiClient;

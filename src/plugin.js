@@ -17,6 +17,9 @@ const DEFAULT_SETTINGS = {
 	aiProvider: "",
 	aiModel: "",
 	aiEffort: "high",
+	// Mode Fast de Codex (service tier « priority », 1.5x speed) — l'éclair
+	// du popover effort ChatGPT. Ignoré si le modèle ne l'expose pas.
+	aiCodexFast: false,
 	aiOllamaUrl: "http://localhost:11434",
 	aiOllamaCloudKey: "",
 	// Modèles Ollama affichés dans le menu (ordre réglable, max 7) : les
@@ -699,6 +702,10 @@ module.exports = class InteractiveQuizPlugin extends obsidian.Plugin {
 	onunload() {
 		this._scanner?.destroy();
 		this._statsStore?.destroy();
+		// Menus/popovers portalés au <body> (ui-select) : sans fermeture ici,
+		// un menu ouvert au moment d'un unload (update/reload du plugin)
+		// resterait orphelin dans le DOM avec ses closures mortes.
+		try { require("./dashboard/ui-select").closeAllSelects(); } catch (e) { /* best effort */ }
 		this.log?.info("plugin déchargé");
 	}
 

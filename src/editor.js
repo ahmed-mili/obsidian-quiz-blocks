@@ -16,158 +16,138 @@ const createHintHandlers = require("./editor/hint");
 const VIEW_TYPE = "quiz-blocks-builder";
 
 /* ════════════════════════════════════════════════════════
-   QUIZ BUILDER VIEW
+   CŒUR DE L'ÉDITEUR — attachQuizEditorCore(view, host, app, plugin)
+   Assemble l'état, le ctx et les handlers de l'éditeur sur `view`,
+   avec le DOM monté dans `host`. Utilisé par la vue onglet
+   (QuizBuilderView) ET par l'éditeur EMBARQUÉ dans la page Générer
+   du dashboard (`view` y est un simple objet, sans leaf).
    ════════════════════════════════════════════════════════ */
-class QuizBuilderView extends obsidian.ItemView {
-	constructor(leaf, plugin) {
-		super(leaf);
-		this.plugin = plugin;
-		this.questions = [Object.assign(makeDefault("single"), { title: "Question 1" })];
-		this.activeIdx = 0;
-		this.panels = { sidebar: true, editor: true, preview: true, code: false };
-		this._previewDebounce = 0;
-		this.examOptions = {
-			enabled: false,
-			durationMinutes: 10,
-			autoSubmit: true,
-			showTimer: true
-		};
-		this.activeEditorTab = 'content';
-		this.sourceFile = null; // Fichier source ouvert en mode édition directe
-		this._saveDebounce = 0; // Timer pour sauvegarde automatique
+function attachQuizEditorCore(view, host, app, plugin) {
+	view.app = view.app || app;
+	view.plugin = plugin;
+	// Les handlers (ui.js…) lisent view.contentEl : pour la vue onglet c'est
+	// le contentEl de l'ItemView, pour l'embed c'est le host fourni.
+	view.contentEl = view.contentEl || host;
+	view.questions = [Object.assign(makeDefault("single"), { title: "Question 1" })];
+	view.activeIdx = 0;
+	view.panels = { sidebar: true, editor: true, preview: true, code: false };
+	view._previewDebounce = 0;
+	view.examOptions = {
+		enabled: false,
+		durationMinutes: 10,
+		autoSubmit: true,
+		showTimer: true
+	};
+	view.activeEditorTab = 'content';
+	view.sourceFile = null; // Fichier source ouvert en mode édition directe
+	view._saveDebounce = 0; // Timer pour sauvegarde automatique
 
-		this._savedWidths = {
-			sidebar: 320,
-			editor: 480,
-			preview: 304,
-			code: 288
-		};
-		this._minPanelWidth = 50;
-		this._hideThreshold = 10;
+	view._savedWidths = {
+		sidebar: 320,
+		editor: 480,
+		preview: 304,
+		code: 288
+	};
+	view._minPanelWidth = 50;
+	view._hideThreshold = 10;
 
-		// Créer le contexte partagé (ctx) pour injection de dépendances
-		const ctx = {
-			view: this,
-			app: this.app,
-			plugin: plugin,
-			container: this.contentEl,
+	// Créer le contexte partagé (ctx) pour injection de dépendances
+	const ctx = {
+		view,
+		app: view.app,
+		plugin: plugin,
+		container: host,
 
-			questions: this.questions,
-			activeIdx: this.activeIdx,
-			panels: this.panels,
-			examOptions: this.examOptions,
-			activeEditorTab: this.activeEditorTab,
-			_savedWidths: this._savedWidths,
-			_minPanelWidth: this._minPanelWidth,
-			_hideThreshold: this._hideThreshold,
-			_previewDebounce: this._previewDebounce,
+		questions: view.questions,
+		activeIdx: view.activeIdx,
+		panels: view.panels,
+		examOptions: view.examOptions,
+		activeEditorTab: view.activeEditorTab,
+		_savedWidths: view._savedWidths,
+		_minPanelWidth: view._minPanelWidth,
+		_hideThreshold: view._hideThreshold,
+		_previewDebounce: view._previewDebounce,
 
-			get activeQuestion() { return ctx.questions[ctx.activeIdx]; },
-			set activeQuestion(v) { ctx.questions[ctx.activeIdx] = v; },
+		get activeQuestion() { return ctx.questions[ctx.activeIdx]; },
+		set activeQuestion(v) { ctx.questions[ctx.activeIdx] = v; },
 
-			Q_TYPES,
-			loadReact,
-			_setIcon,
-			_iconSpan,
-			makeDefault,
-			md2html,
-			escHtml,
-			esc5,
-			exportQuestion,
-			exportAll,
-			exportAllWithFence,
-			parseQuizSource,
-			ConfirmModal,
-			TypePickerModal,
-			ImportQuizModal,
-			QuizFileSuggestModal,
-			ImportFromNoteModal,
-			VIEW_TYPE
-		};
+		Q_TYPES,
+		loadReact,
+		_setIcon,
+		_iconSpan,
+		makeDefault,
+		md2html,
+		escHtml,
+		esc5,
+		exportQuestion,
+		exportAll,
+		exportAllWithFence,
+		parseQuizSource,
+		ConfirmModal,
+		TypePickerModal,
+		ImportQuizModal,
+		QuizFileSuggestModal,
+		ImportFromNoteModal,
+		VIEW_TYPE
+	};
 
-		// Initialiser les handlers
-		const ui = createEditorUIHandlers(ctx);
-		const resize = createResizeHandlers(ctx);
-		const sidebar = createSidebarHandlers(ctx);
-		const editorForm = createEditorFormHandlers(ctx);
-		const preview = createPreviewHandlers(ctx);
-		const hint = createHintHandlers(ctx);
+	// Initialiser les handlers
+	const ui = createEditorUIHandlers(ctx);
+	const resize = createResizeHandlers(ctx);
+	const sidebar = createSidebarHandlers(ctx);
+	const editorForm = createEditorFormHandlers(ctx);
+	const preview = createPreviewHandlers(ctx);
+	const hint = createHintHandlers(ctx);
 
-		// Attacher les modules au ctx
-		Object.assign(ctx, {
-			ui,
-			resize,
-			sidebar,
-			editorForm,
-			preview,
-			hint
-		});
+	// Attacher les modules au ctx
+	Object.assign(ctx, {
+		ui,
+		resize,
+		sidebar,
+		editorForm,
+		preview,
+		hint
+	});
 
-		// Exposer les méthodes sur l'instance
-		this.buildUI = ui.buildUI.bind(ui);
-		this.syncPanels = ui.syncPanels.bind(ui);
-		this.render = ui.render.bind(ui);
-		this.showTypeModal = ui.showTypeModal.bind(ui);
+	// Exposer les méthodes sur l'instance
+	view.buildUI = ui.buildUI.bind(ui);
+	view.syncPanels = ui.syncPanels.bind(ui);
+	view.render = ui.render.bind(ui);
+	view.showTypeModal = ui.showTypeModal.bind(ui);
 
-		this._setupResizer = resize._setupResizer.bind(resize);
-		this._closeLeftPanel = resize._closeLeftPanel.bind(resize);
-		this._closeRightPanel = resize._closeRightPanel.bind(resize);
-		this._resizePanels = resize._resizePanels.bind(resize);
+	view._setupResizer = resize._setupResizer.bind(resize);
+	view._closeLeftPanel = resize._closeLeftPanel.bind(resize);
+	view._closeRightPanel = resize._closeRightPanel.bind(resize);
+	view._resizePanels = resize._resizePanels.bind(resize);
 
-		this.renderSidebar = sidebar.renderSidebar.bind(sidebar);
-		this.moveQuestion = sidebar.moveQuestion.bind(sidebar);
-		this.deleteQuestion = sidebar.deleteQuestion.bind(sidebar);
+	view.renderSidebar = sidebar.renderSidebar.bind(sidebar);
+	view.moveQuestion = sidebar.moveQuestion.bind(sidebar);
+	view.deleteQuestion = sidebar.deleteQuestion.bind(sidebar);
 
-		this.renderEditor = editorForm.renderEditor.bind(editorForm);
-		this._field = editorForm._field.bind(editorForm);
-		this._resourceSection = editorForm._resourceSection.bind(editorForm);
-		this._renderTypeFields = editorForm._renderTypeFields.bind(editorForm);
-		this._arrayEditor = editorForm._arrayEditor.bind(editorForm);
+	view.renderEditor = editorForm.renderEditor.bind(editorForm);
+	view._field = editorForm._field.bind(editorForm);
+	view._resourceSection = editorForm._resourceSection.bind(editorForm);
+	view._renderTypeFields = editorForm._renderTypeFields.bind(editorForm);
+	view._arrayEditor = editorForm._arrayEditor.bind(editorForm);
 
-		this.schedulePreview = preview.schedulePreview.bind(preview);
-		this.renderPreview = preview.renderPreview.bind(preview);
-		this._resolveImagesInHtml = preview._resolveImagesInHtml.bind(preview);
-		this.renderCode = preview.renderCode.bind(preview);
+	view.schedulePreview = preview.schedulePreview.bind(preview);
+	view.renderPreview = preview.renderPreview.bind(preview);
+	view._resolveImagesInHtml = preview._resolveImagesInHtml.bind(preview);
+	view.renderCode = preview.renderCode.bind(preview);
 
-		this._ensureHintOverlay = hint._ensureHintOverlay.bind(hint);
-		this._applyHintTheme = hint._applyHintTheme.bind(hint);
-		this._openHint = hint._openHint.bind(hint);
-		this._closeHint = hint._closeHint.bind(hint);
-			this._addHintEscHandler = hint._addHintEscHandler.bind(hint);
-		this._removeHintEscHandler = hint._removeHintEscHandler.bind(hint);
+	view._ensureHintOverlay = hint._ensureHintOverlay.bind(hint);
+	view._applyHintTheme = hint._applyHintTheme.bind(hint);
+	view._openHint = hint._openHint.bind(hint);
+	view._closeHint = hint._closeHint.bind(hint);
+	view._addHintEscHandler = hint._addHintEscHandler.bind(hint);
+	view._removeHintEscHandler = hint._removeHintEscHandler.bind(hint);
 
-		// Sauvegarder ctx sur l'instance
-		this._ctx = ctx;
-	}
+	// Sauvegarder ctx sur l'instance
+	view._ctx = ctx;
 
-	getViewType() { return VIEW_TYPE; }
-	getDisplayText() {
-		if (this.sourceFile) {
-			return this.sourceFile.basename || "Quiz Editor";
-		}
-		return "Quiz Editor";
-	}
-	getIcon() { return "graduation-cap"; }
+	// ── Méthodes partagées (vue onglet + éditeur embarqué) ──
 
-	async onOpen() {
-		this.contentEl.empty();
-		this.contentEl.addClass("qb-root");
-		this.buildUI();
-		this.render();
-	}
-
-	onClose() {
-		this._closeHint();
-		this._removeHintEscHandler();
-		const overlay = document.getElementById("qb-hint-overlay");
-		if (overlay) overlay.remove();
-		// Cleanup any resize overlays that might be stuck
-		const resizeOverlays = document.querySelectorAll('div[style*="cursor:ew-resize"]');
-		resizeOverlays.forEach(el => el.remove());
-		this.contentEl.empty();
-	}
-
-	async importQuizSource(source, fileName = null) {
+	view.importQuizSource = async function (source, fileName = null, opts = {}) {
 		try {
 			const parsed = parseQuizSource(source);
 			if (!Array.isArray(parsed) || parsed.length === 0) {
@@ -189,7 +169,7 @@ class QuizBuilderView extends obsidian.ItemView {
 					continue;
 				}
 
-				const question = this.convertParsedToInternal(q);
+				const question = view.convertParsedToInternal(q);
 				if (question) questions.push(question);
 			}
 
@@ -199,63 +179,65 @@ class QuizBuilderView extends obsidian.ItemView {
 			}
 
 			// Stocker le nom du fichier importé
-			this.importedFileName = fileName;
+			view.importedFileName = fileName;
 
 			// Mettre à jour le tableau en place pour que ctx.questions reste synchronisé
-			this.questions.length = 0;
-			questions.forEach(q => this.questions.push(q));
-			this.activeIdx = 0;
-			if (this._ctx) this._ctx.activeIdx = 0;  // Sync ctx.activeIdx
+			view.questions.length = 0;
+			questions.forEach(q => view.questions.push(q));
+			view.activeIdx = 0;
+			if (view._ctx) view._ctx.activeIdx = 0;  // Sync ctx.activeIdx
 			if (examOptions) {
-				Object.assign(this.examOptions, examOptions);
+				Object.assign(view.examOptions, examOptions);
 				// Mettre à jour l'UI de l'examen si la fonction existe
-				if (this.updateExamUIState) this.updateExamUIState();
+				if (view.updateExamUIState) view.updateExamUIState();
 			}
 
 			// Mettre à jour le nom du fichier affiché dans l'UI
-			if (this._fileNameEl) {
-				this._fileNameEl.textContent = fileName || "quiz-blocks";
-				this._fileNameEl.classList.toggle("has-file", !!fileName);
+			if (view._fileNameEl) {
+				view._fileNameEl.textContent = fileName || "quiz-blocks";
+				view._fileNameEl.classList.toggle("has-file", !!fileName);
 			}
 
 			// Rafraîchir le titre de l'onglet
-			if (this.leaf && this.sourceFile) {
+			if (view.leaf && view.sourceFile) {
 				// Mettre à jour getDisplayText pour retourner le nom du fichier
-				this.getDisplayText = () => this.sourceFile.basename;
+				view.getDisplayText = () => view.sourceFile.basename;
 
 				// Forcer le rafraîchissement via updateHeader (méthode interne)
-				if (this.leaf.updateHeader) {
-					this.leaf.updateHeader();
+				if (view.leaf.updateHeader) {
+					view.leaf.updateHeader();
 				}
 
 				// Déclencher un événement pour forcer le rafraîchissement
-				this.app.workspace.trigger('layout-change');
+				view.app.workspace.trigger('layout-change');
 			}
 
-			this.render();
-			new obsidian.Notice(`${questions.length} question(s) importée(s)${fileName ? " depuis " + fileName : ""}`);
+			view.render();
+			if (!opts.silent) {
+				new obsidian.Notice(`${questions.length} question(s) importée(s)${fileName ? " depuis " + fileName : ""}`);
+			}
 		} catch (err) {
 			console.error("Import error:", err);
 			new obsidian.Notice("Erreur lors de l'import: " + err.message);
 		}
-	}
+	};
 
-	async openQuizFile(file, source) {
+	view.openQuizFile = async function (file, source) {
 		// Stocker le fichier source pour sauvegarde automatique
-		this.sourceFile = file;
-		await this.importQuizSource(source, file.name);
-	}
+		view.sourceFile = file;
+		await view.importQuizSource(source, file.name);
+	};
 
-	async saveToSourceFile() {
-		if (!this.sourceFile) return;
+	view.saveToSourceFile = async function () {
+		if (!view.sourceFile) return;
 
 		try {
 			// Lire le contenu actuel du fichier
-			const content = await this.app.vault.read(this.sourceFile);
+			const content = await view.app.vault.read(view.sourceFile);
 
 			// Générer le nouveau contenu du quiz (SANS les fences)
 			const { exportAll } = require("./editor/export");
-			const newQuizJson = exportAll(this.questions, this.examOptions);
+			const newQuizJson = exportAll(view.questions, view.examOptions);
 
 			// Valider que le JSON5 généré est correct avant de sauvegarder
 			try {
@@ -282,24 +264,24 @@ class QuizBuilderView extends obsidian.ItemView {
 
 			// Sauvegarder si le contenu a changé
 			if (updatedContent !== content) {
-				await this.app.vault.modify(this.sourceFile, updatedContent);
-				this.updateSaveIndicator?.(true);
+				await view.app.vault.modify(view.sourceFile, updatedContent);
+				view.updateSaveIndicator?.(true);
 			}
 		} catch (err) {
 			console.error("[Quiz Blocks] Save error:", err);
 			new obsidian.Notice("Erreur lors de la sauvegarde: " + err.message);
 		}
-	}
+	};
 
-	scheduleSave() {
-		if (!this.sourceFile) return;
-		if (this._saveDebounce) clearTimeout(this._saveDebounce);
-		this._saveDebounce = setTimeout(() => this.saveToSourceFile(), 1000);
+	view.scheduleSave = function () {
+		if (!view.sourceFile) return;
+		if (view._saveDebounce) clearTimeout(view._saveDebounce);
+		view._saveDebounce = setTimeout(() => view.saveToSourceFile(), 1000);
 		// Mettre à jour l'indicateur de sauvegarde
-		this.updateSaveIndicator?.(false);
-	}
+		view.updateSaveIndicator?.(false);
+	};
 
-	convertParsedToInternal(q) {
+	view.convertParsedToInternal = function (q) {
 		let type = "single";
 		if (q.ordering) type = "ordering";
 		else if (q.matching) type = "matching";
@@ -380,7 +362,49 @@ class QuizBuilderView extends obsidian.ItemView {
 		}
 
 		return question;
-	}
+	};
+
+	return view;
 }
 
-module.exports = { QuizBuilderView, VIEW_TYPE, QuizFileSuggestModal };
+/* ════════════════════════════════════════════════════════
+   QUIZ BUILDER VIEW
+   ════════════════════════════════════════════════════════ */
+class QuizBuilderView extends obsidian.ItemView {
+	constructor(leaf, plugin) {
+		super(leaf);
+		// Tout l'assemblage (état, ctx, handlers, méthodes) est partagé avec
+		// l'éditeur embarqué du dashboard via attachQuizEditorCore.
+		attachQuizEditorCore(this, this.contentEl, this.app, plugin);
+	}
+
+	getViewType() { return VIEW_TYPE; }
+	getDisplayText() {
+		if (this.sourceFile) {
+			return this.sourceFile.basename || "Quiz Editor";
+		}
+		return "Quiz Editor";
+	}
+	getIcon() { return "graduation-cap"; }
+
+	async onOpen() {
+		this.contentEl.empty();
+		this.contentEl.addClass("qb-root");
+		this.buildUI();
+		this.render();
+	}
+
+	onClose() {
+		this._closeHint();
+		this._removeHintEscHandler();
+		const overlay = document.getElementById("qb-hint-overlay");
+		if (overlay) overlay.remove();
+		// Cleanup any resize overlays that might be stuck
+		const resizeOverlays = document.querySelectorAll('div[style*="cursor:ew-resize"]');
+		resizeOverlays.forEach(el => el.remove());
+		this.contentEl.empty();
+	}
+
+}
+
+module.exports = { QuizBuilderView, VIEW_TYPE, QuizFileSuggestModal, attachQuizEditorCore };
