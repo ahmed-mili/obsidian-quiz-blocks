@@ -637,13 +637,12 @@
 	border: none;
 }
 
-/* Toute la carte se comporte comme UNE zone de saisie discrète :
-   curseur normal partout (jamais le I-beam), y compris sur le champ —
-   les boutons gardent leur pointer. Le clic n'importe où focus le
-   champ (géré dans ai.js). */
+/* Toute la carte se comporte comme UNE zone de saisie : curseur I
+   (text) partout hors des contrôles — qui gardent leur pointer — et le
+   clic n'importe où focus le champ (géré dans ai.js). */
 .qbd-ai-composer,
 .qbd-ai-composer-input {
-	cursor: default;
+	cursor: text;
 }
 
 .qbd-ai-composer-input {
