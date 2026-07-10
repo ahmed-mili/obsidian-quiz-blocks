@@ -6,6 +6,7 @@ const { QuizBuilderView, VIEW_TYPE } = require("./editor");
 const { QuizDashboardView, VIEW_TYPE_DASHBOARD } = require("./dashboard");
 const createScanner = require("./dashboard/scanner");
 const createStatsStore = require("./dashboard/stats-store");
+const voiceInstall = require("./dashboard/voice-install");
 
 const PLUGIN_ID = "quiz-blocks";
 const PLUGIN_NAME = "Quiz Blocks";
@@ -29,6 +30,12 @@ const DEFAULT_SETTINGS = {
 	// Cache du catalogue cloud récupéré de ollama.com ([{value,label}]) : liste
 	// des modèles récents proposés à l'ajout. null → repli embarqué.
 	aiOllamaCatalog: null,
+	// ── Saisie vocale (dictée locale whisper.cpp) — opt-in complet.
+	// Spec : docs/superpowers/specs/2026-07-10-voice-input-design.md
+	voiceEnabled: false,
+	voiceBackend: "cpu",      // "cpu" | "cuda"
+	voiceModel: "small-q5_1", // cf. voice-install.js MODELS
+	voiceLang: "fr",          // "fr" | "auto" | "en"
 };
 
 function createLogger() {
@@ -538,6 +545,108 @@ class QuizBlocksSettingTab extends obsidian.PluginSettingTab {
 				docsLink.style.cssText = "font-size: 0.88em; color: var(--interactive-accent); text-decoration: underline;";
 				docsLink.target = "_blank";
 				docsLink.rel = "noopener noreferrer";
+			}
+		}
+
+		// ─── Saisie vocale (dictée) ───
+		containerEl.createEl("h3", { text: "Saisie vocale (dictée)" });
+		if (!voiceInstall.isSupported()) {
+			containerEl.createEl("p", {
+				text: "Disponible sur Windows uniquement pour l'instant.",
+				cls: "setting-item-description",
+			});
+		} else {
+			new obsidian.Setting(containerEl)
+				.setName("Activer la dictée")
+				.setDesc("Maintenir Espace dans le composer IA pour dicter (transcription 100 % locale, whisper.cpp).")
+				.addToggle(t => t
+					.setValue(this.plugin.settings.voiceEnabled)
+					.onChange(async (v) => {
+						this.plugin.settings.voiceEnabled = v;
+						await this.plugin.saveSettings();
+						this.display();
+					}));
+
+			if (this.plugin.settings.voiceEnabled) {
+				new obsidian.Setting(containerEl)
+					.setName("Accélération")
+					.setDesc("CPU : léger (8 Mo), universel. GPU NVIDIA : téléchargement ~680 Mo, transcription quasi instantanée. (Pas de build AMD/Intel en v1.)")
+					.addDropdown(d => d
+						.addOption("cpu", "CPU")
+						.addOption("cuda", "GPU NVIDIA (CUDA)")
+						.setValue(this.plugin.settings.voiceBackend)
+						.onChange(async (v) => {
+							this.plugin.settings.voiceBackend = v;
+							await this.plugin.saveSettings();
+							this.display();
+						}));
+
+				new obsidian.Setting(containerEl)
+					.setName("Modèle")
+					.setDesc("Rapide suffit pour une dictée propre ; Max gagne sur le bruit/les accents.")
+					.addDropdown(d => {
+						for (const [id, m] of Object.entries(voiceInstall.MODELS)) d.addOption(id, m.label);
+						d.setValue(this.plugin.settings.voiceModel)
+							.onChange(async (v) => {
+								this.plugin.settings.voiceModel = v;
+								await this.plugin.saveSettings();
+								this.display();
+							});
+					});
+
+				new obsidian.Setting(containerEl)
+					.setName("Langue")
+					.addDropdown(d => d
+						.addOption("fr", "Français")
+						.addOption("auto", "Détection automatique")
+						.addOption("en", "Anglais")
+						.setValue(this.plugin.settings.voiceLang)
+						.onChange(async (v) => {
+							this.plugin.settings.voiceLang = v;
+							await this.plugin.saveSettings();
+						}));
+
+				// État d'installation + téléchargements (rien sans clic explicite).
+				const st = voiceInstall.getStatus(this.plugin.settings);
+				const fmtPct = (d, t) => (t ? Math.round((d / t) * 100) + " %" : Math.round(d / 1e6) + " Mo");
+
+				const binRow = new obsidian.Setting(containerEl)
+					.setName("Binaire whisper.cpp (" + this.plugin.settings.voiceBackend + ")")
+					.setDesc(st.cliPath ? "Installé — " + st.cliPath : "Non installé.");
+				if (!st.cliPath) binRow.addButton(b => b
+					.setButtonText("Télécharger")
+					.setCta()
+					.onClick(async () => {
+						b.setDisabled(true);
+						try {
+							await voiceInstall.installBinary(this.plugin.settings.voiceBackend,
+								(d, t) => b.setButtonText(fmtPct(d, t)));
+							new obsidian.Notice("Binaire whisper.cpp installé.");
+						} catch (e) {
+							console.error("[quiz-blocks] install binaire:", e);
+							new obsidian.Notice("Téléchargement échoué : " + e.message);
+						}
+						this.display();
+					}));
+
+				const mdlRow = new obsidian.Setting(containerEl)
+					.setName("Modèle — " + ((voiceInstall.MODELS[this.plugin.settings.voiceModel] || {}).label || this.plugin.settings.voiceModel))
+					.setDesc(st.modelFile ? "Installé — " + st.modelFile : "Non installé.");
+				if (!st.modelFile) mdlRow.addButton(b => b
+					.setButtonText("Télécharger")
+					.setCta()
+					.onClick(async () => {
+						b.setDisabled(true);
+						try {
+							await voiceInstall.installModel(this.plugin.settings.voiceModel,
+								(d, t) => b.setButtonText(fmtPct(d, t)));
+							new obsidian.Notice("Modèle installé.");
+						} catch (e) {
+							console.error("[quiz-blocks] install modèle:", e);
+							new obsidian.Notice("Téléchargement échoué : " + e.message);
+						}
+						this.display();
+					}));
 			}
 		}
 	}
