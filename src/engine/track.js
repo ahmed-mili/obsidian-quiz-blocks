@@ -109,7 +109,7 @@ module.exports = function createTrackHandlers(ctx) {
 	function finishTrackSlideAnimation(token, targetIndex) {
 		if (token !== ctx.quizState.slideToken) return;
 		const { track, viewport } = ctx.viewport.getTrackElements();
-		const shouldLockResultsNow = ctx.isResultsSlideIndex(targetIndex) && ctx.quizState.pendingResultsLock;
+		const shouldLockResultsNow = ctx.isResultsSlideIndex(targetIndex) && ctx.quizState.pendingResultsLock && !ctx.textOnly?.isTextOnlyMode?.();
 		const grewDuringSlide = viewport?.dataset.quizGrowDuringSlide === "1";
 		clearTrackTransitionFallback();
 		if (track && track.__quizTransitionEndHandler) {

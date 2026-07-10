@@ -7,8 +7,10 @@ module.exports = function createInteractionHandlers(ctx) {
 	let __quizZoomFixSettleTimer = 0;
 	let __quizZoomLastDpr = window.devicePixelRatio || 1;
 	let __quizZoomFixHandler = null;
+	const MODE_TOGGLE_ANIMATION_MS = 260;
 
 	function commitQuestionInteraction(qi, { syncHeight = true } = {}) {
+		ctx.invalidateSavedResults?.();
 		const slideIdx = ctx.getSlideIndexForQuestion(qi);
 		if (slideIdx >= 0) ctx.__quizSlideHeightCache?.delete(slideIdx);
 		ctx.refreshQuestionSlide(qi, { syncHeight });
@@ -283,10 +285,14 @@ module.exports = function createInteractionHandlers(ctx) {
 		const isMatch = ctx.isMatchingQuestion(q);
 		const isMulti = !!q.multiSelect;
 
-		if (isTxt) ctx.terminal.bindTextQuestion(trackItem, qi);
-		if (!isTxt && !isOrd && !isMatch) bindBinaryQuestion(trackItem, qi, isMulti);
-		if (isOrd) bindOrderingQuestion(trackItem, qi, q);
-		if (isMatch) bindMatchingQuestion(trackItem, qi, q);
+		if (ctx.textOnly?.isTextOnlyMode?.()) {
+			ctx.textOnly.bindTextOnlyQuestion(trackItem, qi);
+		} else {
+			if (isTxt) ctx.terminal.bindTextQuestion(trackItem, qi);
+			if (!isTxt && !isOrd && !isMatch) bindBinaryQuestion(trackItem, qi, isMulti);
+			if (isOrd) bindOrderingQuestion(trackItem, qi, q);
+			if (isMatch) bindMatchingQuestion(trackItem, qi, q);
+		}
 
 		const hintBtn = trackItem.querySelector(".quiz-hint-btn");
 		if (hintBtn) {
@@ -302,6 +308,12 @@ module.exports = function createInteractionHandlers(ctx) {
 
 		const nextBtn = trackItem.querySelector(".quiz-next-btn");
 		if (nextBtn) nextBtn.addEventListener("click", () => ctx.goToQuestion(qi + 1));
+
+		const resultsBtn = trackItem.querySelector(".quiz-results-btn");
+		if (resultsBtn) resultsBtn.addEventListener("click", () => {
+			if (ctx.textOnly?.isExamAnswerPhase?.()) ctx.goToSubmit();
+			else ctx.goToResults();
+		});
 	}
 
 	function bindSubmitSlideControls(rootEl) {
@@ -320,10 +332,42 @@ module.exports = function createInteractionHandlers(ctx) {
 
 	function bindResultsSlideControls(rootEl) {
 		if (!rootEl) return;
+		const saveBtn = rootEl.querySelector(".quiz-save-results-btn");
+		if (saveBtn) saveBtn.addEventListener("click", async e => {
+			e.preventDefault();
+			if (saveBtn.dataset.saving === "1") return;
+			saveBtn.dataset.saving = "1";
+			saveBtn.disabled = true;
+			const previousText = saveBtn.textContent;
+			saveBtn.textContent = "Sauvegarde...";
+
+			try {
+				const saved = await ctx.resultsSaver.saveCurrentResults();
+				ctx.quizState.savedResultsPath = saved.path;
+				if (typeof ctx.Notice === "function") {
+					new ctx.Notice(`Résultats sauvegardés : ${saved.path}`, 5000);
+				}
+				ctx.cards.refreshMetaSlides({ force: true });
+			} catch (error) {
+				console.error("Quiz results save error:", error);
+				saveBtn.disabled = false;
+				saveBtn.textContent = previousText || "Sauvegarder mes résultats";
+				delete saveBtn.dataset.saving;
+				if (typeof ctx.Notice === "function") {
+					new ctx.Notice(`Erreur sauvegarde résultats : ${error?.message || "erreur inconnue"}`, 6000);
+				}
+			}
+		});
+
 		const retryBtn = rootEl.querySelector(".quiz-retry-btn");
 		if (retryBtn) retryBtn.addEventListener("click", e => {
 			e.preventDefault();
 			ctx.zoom.restartQuizWithZoomBlurTransition();
+		});
+		const reviewBtn = rootEl.querySelector(".quiz-review-answers-btn");
+		if (reviewBtn) reviewBtn.addEventListener("click", e => {
+			e.preventDefault();
+			ctx.goToQuestion(0);
 		});
 		const examBtn = rootEl.querySelector(".quiz-exam-btn");
 		if (examBtn) examBtn.addEventListener("click", e => {
@@ -335,11 +379,57 @@ module.exports = function createInteractionHandlers(ctx) {
 	function bindExamStartButton() {
 		const startBtn = ctx.container.querySelector('.quiz-exam-start-btn');
 		if (startBtn) {
-			startBtn.addEventListener('click', () => ctx.exam.startExam());
+			startBtn.addEventListener('click', () => {
+				if (ctx.quizState?.practiceMode === "text") ctx.exam.startTrainingMode();
+				else ctx.exam.startExam();
+			});
 		}
 	}
 
+	function applyModeToggleVisualState(btn, mode) {
+		const isTextOnly = mode === "text";
+		btn.classList.toggle("is-on", isTextOnly);
+		btn.setAttribute("aria-checked", isTextOnly ? "true" : "false");
+		btn.setAttribute("aria-label", isTextOnly ? "Désactiver le mode entraînement" : "Activer le mode entraînement");
+		btn.dataset.quizMode = isTextOnly ? "qcm" : "text";
+	}
+
+	function bindModeToggleControls(rootEl = ctx.container) {
+		rootEl?.querySelectorAll?.("[data-quiz-mode]")?.forEach(btn => {
+			btn.addEventListener("click", e => {
+				e.preventDefault();
+				const nextMode = btn.dataset.quizMode === "text" ? "text" : "qcm";
+				if (nextMode === ctx.quizState.practiceMode || btn.dataset.quizSwitching === "1") return;
+
+				btn.dataset.quizSwitching = "1";
+				btn.classList.add("is-animating");
+				requestAnimationFrame(() => {
+					if (ctx.__quizDestroyed) return;
+					applyModeToggleVisualState(btn, nextMode);
+				});
+
+				window.setTimeout(() => {
+					if (ctx.__quizDestroyed) return;
+					ctx.setPracticeMode(nextMode);
+				}, MODE_TOGGLE_ANIMATION_MS);
+			});
+		});
+	}
+
+	function bindStartModeControls(rootEl = ctx.container) {
+		rootEl?.querySelectorAll?.("[data-quiz-start-mode]")?.forEach(btn => {
+			btn.addEventListener("click", e => {
+				e.preventDefault();
+				const nextMode = btn.dataset.quizStartMode === "training" ? "text" : "qcm";
+				if (nextMode === ctx.quizState.practiceMode) return;
+				ctx.setPracticeMode(nextMode);
+			});
+		});
+	}
+
 	function bindStaticControls() {
+		bindModeToggleControls(ctx.container);
+
 		bindSubmitSlideControls(ctx.container.querySelector('.quiz-track-item[data-slide-kind="submit"]'));
 		bindResultsSlideControls(ctx.container.querySelector('.quiz-track-item[data-slide-kind="results"]'));
 
@@ -361,7 +451,9 @@ module.exports = function createInteractionHandlers(ctx) {
 						ctx.goToSlide(cur + 1, { forceRender: false });
 						navigated = true;
 					} else {
-						if (ctx.quizState.locked) ctx.goToSlide(ctx.SLIDE_RESULTS_INDEX, { forceRender: false });
+						if (ctx.textOnly?.isExamAnswerPhase?.()) ctx.goToSubmit();
+						else if (ctx.textOnly?.isTextOnlyMode?.()) ctx.goToResults();
+						else if (ctx.quizState.locked) ctx.goToSlide(ctx.SLIDE_RESULTS_INDEX, { forceRender: false });
 						else ctx.goToSubmit();
 						navigated = true;
 					}
@@ -377,8 +469,12 @@ module.exports = function createInteractionHandlers(ctx) {
 			}
 			if (navigated) e.preventDefault();
 		};
-		document.addEventListener("keydown", onArrowKey);
-		ctx.__quizGlobalCleanups.push(() => document.removeEventListener("keydown", onArrowKey));
+		// Bindé sur le container (pas document) : le keydown ne remonte au handler que
+		// si le focus est DANS ce quiz. Sinon plusieurs blocs quiz d'une même note
+		// naviguaient tous ensemble à chaque flèche (handler document partagé), et un
+		// quiz captait les flèches globalement même hors focus.
+		ctx.container.addEventListener("keydown", onArrowKey);
+		ctx.__quizGlobalCleanups.push(() => ctx.container.removeEventListener("keydown", onArrowKey));
 
 		const bindNavTab = (tab, navigateFn) => {
 			if (!tab) return;
@@ -404,7 +500,9 @@ module.exports = function createInteractionHandlers(ctx) {
 		ctx.container.querySelectorAll("[data-nav]").forEach(a => bindNavTab(a, () => ctx.goToQuestion(Number(a.dataset.nav))));
 		const resultsTab = ctx.container.querySelector("[data-nav-results]");
 		if (resultsTab) bindNavTab(resultsTab, () => {
-			if (ctx.quizState.locked) ctx.goToSlide(ctx.SLIDE_RESULTS_INDEX, { forceRender: false });
+			if (ctx.textOnly?.isExamAnswerPhase?.()) ctx.goToSubmit();
+			else if (ctx.textOnly?.isTextOnlyMode?.()) ctx.goToResults();
+			else if (ctx.quizState.locked) ctx.goToSlide(ctx.SLIDE_RESULTS_INDEX, { forceRender: false });
 			else ctx.goToSubmit();
 		});
 	}
@@ -505,6 +603,8 @@ module.exports = function createInteractionHandlers(ctx) {
 		bindBinaryQuestion,
 		bindOrderingQuestion,
 		bindMatchingQuestion,
+		bindModeToggleControls,
+		bindStartModeControls,
 		bindQuestionTrackItem,
 		bindSubmitSlideControls,
 		bindResultsSlideControls,

@@ -658,6 +658,8 @@
     transition: all 0.2s ease;
     box-shadow: 0 4px 12px rgba(14, 165, 233, 0.3);
     margin-top: 4px;
+    max-width: 100%;
+    box-sizing: border-box;
 }
 
 .quiz-exam-start-btn:hover {
@@ -709,6 +711,7 @@
     .quiz-exam-start-btn {
         padding: 8px 20px;
         font-size: 14px;
+        white-space: normal;
     }
 }
 
@@ -724,5 +727,10 @@
     .quiz-exam-start-question-count {
         font-size: 12px;
         padding: 5px 12px;
+    }
+
+    .quiz-exam-start-btn {
+        width: 100%;
+        white-space: normal;
     }
 }

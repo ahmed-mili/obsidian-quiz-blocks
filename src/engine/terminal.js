@@ -608,9 +608,18 @@ module.exports = function createTerminalHandlers(ctx) {
 
 		trackItem.__quizTextQuestionCleanup = cleanupTextQuestionBinding;
 
-		const commitValue = () => {
+		// persistSelection écrit l'état SANS re-render : sûr à appeler pendant une
+		// animation de slide. commitValue ajoute le re-render (nav + meta slides),
+		// qu'on garde bloqué pendant le slide pour ne pas casser l'animation.
+		const persistSelection = () => {
 			const finalValue = normalizeTextareaValue({ preserveSelection: true });
+			ctx.invalidateSavedResults?.();
 			ctx.quizState.selections[qi] = finalValue;
+			return finalValue;
+		};
+
+		const commitValue = () => {
+			persistSelection();
 			applyLiveTextStatusClasses();
 			ctx.updateNavHighlight();
 			ctx.cards.refreshMetaSlides();
@@ -620,7 +629,10 @@ module.exports = function createTerminalHandlers(ctx) {
 		textarea.addEventListener("input", () => {
 			queueSync();
 
-			if (ctx.quizState.isSliding || ctx.quizState.locked) return;
+			if (ctx.quizState.locked) return;
+			// Pendant un slide : persister la saisie sans re-render, sinon les derniers
+			// caractères tapés ne sont jamais enregistrés dans selections[qi] (scoring périmé).
+			if (ctx.quizState.isSliding) { persistSelection(); return; }
 			commitValue();
 		});
 
@@ -628,7 +640,8 @@ module.exports = function createTerminalHandlers(ctx) {
 			requestAnimationFrame(() => {
 				queueSync();
 
-				if (ctx.quizState.isSliding || ctx.quizState.locked) return;
+				if (ctx.quizState.locked) return;
+				if (ctx.quizState.isSliding) { persistSelection(); return; }
 				commitValue();
 			});
 		});
@@ -636,6 +649,9 @@ module.exports = function createTerminalHandlers(ctx) {
 		textarea.addEventListener("focus", () => queueSync());
 		textarea.addEventListener("blur", () => {
 			stopCommandSelectionTracking();
+			// Filet de sécurité : persister la valeur courante à la perte de focus
+			// (couvre une saisie terminée juste avant une navigation/slide).
+			if (!ctx.quizState.locked) persistSelection();
 			queueSync();
 		});
 		textarea.addEventListener("click", () => queueSync());

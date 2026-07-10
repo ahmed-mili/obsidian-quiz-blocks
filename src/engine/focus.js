@@ -29,6 +29,15 @@ module.exports = function createFocusHandlers(ctx) {
 		else if (active.matches?.('.quiz-textarea[data-text-answer]')) {
 			descriptor.selector = '.quiz-textarea[data-text-answer]';
 		}
+		else if (active.matches?.('.quiz-textonly-textarea[data-textonly-answer]')) {
+			descriptor.selector = '.quiz-textonly-textarea[data-textonly-answer]';
+		}
+		else if (active.matches?.('.quiz-textonly-check-btn')) {
+			descriptor.selector = '.quiz-textonly-check-btn';
+		}
+		else if (active.matches?.('.quiz-textonly-rating-btn[data-textonly-rating]')) {
+			descriptor.selector = `.quiz-textonly-rating-btn[data-textonly-rating="${active.dataset.textonlyRating}"]`;
+		}
 		else if (active.matches?.('.quiz-hint-btn')) {
 			descriptor.selector = '.quiz-hint-btn';
 		}

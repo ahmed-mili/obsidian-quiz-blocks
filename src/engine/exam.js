@@ -6,8 +6,12 @@ module.exports = function createExamHandlers(ctx) {
 	let examStartTime = 0;
 
 	function examTimerHtml() {
-    if (!ctx.isExamMode || !ctx.examOptions.showTimer) return "";
+    if (!ctx.isExamMode) return "";
     if (!ctx.examStarted) {
+        const isTraining = ctx.quizState?.practiceMode === "text";
+        const modeSelectorHtml = typeof ctx.cards?.startModeSelectorHtml === "function" ? ctx.cards.startModeSelectorHtml() : "";
+        const primaryLabel = isTraining ? "Commencer l'entraînement" : "Commencer l'examen";
+        const summaryLabel = isTraining ? "Sans chrono" : `Durée : ${ctx.examOptions.durationMinutes} minutes`;
         return `<div class="quiz-exam-start-screen" data-exam-start-screen="1">
             <div class="quiz-exam-start-content">
                 <div class="quiz-exam-start-icon">
@@ -17,13 +21,16 @@ module.exports = function createExamHandlers(ctx) {
                         <circle cx="12" cy="14" r="8"></circle>
                     </svg>
                 </div>
-                <div class="quiz-exam-start-title">Examen</div>
-                <div class="quiz-exam-start-duration">Durée : ${ctx.examOptions.durationMinutes} minutes</div>
+                <div class="quiz-exam-start-title">Choisir le mode</div>
+                <div class="quiz-exam-start-duration">${summaryLabel}</div>
                 <div class="quiz-exam-start-question-count">${ctx.quiz.length} questions</div>
-                <button class="quiz-exam-start-btn" type="button">Commencer l'examen</button>
+                ${modeSelectorHtml}
+                <button class="quiz-exam-start-btn" type="button">${primaryLabel}</button>
             </div>
         </div>`;
     }
+
+    if (!ctx.examOptions.showTimer) return "";
 
     const minutes = Math.floor(ctx.examTimeRemaining / 60000);
     const seconds = Math.floor((ctx.examTimeRemaining % 60000) / 1000);
@@ -49,8 +56,11 @@ module.exports = function createExamHandlers(ctx) {
 		ctx.examTimeRemaining = ctx.examDurationMs;
 		updateExamTimerDisplay();
 
-		let animationFrameId = null;
-
+		// setInterval (et non requestAnimationFrame) : rAF est suspendu quand la fenêtre
+		// Obsidian est masquée/minimisée → le chrono gèlerait et l'auto-submit ne partirait
+		// pas à l'échéance. setInterval continue de tourner en arrière-plan (throttlé à ~1 s
+		// au pire), et examTimeRemaining est toujours recalculé depuis Date.now(), donc
+		// handleExamTimeUp part bien à l'heure même fenêtre au premier plan ou non.
 		const tick = () => {
 			if (ctx.examEnded) return;
 
@@ -60,19 +70,22 @@ module.exports = function createExamHandlers(ctx) {
 			updateExamTimerDisplay();
 
 			if (ctx.examTimeRemaining <= 0) {
-				handleExamTimeUp();
-				return;
+				handleExamTimeUp(); // appelle stopExamTimer() → clearInterval
 			}
-
-			animationFrameId = requestAnimationFrame(tick);
 		};
 
-		animationFrameId = requestAnimationFrame(tick);
-		examTimerId = animationFrameId;
+		examTimerId = setInterval(tick, 250);
 	}
 
 	function startExam() {
     if (!ctx.isExamMode || ctx.examStarted) return;
+    if (ctx.quizState?.practiceMode === "text") {
+        startTrainingMode();
+        return;
+    }
+
+    ctx.trainingSession = false;
+    ctx.quizState.practiceMode = "qcm";
 
     // Apply out-focus transition to current content
     const currentSlide = ctx.container.querySelector('.quiz-track-item[data-slide-kind="question"][data-qi="0"]');
@@ -112,6 +125,27 @@ module.exports = function createExamHandlers(ctx) {
     }
 }
 
+    function startTrainingMode() {
+        if (!ctx.isExamMode || ctx.examStarted) return;
+
+        ctx.trainingSession = true;
+        ctx.quizMode = "training";
+        ctx.isExamMode = false;
+        ctx.examStarted = false;
+        ctx.examEnded = false;
+        ctx.examStartTime = 0;
+        ctx.examTimeRemaining = 0;
+        ctx.quizState.practiceMode = "text";
+        ctx.quizState.current = 0;
+        ctx.quizState.prevCurrent = 0;
+        ctx.quizState.lastQuestionIndex = 0;
+        ctx.quizState.pendingResultsLock = false;
+        ctx.quizState.savedResultsPath = null;
+        ctx.container?.classList?.remove("quiz-is-locked");
+        stopExamTimer();
+        ctx.render();
+    }
+
 			function updateExamTimerDisplay() {
 			const progressEl = ctx.container?.querySelector('[data-exam-progress="1"]');
 			const textEl = ctx.container?.querySelector('[data-exam-text="1"]');
@@ -136,12 +170,23 @@ module.exports = function createExamHandlers(ctx) {
 
 	function handleExamTimeUp() {
     if (ctx.examEnded) return;
-    ctx.examEnded = true;
 
     // 1. Forcer l'état final du timer avant tout rendu
     ctx.examTimeRemaining = 0;
     stopExamTimer();
     updateExamTimerDisplay();
+
+    // Sans soumission auto (examAutoSubmit: false) : le chrono s'arrête à 0 et on
+    // prévient, mais on laisse l'examen OUVERT pour une validation manuelle. On ne
+    // marque pas examEnded (sinon bascule en phase review) ni locked.
+    if (ctx.examOptions && ctx.examOptions.autoSubmit === false) {
+        if (typeof ctx.Notice === 'function') {
+            new ctx.Notice('Temps écoulé ! Terminez et validez votre examen.', 6000);
+        }
+        return;
+    }
+
+    ctx.examEnded = true;
 
     // 2. Verrouiller le quiz
     ctx.quizState.locked = true;
@@ -158,7 +203,7 @@ module.exports = function createExamHandlers(ctx) {
 
 	function stopExamTimer() {
 		if (examTimerId) {
-			cancelAnimationFrame(examTimerId);
+			clearInterval(examTimerId);
 			examTimerId = null;
 		}
 	}
@@ -167,7 +212,8 @@ module.exports = function createExamHandlers(ctx) {
 		const btn = ctx.container?.querySelector('[data-exam-start-screen="1"] .quiz-exam-start-btn');
 		if (btn) {
 			btn.addEventListener('click', () => {
-				startExam();
+				if (ctx.quizState?.practiceMode === "text") startTrainingMode();
+				else startExam();
 			});
 		}
 	}
@@ -176,6 +222,7 @@ module.exports = function createExamHandlers(ctx) {
 		examTimerHtml,
 		startExamTimer,
 		startExam,
+		startTrainingMode,
 		updateExamTimerDisplay,
 		handleExamTimeUp,
 		stopExamTimer,

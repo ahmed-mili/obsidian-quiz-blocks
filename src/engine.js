@@ -16,11 +16,14 @@ const createInteractionHandlers = require("./engine/interactions");
 const createStateHandlers = require("./engine/state");
 const createHintHandlers = require("./engine/hint");
 const createQuestionHandlers = require("./engine/questions");
+const createTextOnlyHandlers = require("./engine/text-only");
+const createResultsSaver = require("./engine/results-save");
 
 async function renderInteractiveQuiz(context) {
 
 	const {
 		app,
+		plugin,
 		container,
 		quiz: rawQuiz,
 		sourcePath,
@@ -39,6 +42,15 @@ async function renderInteractiveQuiz(context) {
 	if (!Array.isArray(quiz) || quiz.length === 0) {
 		renderParagraph(container, "⚠️ Aucune question fournie au moteur de quiz.");
 		return;
+	}
+
+	// Compat : d'anciens quiz générés par l'IA portent la clé `correctIndexes`
+	// (au lieu de `correctIndices` lu partout ailleurs). Normaliser à l'ingestion
+	// répare le scoring (state.js) et le rendu verrouillé (cards.js) sans réécrire la note.
+	for (const q of quiz) {
+		if (q && q.correctIndices == null && Array.isArray(q.correctIndexes)) {
+			q.correctIndices = q.correctIndexes;
+		}
 	}
 
 	const isExamMode = examOptions !== null;
@@ -79,12 +91,14 @@ async function renderInteractiveQuiz(context) {
 
 	const ctx = {
 		app,
+		plugin,
 		container,
 		sourcePath,
 		Notice,
 		quiz,
 		quizMode,
 		isExamMode,
+		trainingSession: false,
 		examOptions,
 		examDurationMs,
 		learnExamOptions,
@@ -113,6 +127,7 @@ async function renderInteractiveQuiz(context) {
 	const sanitizer = createSanitizer(ctx);
 	const resources = createResourceHandlers(ctx);
 	const exam = createExamHandlers(ctx);
+	const textOnly = createTextOnlyHandlers(ctx);
 	const cards = createCardRenderers(ctx);
 	const viewport = createViewportHandlers(ctx);
 	const track = createTrackHandlers(ctx);
@@ -125,6 +140,7 @@ async function renderInteractiveQuiz(context) {
 	const state = createStateHandlers(ctx);
 	const hint = createHintHandlers(ctx);
 	const questions = createQuestionHandlers(ctx);
+	const resultsSaver = createResultsSaver(ctx);
 
 	// Fonctions utilitaires seront définies après les constantes SLIDE_* pour éviter TDZ
 
@@ -133,6 +149,7 @@ async function renderInteractiveQuiz(context) {
 		sanitize: sanitizer,
 		resources,
 		exam,
+		textOnly,
 		cards,
 		viewport,
 		clearNavTabPressState: state.clearNavTabPressState,
@@ -147,6 +164,7 @@ async function renderInteractiveQuiz(context) {
 		state,
 		hint,
 		questions,
+		resultsSaver,
 		// Fonctions exposées directement
 		escapeHtmlText: sanitizer.escapeHtmlText,
 		escapeHtmlAttr: sanitizer.escapeHtmlAttr,
@@ -189,6 +207,7 @@ async function renderInteractiveQuiz(context) {
 		goToSubmit: state.goToSubmit,
 		goToResults: state.goToResults,
 		resetQuiz: state.resetQuiz,
+		setPracticeMode: state.setPracticeMode,
 		goToSlide: state.goToSlide,
 		redirectSlide: state.redirectSlide,
 		updateNavHighlight: state.updateNavHighlight,
@@ -230,6 +249,9 @@ function initSelections() {
 		return null;
 	});
 }
+const initTextOnlyAnswers = () => quiz.map(() => "");
+const initTextOnlyChecked = () => quiz.map(() => false);
+const initTextOnlyRatings = () => quiz.map(() => null);
 const initOrderingPicks = () => quiz.map(() => null);
 const initMatchPicks = () => quiz.map(() => null);
 
@@ -250,12 +272,17 @@ const SLIDE_RESULTS_INDEX = slideMap.length - 1;
 const TOTAL_SLIDES = slideMap.length;
 
 const quizState = {
+	practiceMode: "qcm",
 	selections: initSelections(),
+	textOnlyAnswers: initTextOnlyAnswers(),
+	textOnlyChecked: initTextOnlyChecked(),
+	textOnlyRatings: initTextOnlyRatings(),
 	current: 0,
 	prevCurrent: 0,
 	lastQuestionIndex: 0,
 	locked: false,
 	pendingResultsLock: false,
+	savedResultsPath: null,
 	shuffleMap: buildShuffleMap(),
 	orderingPick: initOrderingPicks(),
 	matchPick: initMatchPicks(),
@@ -270,6 +297,9 @@ ctx.SLIDE_SUBMIT_INDEX = SLIDE_SUBMIT_INDEX;
 ctx.SLIDE_RESULTS_INDEX = SLIDE_RESULTS_INDEX;
 ctx.TOTAL_SLIDES = TOTAL_SLIDES;
 ctx.initSelections = initSelections;
+ctx.initTextOnlyAnswers = initTextOnlyAnswers;
+ctx.initTextOnlyChecked = initTextOnlyChecked;
+ctx.initTextOnlyRatings = initTextOnlyRatings;
 ctx.buildShuffleMap = buildShuffleMap;
 ctx.initOrderingPicks = initOrderingPicks;
 ctx.initMatchPicks = initMatchPicks;
@@ -294,6 +324,9 @@ ctx.isResultsSlideIndex = isResultsSlideIndex;
 ctx.clampSlideIndex = clampSlideIndex;
 ctx.getSlidingWindow = getSlidingWindow;
 ctx.getSlideIndexForQuestion = getSlideIndexForQuestion;
+ctx.invalidateSavedResults = () => {
+	quizState.savedResultsPath = null;
+};
 
 if (typeof container.__quizDestroy === "function") {
 	try { container.__quizDestroy(); } catch (_) {}
@@ -660,6 +693,7 @@ function refreshQuestionSlide(qi, { syncHeight = true } = {}) {
 ctx.refreshQuestionSlide = refreshQuestionSlide;
 
 function commitQuestionInteraction(qi, { syncHeight = true } = {}) {
+	ctx.invalidateSavedResults?.();
 	const slideIdx = getSlideIndexForQuestion(qi);
 	if (slideIdx >= 0) __quizSlideHeightCache.delete(slideIdx);
 	refreshQuestionSlide(qi, { syncHeight });
@@ -676,6 +710,9 @@ let __quizZoomFixHandler = null;
 function render() {
     ctx.lifecycle.restartAsyncLifecycle();
     cancelEnsureTrackVisibleRaf();
+    container.classList.toggle("quiz-mode-text-only", quizState.practiceMode === "text");
+    container.classList.toggle("quiz-mode-qcm", quizState.practiceMode !== "text");
+    container.classList.toggle("quiz-is-locked", quizState.locked && quizState.practiceMode !== "text");
 
     container.querySelectorAll('.quiz-track-item[data-slide-kind="question"]').forEach(item => {
         if (typeof item.__quizTextQuestionCleanup === "function") {
@@ -689,6 +726,17 @@ function render() {
     ctx.viewport.destroyViewportResizeObserver();
     ctx.track.clearTrackTransitionFallback();
 
+    if (ctx.isExamMode && !ctx.examStarted) {
+        // L'examen reste QCM chronométré ; l'entraînement est un mode séparé.
+        container.innerHTML = ctx.exam.examTimerHtml();
+        ctx.interactions.bindStartModeControls(container);
+        ctx.exam.bindExamStartButton();
+        return;
+    }
+
+    const examChromeHtml = ctx.exam.examTimerHtml();
+    const modeToggleHtml = (ctx.isExamMode || ctx.trainingSession) ? "" : ctx.cards.modeToggleHtml();
+
     // Construire le HTML des slides à partir du slideMap
     const slidesHtml = slideMap.map(entry => {
         if (entry.type === "question") return ctx.cards.questionCardHtml(entry.questionIndex);
@@ -697,7 +745,7 @@ function render() {
         return "";
     }).join("");
 
-    container.innerHTML = `${ctx.exam.examTimerHtml()}${ctx.cards.navHtml()}<div class="quiz-track-viewport" data-quiz-height-ready="0"><div class="quiz-track">${slidesHtml}</div></div>`;
+    container.innerHTML = `${examChromeHtml}${ctx.cards.navHtml()}${modeToggleHtml}<div class="quiz-track-viewport" data-quiz-height-ready="0"><div class="quiz-track">${slidesHtml}</div></div>`;
     __quizSubmitSlideSignature = ctx.state.getSubmitSlideSignature();
     __quizResultsSlideSignature = ctx.state.getResultsSlideSignature();
 
@@ -730,14 +778,6 @@ function render() {
     container.querySelectorAll('.quiz-track-item[data-slide-kind="question"]').forEach(ctx.interactions.bindQuestionTrackItem);
     ctx.interactions.bindStaticControls();
 
-    if (ctx.isExamMode && !ctx.examStarted) {
-        // En mode examen, tant que l'examen n'a pas commencé,
-        // on affiche seulement l'écran de démarrage (pas de navigation, pas de quiz)
-        container.innerHTML = `${ctx.exam.examTimerHtml()}<div class="quiz-exam-placeholder" data-exam-placeholder="1"></div>`;
-        ctx.exam.bindExamStartButton();
-        return;
-    }
-
     primeAllSlideHeights({ retries: 6, syncCurrent: true });
     ctx.warming.warmSlidesAroundIndex(quizState.current, 3);
     ctx.warming.startFullBackgroundWarm();
@@ -760,6 +800,7 @@ function switchToExamMode() {
 	// sont intégrées dans les question cards et seront masquées au render)
 	ctx.quizMode = "exam";
 	ctx.isExamMode = true;
+	ctx.trainingSession = false;
 	ctx.examOptions = learnExamOptions;
 	ctx.examDurationMs = learnExamOptions.durationMinutes * 60 * 1000;
 	ctx.examTimeRemaining = ctx.examDurationMs;

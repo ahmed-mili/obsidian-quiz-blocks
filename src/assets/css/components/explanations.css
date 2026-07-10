@@ -75,3 +75,65 @@
   border: 1px solid var(--background-modifier-border);
 }
 
+/* Callout "Claude" injecté dans explainHtml par l'AI */
+.claude-callout,
+.quiz-explain .claude-callout{
+  margin: 14px 0 10px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  border: 1px solid color-mix(in srgb, var(--interactive-accent) 32%, var(--background-modifier-border));
+  background:
+    linear-gradient(180deg,
+      color-mix(in srgb, var(--interactive-accent) 10%, var(--background-secondary)) 0%,
+      color-mix(in srgb, var(--interactive-accent) 4%, var(--background-primary)) 100%
+    );
+  color: var(--text-normal);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+}
+
+.claude-callout-title,
+.quiz-explain .claude-callout-title{
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 8px;
+  font-size: 0.72em;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--interactive-accent);
+}
+
+.claude-callout-title::before,
+.quiz-explain .claude-callout-title::before{
+  content: "";
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  background: currentColor;
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 8V4H8'/%3E%3Crect width='16' height='12' x='4' y='8' rx='2'/%3E%3Cpath d='M2 14h2'/%3E%3Cpath d='M20 14h2'/%3E%3Cpath d='M15 13v2'/%3E%3Cpath d='M9 13v2'/%3E%3C/svg%3E");
+  mask-size: contain;
+  mask-repeat: no-repeat;
+  mask-position: center;
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 8V4H8'/%3E%3Crect width='16' height='12' x='4' y='8' rx='2'/%3E%3Cpath d='M2 14h2'/%3E%3Cpath d='M20 14h2'/%3E%3Cpath d='M15 13v2'/%3E%3Cpath d='M9 13v2'/%3E%3C/svg%3E");
+  -webkit-mask-size: contain;
+  -webkit-mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+}
+
+.claude-callout p,
+.quiz-explain .claude-callout p{
+  margin: 0;
+}
+
+.claude-callout p + p,
+.quiz-explain .claude-callout p + p{
+  margin-top: 8px;
+}
+
+.claude-callout code,
+.quiz-explain .claude-callout code{
+  background: color-mix(in srgb, var(--background-primary) 60%, transparent);
+  padding: 1px 4px;
+  border-radius: 4px;
+}

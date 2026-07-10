@@ -9,6 +9,13 @@ module.exports = function createCardRenderers(ctx) {
 		const cur = ctx.quizState.current;
 		const isActive = ctx.isQuestionSlideIndex(cur) && ctx.slideMap[cur]?.questionIndex === i;
 		const active = isActive ? "active" : "";
+		if (ctx.textOnly?.isTextOnlyMode?.()) {
+			const rating = ctx.textOnly.getRatingMeta(ctx.quizState.textOnlyRatings?.[i]);
+			if (rating) return `${active} ${rating.className}`.trim();
+			if (ctx.textOnly.isChecked(i)) return `${active} checked`.trim();
+			if (ctx.textOnly.hasAnyAnswer(i)) return `${active} answered`.trim();
+			return active;
+		}
 		if (!ctx.hasAnyAnswer(i)) return active;
 		if (!ctx.quizState.locked) return `${active} answered`.trim();
 		return `${active} ${ctx.isCorrect(i) ? "correct" : "wrong"}`.trim();
@@ -19,13 +26,39 @@ module.exports = function createCardRenderers(ctx) {
 		return `<div class="quiz-nav">${ctx.quiz.map((_, i) => `<a class="quiz-tab ${tabClass(i)}" href="#" data-nav="${i}">Q${i + 1}</a>`).join("")}<a class="quiz-tab is-result ${resultsActive}" href="#" data-nav-results="1">Résultats</a></div>`;
 	}
 
+	function modeToggleHtml() {
+		const mode = ctx.quizState.practiceMode === "text" ? "text" : "qcm";
+		const isTextOnly = mode === "text";
+		const nextMode = isTextOnly ? "qcm" : "text";
+		return `<div class="quiz-mode-toggle" aria-label="Mode d'entraînement">
+			<span class="quiz-mode-toggle-label">Mode entraînement</span>
+			<button class="quiz-mode-switch${isTextOnly ? " is-on" : ""}" type="button" role="switch" aria-checked="${isTextOnly ? "true" : "false"}" aria-label="${isTextOnly ? "Désactiver le mode entraînement" : "Activer le mode entraînement"}" data-quiz-mode="${nextMode}">
+				<span class="quiz-mode-switch-track" aria-hidden="true"><span class="quiz-mode-switch-thumb"></span></span>
+			</button>
+		</div>`;
+	}
+
+	function startModeSelectorHtml() {
+		const isTraining = ctx.quizState.practiceMode === "text";
+		return `<div class="quiz-start-mode-selector" role="group" aria-label="Choisir le mode du quiz">
+			<button class="quiz-start-mode-option${!isTraining ? " is-active" : ""}" type="button" data-quiz-start-mode="exam" aria-pressed="${!isTraining ? "true" : "false"}">
+				<span class="quiz-start-mode-title">Examen</span>
+				<span class="quiz-start-mode-sub">QCM chronométré</span>
+			</button>
+			<button class="quiz-start-mode-option${isTraining ? " is-active" : ""}" type="button" data-quiz-start-mode="training" aria-pressed="${isTraining ? "true" : "false"}">
+				<span class="quiz-start-mode-title">Entraînement</span>
+				<span class="quiz-start-mode-sub">Réponse libre</span>
+			</button>
+		</div>`;
+	}
+
 	function optionClass(qi, oi) {
 		const q = ctx.quiz[qi];
 		const sel = ctx.quizState.selections[qi];
 		if (q.multiSelect) {
 			const selected = sel instanceof Set && sel.has(oi);
 			if (!ctx.quizState.locked) return selected ? "selected" : "";
-			const correct = q.correctIndices.includes(oi);
+			const correct = Array.isArray(q.correctIndices) && q.correctIndices.includes(oi);
 			if (selected && correct) return "correct";
 			if (selected && !correct) return "wrong";
 			if (!selected && correct) return "missed";
@@ -62,6 +95,29 @@ module.exports = function createCardRenderers(ctx) {
 			return ctx.sanitize.renderTextWithEmbeds(q.prompt);
 		}
 		return "";
+	}
+
+	function optionContentHtml(q, oi) {
+		let optionContentHtml = "";
+		if (q.optionHtml?.[oi]) {
+			optionContentHtml = q.optionHtml[oi];
+			if (typeof ctx.app?.vault?.adapter?.getResourcePath === "function") {
+				optionContentHtml = optionContentHtml.replace(/src="([^"]+)"/g, (match, src) => {
+					if (src.startsWith("http") || src.startsWith("data:") || src.startsWith("app://")) {
+						return match;
+					}
+					try {
+						const resolved = ctx.app.vault.adapter.getResourcePath(src);
+						return `src="${ctx.escapeHtmlAttr(resolved)}"`;
+					} catch {
+						return match;
+					}
+				});
+			}
+		} else {
+			optionContentHtml = ctx.sanitize.renderRawHtmlWithEmbeds(q.options[oi], { wrapClass: "quiz-option-embed-wrap", imgClass: "quiz-option-embed" });
+		}
+		return optionContentHtml;
 	}
 
 	function orderingCardHtml(q, qi) {
@@ -153,10 +209,46 @@ module.exports = function createCardRenderers(ctx) {
 	function submitSlideHtml() {
 		const missing = ctx.getMissingIndices();
 		const mc = missing.length;
+		if (ctx.textOnly?.isTextOnlyMode?.()) {
+			if (ctx.textOnly.isExamAnswerPhase?.()) {
+				const missingAnswers = ctx.quiz
+					.map((_, i) => i)
+					.filter(i => !ctx.textOnly.hasAnyAnswer(i));
+				const mac = missingAnswers.length;
+				const intro = mac > 0
+					? `<div class="quiz-warn">Il manque ${mac} réponse${mac > 1 ? "s" : ""} libre${mac > 1 ? "s" : ""}.</div><div class="quiz-submit-sub">Questions sans réponse :</div>`
+					: `<div class="quiz-submit-sub">Toutes les questions ont une réponse libre.</div>`;
+				return `<div class="quiz-track-item" data-slide-kind="submit"><div class="quiz-submit-wrap"><div class="quiz-submit-card">${intro}<div class="quiz-chip-row">${(mac > 0 ? missingAnswers : ctx.quiz.map((_, i) => i)).map(i => `<button class="quiz-chip ${mac > 0 ? "missing" : ""}" type="button" data-jump="${i}">Q${i + 1}</button>`).join("")}</div><div class="quiz-actions"><button class="quiz-action-btn quiz-back-btn" type="button">Retour</button><button class="quiz-action-btn success quiz-show-score-btn" type="button">Terminer l'examen</button></div></div></div></div>`;
+			}
+
+			const intro = mc > 0
+				? `<div class="quiz-warn">Il manque ${mc} auto-évaluation${mc > 1 ? "s" : ""}.</div><div class="quiz-submit-sub">Questions à auto-évaluer :</div>`
+				: `<div class="quiz-submit-sub">Toutes les questions sont auto-évaluées.</div>`;
+			return `<div class="quiz-track-item" data-slide-kind="submit"><div class="quiz-submit-wrap"><div class="quiz-submit-card">${intro}<div class="quiz-chip-row">${(mc > 0 ? missing : ctx.quiz.map((_, i) => i)).map(i => `<button class="quiz-chip ${mc > 0 ? "missing" : ""}" type="button" data-jump="${i}">Q${i + 1}</button>`).join("")}</div><div class="quiz-actions"><button class="quiz-action-btn quiz-back-btn" type="button">Retour</button><button class="quiz-action-btn success quiz-show-score-btn" type="button">Voir les résultats</button></div></div></div></div>`;
+		}
 		return `<div class="quiz-track-item" data-slide-kind="submit"><div class="quiz-submit-wrap"><div class="quiz-submit-card">${mc > 0 ? `<div class="quiz-warn">Il manque ${mc} réponse${mc > 1 ? "s" : ""}.</div><div class="quiz-submit-sub">Questions sans réponse :</div>` : `<div class="quiz-submit-sub">Revenir sur une question :</div>`}<div class="quiz-chip-row">${(mc > 0 ? missing : ctx.quiz.map((_, i) => i)).map(i => `<button class="quiz-chip ${mc > 0 ? "missing" : ""}" type="button" data-jump="${i}">Q${i + 1}</button>`).join("")}</div><div class="quiz-actions"><button class="quiz-action-btn quiz-back-btn" type="button">Retour</button><button class="quiz-action-btn success quiz-show-score-btn" type="button">Voir le score</button></div></div></div></div>`;
 	}
 
+	function saveResultsButtonHtml() {
+		const savedPath = ctx.quizState.savedResultsPath;
+		const saved = !!savedPath;
+		const titleAttr = saved ? ` title="Sauvegardé dans ${ctx.escapeHtmlAttr(savedPath)}"` : "";
+		return `<button class="quiz-action-btn quiz-save-results-btn${saved ? " is-saved" : ""}" type="button" data-save-results="1"${saved ? " disabled" : ""}${titleAttr}>${saved ? "Résultats sauvegardés" : "Sauvegarder mes résultats"}</button>`;
+	}
+
 	function resultsSlideHtml() {
+		if (ctx.textOnly?.isTextOnlyMode?.()) {
+			const results = ctx.textOnly.computeResults();
+			const isExamCorrection = ctx.isExamMode && ctx.examEnded;
+			const title = isExamCorrection ? "Correction réponse libre" : "Résultats entraînement";
+			const correctionHint = isExamCorrection && results.pending > 0
+				? `<p class="quiz-textonly-correction-hint">Revenez sur les questions pour comparer vos réponses, lire les explications et vous auto-évaluer.</p>`
+				: "";
+			const correctionBtn = isExamCorrection && results.pending > 0
+				? `<button class="quiz-action-btn quiz-review-answers-btn" type="button">Corriger mes réponses</button>`
+				: "";
+			return `<div class="quiz-track-item" data-slide-kind="results"><section class="quiz-result quiz-textonly-result"><h2 class="quiz-result-title" style="font-weight:900;">${title}</h2><p>Auto-évaluées : <strong>${results.rated}/${results.total}</strong></p>${correctionHint}<div class="quiz-textonly-result-grid"><div class="quiz-textonly-result-stat understood"><strong>${results.understood}</strong><span>Compris</span></div><div class="quiz-textonly-result-stat partial"><strong>${results.partial}</strong><span>Partiel</span></div><div class="quiz-textonly-result-stat review"><strong>${results.review}</strong><span>À revoir</span></div>${results.pending > 0 ? `<div class="quiz-textonly-result-stat pending"><strong>${results.pending}</strong><span>Non évaluée${results.pending > 1 ? "s" : ""}</span></div>` : ""}</div><div class="quiz-actions">${correctionBtn}${saveResultsButtonHtml()}<button class="quiz-action-btn success quiz-retry-btn" type="button">Recommencer</button></div></section></div>`;
+		}
 		const { pct, correct, total } = ctx.computeScorePercent();
 		// Mode learn : bouton "Passer l'examen"
 		const learnExamBtn = (ctx.quizMode === "learn" && ctx.learnExamOptions)
@@ -166,7 +258,7 @@ module.exports = function createCardRenderers(ctx) {
 		const retakeExamBtn = (ctx.quizMode === "exam" && ctx.originalQuizMode === "learn" && ctx.originalLearnExamOptions)
 			? `<button class="quiz-action-btn quiz-exam-btn" type="button">Repasser l'examen</button>`
 			: "";
-		return `<div class="quiz-track-item" data-slide-kind="results"><section class="quiz-result"><h2 class="quiz-result-title" style="font-weight:900;">Résultats</h2><p style="font-size:48px;font-weight:900;margin:18px 0 6px;">${pct}%</p><p>Bonnes réponses : <strong>${correct}/${total}</strong></p><div class="quiz-actions"><button class="quiz-action-btn success quiz-retry-btn" type="button">Recommencer</button>${learnExamBtn}${retakeExamBtn}</div></section></div>`;
+		return `<div class="quiz-track-item" data-slide-kind="results"><section class="quiz-result"><h2 class="quiz-result-title" style="font-weight:900;">Résultats</h2><p style="font-size:48px;font-weight:900;margin:18px 0 6px;">${pct}%</p><p>Bonnes réponses : <strong>${correct}/${total}</strong></p><div class="quiz-actions">${saveResultsButtonHtml()}<button class="quiz-action-btn success quiz-retry-btn" type="button">Recommencer</button>${learnExamBtn}${retakeExamBtn}</div></section></div>`;
 	}
 
 
@@ -223,6 +315,7 @@ module.exports = function createCardRenderers(ctx) {
 
 	function questionCardHtml(qi) {
 		const q = ctx.quiz[qi];
+		const isTextOnly = ctx.textOnly?.isTextOnlyMode?.();
 		const isTxt = ctx.isTextQuestion(q);
 		const isOrd = ctx.isOrderingQuestion(q);
 		const isMatch = ctx.isMatchingQuestion(q);
@@ -230,7 +323,10 @@ module.exports = function createCardRenderers(ctx) {
 
 		let body = "";
 
-		if (isTxt) {
+		if (isTextOnly) {
+			body = ctx.textOnly.questionCardBodyHtml(q, qi);
+		}
+		else if (isTxt) {
 			body = ctx.terminal.textQuestionCardHtml(q, qi);
 		}
 		else if (isOrd) {
@@ -242,34 +338,21 @@ module.exports = function createCardRenderers(ctx) {
 		else {
 			const smap = ctx.quizState.shuffleMap[qi] || [];
 			const mi = isMulti ? `<div class="quiz-multi-indicator">Sélectionnez une ou plusieurs réponses</div>` : "";
+			const sel = ctx.quizState.selections[qi];
 			const optionsHtml = smap.map((oi) => {
-				let optionContentHtml = "";
-				if (q.optionHtml?.[oi]) {
-					optionContentHtml = q.optionHtml[oi];
-					if (typeof ctx.app?.vault?.adapter?.getResourcePath === "function") {
-						optionContentHtml = optionContentHtml.replace(/src="([^"]+)"/g, (match, src) => {
-							if (src.startsWith("http") || src.startsWith("data:") || src.startsWith("app://")) {
-								return match;
-							}
-							try {
-								const resolved = ctx.app.vault.adapter.getResourcePath(src);
-								return `src="${ctx.escapeHtmlAttr(resolved)}"`;
-							} catch {
-								return match;
-							}
-						});
-					}
-				} else {
-					optionContentHtml = ctx.sanitize.renderRawHtmlWithEmbeds(q.options[oi], { wrapClass: "quiz-option-embed-wrap", imgClass: "quiz-option-embed" });
-				}
-				return `<div class="quiz-option ${isMulti ? "multi" : ""} ${optionClass(qi, oi)}" role="button" tabindex="0" data-orig="${oi}">${optionContentHtml}</div>`;
+				const contentHtml = optionContentHtml(q, oi);
+				// aria-pressed reflète l'état sélectionné pour les lecteurs d'écran (recalculé
+				// à chaque refreshQuestionSlide). role=button + aria-pressed plutôt que radio/
+				// checkbox pour ne pas capturer les flèches (réservées à la navigation).
+				const isSelected = isMulti ? (sel instanceof Set && sel.has(oi)) : (sel === oi);
+				return `<div class="quiz-option ${isMulti ? "multi" : ""} ${optionClass(qi, oi)}" role="button" tabindex="0" aria-pressed="${isSelected}" data-orig="${oi}">${contentHtml}</div>`;
 			}).join("");
 			const hasImg = /<img[\s>]/i.test(optionsHtml);
 			body = mi + `<div class="quiz-options-wrap${hasImg ? " quiz-options-image-grid" : ""}">${optionsHtml}</div>`;
 		}
 
-		const hintBtn = (q.hint && String(q.hint).trim()) ? `<button class="quiz-hint-btn" type="button">Indice</button>` : "";
-		const learnSection = (ctx.quizMode === "learn" && (q.learn || q.learnHtml || q._learnHtml) && !ctx.quizState.locked)
+		const hintBtn = (!isTextOnly && q.hint && String(q.hint).trim()) ? `<button class="quiz-hint-btn" type="button">Indice</button>` : "";
+		const learnSection = (!isTextOnly && ctx.quizMode === "learn" && (q.learn || q.learnHtml || q._learnHtml) && !ctx.quizState.locked)
 			? (() => {
 				const learnHtml = q.learnHtml || q._learnHtml;
 				const learnContent = learnHtml
@@ -278,6 +361,7 @@ module.exports = function createCardRenderers(ctx) {
 				return `<div class="quiz-learn-section"><div class="quiz-learn-label">Leçon</div><div class="quiz-learn-content">${learnContent}</div></div>`;
 			})()
 			: "";
+		const textOnlyActions = isTextOnly ? ctx.textOnly.questionActionsHtml(qi) : "";
 		const sectionIdAttr = (typeof q?.id === "string" && q.id.trim().length > 0)
 			? ` id="${ctx.escapeHtmlAttr(q.id)}"`
 			: "";
@@ -290,7 +374,8 @@ module.exports = function createCardRenderers(ctx) {
 				${body}
 				${learnSection}
 				${hintBtn}
-				${ctx.quizState.locked ? explanationHtml(qi) : ""}
+				${textOnlyActions}
+				${!isTextOnly && ctx.quizState.locked ? explanationHtml(qi) : ""}
 			</section>
 		</div>`;
 	}
@@ -298,7 +383,10 @@ module.exports = function createCardRenderers(ctx) {
 	return {
 		tabClass,
 		navHtml,
+		modeToggleHtml,
+		startModeSelectorHtml,
 		optionClass,
+		optionContentHtml,
 		explanationHtml,
 		renderQuizPromptHtml,
 		orderingCardHtml,

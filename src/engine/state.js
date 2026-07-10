@@ -6,6 +6,10 @@ module.exports = function createStateHandlers(ctx) {
 	const NAV_TAB_FALLBACK_CLEAR_MS = 320;
 
 	function hasAnyAnswer(i) {
+		if (ctx.textOnly?.isTextOnlyMode?.()) {
+			return ctx.textOnly.hasAnyAnswer(i) || ctx.textOnly.isChecked(i) || ctx.textOnly.isRated(i);
+		}
+
 		const q = ctx.quiz[i], sel = ctx.quizState.selections[i];
 
 		if (ctx.isTextQuestion(q)) {
@@ -21,6 +25,10 @@ module.exports = function createStateHandlers(ctx) {
 	}
 
 	function isComplete(i) {
+		if (ctx.textOnly?.isTextOnlyMode?.()) {
+			return ctx.textOnly.isRated(i);
+		}
+
 		const q = ctx.quiz[i], sel = ctx.quizState.selections[i];
 
 		if (ctx.isTextQuestion(q)) {
@@ -42,6 +50,10 @@ module.exports = function createStateHandlers(ctx) {
 	}
 
 	function isCorrect(i) {
+		if (ctx.textOnly?.isTextOnlyMode?.()) {
+			return ctx.quizState.textOnlyRatings?.[i] === "understood";
+		}
+
 		const q = ctx.quiz[i], sel = ctx.quizState.selections[i];
 
 		if (ctx.isTextQuestion(q)) {
@@ -74,10 +86,25 @@ module.exports = function createStateHandlers(ctx) {
 		return { pct: Math.round((correct / ctx.quiz.length) * 100), correct, total: ctx.quiz.length };
 	}
 
-	const getSubmitSlideSignature = () => JSON.stringify({ missing: getMissingIndices(), lastQuestionIndex: ctx.quizState.lastQuestionIndex });
+	const getSubmitSlideSignature = () => JSON.stringify({
+		mode: ctx.quizState.practiceMode,
+		examAnswerPhase: !!ctx.textOnly?.isExamAnswerPhase?.(),
+		missingAnswers: ctx.textOnly?.isExamAnswerPhase?.()
+			? ctx.quiz.map((_, i) => i).filter(i => !ctx.textOnly.hasAnyAnswer(i))
+			: null,
+		missing: getMissingIndices(),
+		lastQuestionIndex: ctx.quizState.lastQuestionIndex
+	});
 	const getResultsSlideSignature = () => {
+		if (ctx.textOnly?.isTextOnlyMode?.()) {
+			return JSON.stringify({
+				mode: ctx.quizState.practiceMode,
+				results: ctx.textOnly.computeResults(),
+				savedResultsPath: ctx.quizState.savedResultsPath || null
+			});
+		}
 		const { pct, correct, total } = computeScorePercent();
-		return JSON.stringify({ locked: ctx.quizState.locked, pct, correct, total });
+		return JSON.stringify({ mode: ctx.quizState.practiceMode, locked: ctx.quizState.locked, pct, correct, total, savedResultsPath: ctx.quizState.savedResultsPath || null });
 	};
 
 	function clearNavTabPressState(tab) {
@@ -191,6 +218,29 @@ module.exports = function createStateHandlers(ctx) {
 		}
 	}
 
+	function setPracticeMode(mode) {
+		const nextMode = mode === "text" ? "text" : "qcm";
+		if (ctx.quizState.practiceMode === nextMode) return;
+
+		ctx.closeHintModal();
+		ctx.quizState.practiceMode = nextMode;
+		ctx.quizState.pendingResultsLock = false;
+		ctx.quizState.savedResultsPath = null;
+		if (nextMode === "text") ctx.stopExamTimer?.();
+
+		if (ctx.isSubmitSlideIndex(ctx.quizState.current) || ctx.isResultsSlideIndex(ctx.quizState.current)) {
+			const fallbackQi = Math.max(0, Math.min(ctx.quizState.lastQuestionIndex || 0, ctx.quiz.length - 1));
+			const slideIdx = ctx.getSlideIndexForQuestion(fallbackQi);
+			ctx.quizState.current = slideIdx >= 0 ? slideIdx : 0;
+			ctx.quizState.prevCurrent = ctx.quizState.current;
+		}
+
+		ctx.quizState.slideToken++;
+		ctx.quizState.isSliding = false;
+		ctx.container?.classList?.toggle("quiz-is-locked", ctx.quizState.locked && nextMode !== "text");
+		ctx.render();
+	}
+
 	const goToQuestion = index => {
 		ctx.quizState.pendingResultsLock = false;
 		const slideIdx = ctx.getSlideIndexForQuestion(index);
@@ -205,7 +255,7 @@ module.exports = function createStateHandlers(ctx) {
 
 	function goToResults() {
 		if (ctx.isQuestionSlideIndex(ctx.quizState.current)) ctx.quizState.lastQuestionIndex = ctx.slideMap[ctx.quizState.current].questionIndex;
-		ctx.quizState.pendingResultsLock = true;
+		ctx.quizState.pendingResultsLock = !ctx.textOnly?.isTextOnlyMode?.();
 
 		if (ctx.isExamMode && ctx.examStarted && !ctx.examEnded) {
 			ctx.examEnded = true;
@@ -213,9 +263,9 @@ module.exports = function createStateHandlers(ctx) {
 			ctx.updateExamTimerDisplay();
 		}
 
-		// Enregistrer les stats dans le dashboard
+		// Enregistrer les stats QCM dans le dashboard
 		const statsStore = ctx.plugin?._statsStore;
-		if (statsStore && ctx.sourcePath) {
+		if (!ctx.textOnly?.isTextOnlyMode?.() && statsStore && ctx.sourcePath) {
 			const { pct, correct, total } = computeScorePercent();
 			let questionsDone = 0;
 			for (let i = 0; i < ctx.quiz.length; i++) {
@@ -244,12 +294,16 @@ module.exports = function createStateHandlers(ctx) {
 		ctx.__quizBackgroundWarmStarted = false;
 
 		ctx.quizState.selections = ctx.initSelections();
+		ctx.quizState.textOnlyAnswers = ctx.initTextOnlyAnswers();
+		ctx.quizState.textOnlyChecked = ctx.initTextOnlyChecked();
+		ctx.quizState.textOnlyRatings = ctx.initTextOnlyRatings();
 		ctx.quizState.current = 0;
 		ctx.quizState.prevCurrent = 0;
 		ctx.quizState.lastQuestionIndex = 0;
 		ctx.quizState.locked = false;
 		ctx.container?.classList?.remove("quiz-is-locked");
 		ctx.quizState.pendingResultsLock = false;
+		ctx.quizState.savedResultsPath = null;
 		ctx.quizState.shuffleMap = ctx.buildShuffleMap();
 		ctx.quizState.orderingPick = ctx.initOrderingPicks();
 		ctx.quizState.matchPick = ctx.initMatchPicks();
@@ -268,6 +322,7 @@ module.exports = function createStateHandlers(ctx) {
 
 		// Réinitialiser au mode d'origine si demandé
 		if (resetToOriginalMode && ctx.originalQuizMode === "learn") {
+			ctx.trainingSession = false;
 			ctx.quizMode = "learn";
 			ctx.isExamMode = false;
 			ctx.examOptions = null;
@@ -275,7 +330,7 @@ module.exports = function createStateHandlers(ctx) {
 			ctx.learnExamOptions = ctx.originalLearnExamOptions;
 			ctx.examTimeRemaining = 0;
 		} else {
-			ctx.examTimeRemaining = ctx.examDurationMs;
+			ctx.examTimeRemaining = ctx.isExamMode ? ctx.examDurationMs : 0;
 		}
 
 		ctx.render();
@@ -289,6 +344,7 @@ module.exports = function createStateHandlers(ctx) {
 		computeScorePercent,
 		getSubmitSlideSignature,
 		getResultsSlideSignature,
+		setPracticeMode,
 		clearNavTabPressState,
 		setNavTabPressState,
 		clearAllNavTabPressStates,
