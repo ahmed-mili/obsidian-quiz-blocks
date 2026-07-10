@@ -605,6 +605,10 @@
 	transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
+.qbd-ai-composer:hover:not(.qbd-ai-composer--dragover) {
+	border-color: var(--interactive-accent);
+}
+
 .qbd-ai-composer:focus-within {
 	border-color: var(--interactive-accent);
 	box-shadow: 0 0 0 2px color-mix(in srgb, var(--interactive-accent) 16%, transparent);
@@ -621,6 +625,28 @@
 	background: transparent;
 	border: none;
 	box-shadow: none !important;
+}
+
+/* Obsidian assombrit les textarea au survol (textarea:hover →
+   --background-modifier-form-field-hover, spécificité 0,1,1 > 0,1,0) :
+   le champ du composer reste invisible dans sa carte, à tous les états. */
+.qbd-ai-composer-input:hover,
+.qbd-ai-composer-input:focus,
+.qbd-ai-composer-input:active {
+	background: transparent;
+	border: none;
+}
+
+/* Toute la carte se comporte comme UNE zone de saisie discrète :
+   curseur normal partout (jamais le I-beam), y compris sur le champ —
+   les boutons gardent leur pointer. Le clic n'importe où focus le
+   champ (géré dans ai.js). */
+.qbd-ai-composer,
+.qbd-ai-composer-input {
+	cursor: default;
+}
+
+.qbd-ai-composer-input {
 	outline: none;
 	resize: none;
 	padding: 0;

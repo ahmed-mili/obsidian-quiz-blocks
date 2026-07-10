@@ -509,6 +509,17 @@ function createAiHandlers(ctx) {
 			]);
 		});
 
+		// Toute la carte est cliquable pour écrire (demande 2026-07-10) :
+		// un clic hors des contrôles focus le champ, caret en fin de texte.
+		// mousedown natif du textarea préservé (positionnement du caret).
+		composer.addEventListener("mousedown", (e) => {
+			if (e.target.closest("button, textarea, .qbd-select, .qbd-ai-note-chip, .qbd-ai-image-thumb")) return;
+			e.preventDefault(); // pas de blur/re-focus visible
+			const len = composerInput.value.length;
+			composerInput.focus();
+			composerInput.setSelectionRange(len, len);
+		});
+
 		// Glisser-déposer d'images sur tout le composer
 		composer.addEventListener("dragover", (e) => {
 			e.preventDefault();
@@ -534,6 +545,15 @@ function createAiHandlers(ctx) {
 		if (phase === "loading") renderLoading(stage);
 		else if (phase === "error") renderError(stage);
 		else if (phase === "result") renderResult(resultZone);
+
+		// Onglet ouvert → saisie immédiate sans clic (demande 2026-07-10).
+		// Pas en phase résultat : le focus serait volé à l'éditeur embarqué
+		// à chaque re-render.
+		if (phase === "idle" || phase === "error") {
+			requestAnimationFrame(() => {
+				if (composerInput.isConnected) composerInput.focus({ preventScroll: true });
+			});
+		}
 	}
 
 	let containerRef = null;
