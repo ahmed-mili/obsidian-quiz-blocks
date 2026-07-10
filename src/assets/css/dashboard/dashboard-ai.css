@@ -888,65 +888,75 @@
 	transform: scale(1.2);
 }
 
-/* ── Options card ── */
-.qbd-ai-options {
-	background: var(--background-secondary);
-	border: 1px solid var(--background-modifier-border);
-	border-radius: var(--radius-l, 12px);
-	padding: 14px 16px;
-	display: flex;
-	flex-direction: column;
-	gap: 14px;
+/* ── Options : bouton du composer + popover (remplacent l'ancienne
+   carte « Options » du formulaire) ── */
+.qbd-ai-composer-opts {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 30px;
+	height: 30px;
+	padding: 0;
+	border-radius: 8px;
+	background: transparent !important;
+	border: none;
+	box-shadow: none !important;
+	color: var(--text-muted);
+	cursor: pointer;
+	flex-shrink: 0;
+	transition: color 0.14s ease, background 0.14s ease;
 }
 
-.qbd-ai-options-header {
+.qbd-ai-composer-opts:hover {
+	color: var(--text-normal);
+	background: var(--background-modifier-hover) !important;
+}
+
+.qbd-ai-composer-opts svg {
+	width: 15px;
+	height: 15px;
+}
+
+.qbd-options-pop {
+	width: 236px;
+	padding: 10px;
+}
+
+.qbd-options-pop-row {
 	display: flex;
 	align-items: center;
-	justify-content: space-between;
-	margin-bottom: 2px;
+	gap: 10px;
+	padding: 2px 4px 8px;
 }
 
-.qbd-ai-options-label {
-	font-size: 10px;
-	font-weight: 600;
-	color: var(--text-faint);
-	text-transform: uppercase;
-	letter-spacing: 0.08em;
-}
-
-.qbd-ai-option-row {
-	display: flex;
-	align-items: center;
-	gap: 12px;
-}
-
-.qbd-ai-option-label {
+.qbd-options-pop-label {
 	font-size: 12px;
+	font-weight: 500;
 	color: var(--text-muted);
 	flex-shrink: 0;
-	width: 72px;
-	font-weight: 500;
 }
 
-.qbd-ai-option-value {
-	font-size: 13px;
+.qbd-options-pop-value {
+	font-size: 12px;
 	color: var(--text-normal);
 	font-family: var(--font-monospace, monospace);
-	min-width: 22px;
+	min-width: 26px;
 	text-align: center;
 	font-weight: 700;
 	background: var(--background-primary);
 	border: 1px solid var(--background-modifier-border);
 	border-radius: 6px;
-	padding: 2px 8px;
+	padding: 1px 6px;
 }
 
-.qbd-ai-range-wrap {
-	flex: 1;
-	display: flex;
-	align-items: center;
-	gap: 10px;
-	min-width: 0;
+.qbd-options-pop-title {
+	font-size: 10px;
+	font-weight: 600;
+	color: var(--text-faint);
+	text-transform: uppercase;
+	letter-spacing: 0.08em;
+	padding: 6px 4px 4px;
+	border-top: 1px solid var(--background-modifier-border);
 }
 
 .qbd-ai-range {
@@ -954,16 +964,6 @@
 	accent-color: var(--interactive-accent);
 	cursor: pointer;
 	min-width: 0;
-}
-
-.qbd-ai-type-select-wrap {
-	flex: 1;
-	min-width: 0;
-	display: flex;
-}
-
-.qbd-ai-type-select-wrap .qbd-select {
-	flex: 1;
 }
 
 /* ── Generate button ── */
@@ -1333,14 +1333,6 @@
 		font-size: 12px;
 	}
 
-	.qbd-ai-option-row {
-		flex-wrap: wrap;
-	}
-
-	.qbd-ai-option-label {
-		width: auto;
-	}
-
 	.qbd-ai-model-row {
 		flex-wrap: wrap;
 	}
@@ -1352,10 +1344,6 @@
 	.qbd-ai-hint-action {
 		align-self: flex-start;
 		margin-left: 22px;
-	}
-
-	.qbd-ai-range-wrap {
-		flex-basis: 100%;
 	}
 
 	.qbd-ai-result-actions {

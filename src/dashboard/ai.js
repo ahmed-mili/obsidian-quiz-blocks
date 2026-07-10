@@ -8,7 +8,7 @@
 ══════════════════════════════════════════════════════════ */
 
 const aiProviders = require("./ai-providers");
-const { createSelect, closeAllSelects, openActionMenu, openModelMenu, openEffortSlider, openNotePicker } = require("./ui-select");
+const { createSelect, closeAllSelects, openActionMenu, openModelMenu, openEffortSlider, openOptionsMenu, openNotePicker } = require("./ui-select");
 const voiceInput = require("./voice-input");
 
 function createAiHandlers(ctx) {
@@ -387,6 +387,43 @@ function createAiHandlers(ctx) {
 		const composerTools = composerBottom.createDiv({ cls: "qbd-ai-composer-tools" });
 		if (buildModelControl) buildModelControl(composerTools);
 
+		// Bouton Options (questions + type) : remplace l'ancienne carte
+		// « Options » du formulaire — popover à la demande, tooltip d'état.
+		const optsBtn = composerTools.createEl("button", { cls: "qbd-ai-composer-opts" });
+		optsBtn.type = "button";
+		optsBtn.setAttribute("aria-label", "Options du quiz");
+		obsidian.setIcon(optsBtn, "sliders-horizontal");
+		optsBtn.addEventListener("click", () => {
+			openOptionsMenu(optsBtn, {
+				count: questionCount, minCount: 2, maxCount: 20,
+				type: questionType, types: TYPES,
+				onCount: (n) => { questionCount = n; },
+				onType: (t) => { questionType = t; }
+			});
+		});
+		// Tooltip au survol : l'état courant (« 5 questions · Mixte »),
+		// relu à chaque hover — pattern attachStopTip.
+		{
+			let tip = null;
+			const hide = () => { if (tip) { tip.remove(); tip = null; } };
+			optsBtn.addEventListener("mouseenter", () => {
+				if (tip) return;
+				tip = document.body.createDiv({ cls: "qbd-hover-tip" });
+				tip.createDiv({ cls: "qbd-hover-tip-title", text: questionCount + " questions · " + questionType });
+				const r = optsBtn.getBoundingClientRect();
+				tip.style.visibility = "hidden";
+				const tr = tip.getBoundingClientRect();
+				const left = Math.min(Math.max(8, r.left + r.width / 2 - tr.width / 2), window.innerWidth - tr.width - 8);
+				let top = r.top - tr.height - 8;
+				if (top < 8) top = r.bottom + 8;
+				tip.style.left = left + "px";
+				tip.style.top = top + "px";
+				tip.style.visibility = "";
+			});
+			optsBtn.addEventListener("mouseleave", hide);
+			optsBtn.addEventListener("click", hide);
+		}
+
 		// Bouton générer dans le composer (façon bouton d'envoi claude.ai) :
 		// caché tant que le champ est vide, flèche ↑ blanche sur fond accent.
 		// Pendant la génération il devient le bouton STOP (carré + tooltip
@@ -457,37 +494,8 @@ function createAiHandlers(ctx) {
 			if (e.dataTransfer?.files?.length) addImageFiles(Array.from(e.dataTransfer.files));
 		});
 
-		// ── Options ──
-		const optionsCard = formCol.createDiv({ cls: "qbd-ai-options" });
-		const optionsHeader = optionsCard.createDiv({ cls: "qbd-ai-options-header" });
-		optionsHeader.createEl("span", { cls: "qbd-ai-options-label", text: "Options" });
-
-		// Question count
-		const countRow = optionsCard.createDiv({ cls: "qbd-ai-option-row" });
-		countRow.createEl("span", { cls: "qbd-ai-option-label", text: "Questions" });
-		const rangeWrap = countRow.createDiv({ cls: "qbd-ai-range-wrap" });
-		const rangeInput = rangeWrap.createEl("input", {
-			type: "range",
-			cls: "qbd-ai-range"
-		});
-		rangeInput.min = 2;
-		rangeInput.max = 20;
-		rangeInput.value = String(questionCount);
-		const countDisplay = rangeWrap.createEl("span", { cls: "qbd-ai-option-value", text: String(questionCount) });
-		rangeInput.addEventListener("input", (e) => {
-			questionCount = parseInt(e.target.value);
-			countDisplay.textContent = String(questionCount);
-		});
-
-		// Question type — dropdown custom
-		const typeRow = optionsCard.createDiv({ cls: "qbd-ai-option-row" });
-		typeRow.createEl("span", { cls: "qbd-ai-option-label", text: "Type" });
-		const typeWrap = typeRow.createDiv({ cls: "qbd-ai-type-select-wrap" });
-		createSelect(typeWrap, {
-			value: questionType,
-			options: TYPES.map(t => ({ value: t, label: t })),
-			onChange: (v) => { questionType = v; }
-		});
+		// (Les options Questions/Type vivent dans le popover du bouton
+		// sliders du composer — l'ancienne carte « Options » est supprimée.)
 
 		// ── Preview (colonne droite) ──
 		const previewCol = layout.createDiv({ cls: "qbd-ai-preview" });

@@ -938,6 +938,111 @@ function openEffortSlider(anchorEl, opts) {
 }
 
 /*
+ * openOptionsMenu(anchorEl, {
+ *   count, minCount, maxCount,   // slider Questions
+ *   type, types: string[],       // choix du Type
+ *   onCount(n), onType(t)
+ * })
+ * Popover des options de génération (remplace la carte « Options » du
+ * formulaire). Reste ouvert pendant les réglages — fermeture clic-dehors,
+ * Esc, scroll. Le Type est une liste à coche directe, PAS un dropdown
+ * imbriqué : l'ouverture d'un createSelect appelle closeAllSelects(),
+ * qui fermerait ce popover.
+ */
+function openOptionsMenu(anchorEl, opts) {
+	closeAllSelects();
+
+	const menuEl = document.body.createDiv({ cls: "qbd-select-menu qbd-options-pop" });
+	menuEl.setAttribute("role", "menu");
+
+	// ── Questions : slider + valeur ──
+	const countRow = menuEl.createDiv({ cls: "qbd-options-pop-row" });
+	countRow.createSpan({ cls: "qbd-options-pop-label", text: "Questions" });
+	const range = countRow.createEl("input", { type: "range", cls: "qbd-ai-range" });
+	range.min = String(opts.minCount);
+	range.max = String(opts.maxCount);
+	range.value = String(opts.count);
+	const val = countRow.createSpan({ cls: "qbd-options-pop-value", text: String(opts.count) });
+	range.addEventListener("input", () => {
+		val.setText(range.value);
+		if (opts.onCount) opts.onCount(parseInt(range.value, 10));
+	});
+
+	// ── Type : items à coche (même anatomie que les options de select) ──
+	menuEl.createDiv({ cls: "qbd-options-pop-title", text: "Type" });
+	const items = [];
+	let current = opts.type;
+	function refreshItems() {
+		for (const it of items) {
+			const active = it.t === current;
+			it.btn.classList.toggle("is-active", active);
+			it.btn.setAttribute("aria-checked", active ? "true" : "false");
+			it.check.empty();
+			if (active) obsidian.setIcon(it.check, "check");
+		}
+	}
+	for (const t of opts.types) {
+		const btn = menuEl.createEl("button", { cls: "qbd-select-option" });
+		btn.type = "button";
+		btn.setAttribute("role", "menuitemradio");
+		const check = btn.createSpan({ cls: "qbd-select-check" });
+		btn.createSpan({ cls: "qbd-select-option-label", text: t });
+		btn.addEventListener("click", () => {
+			current = t;
+			refreshItems();
+			if (opts.onType) opts.onType(t);
+		});
+		items.push({ t, btn, check });
+	}
+	refreshItems();
+
+	// ── Position (pattern openEffortSlider : sous l'ancre, sinon dessus) ──
+	const rect = anchorEl.getBoundingClientRect();
+	menuEl.style.visibility = "hidden";
+	menuEl.style.top = "0px";
+	menuEl.style.left = "0px";
+	const mr = menuEl.getBoundingClientRect();
+	const left = Math.min(Math.max(8, rect.left), window.innerWidth - mr.width - 8);
+	const below = rect.bottom + 4;
+	const top = (below + mr.height <= window.innerHeight - 8 || rect.top - 4 - mr.height < 8)
+		? below : rect.top - 4 - mr.height;
+	menuEl.style.left = left + "px";
+	menuEl.style.top = top + "px";
+	menuEl.style.visibility = "";
+
+	function closeMenu() {
+		menuEl.remove();
+		openMenus.delete(closeMenu);
+		document.removeEventListener("mousedown", onDocDown, true);
+		document.removeEventListener("keydown", onKeyDown, true);
+		window.removeEventListener("scroll", onScroll, true);
+		window.removeEventListener("resize", closeMenu);
+	}
+
+	function onDocDown(e) {
+		if (anchorEl.contains(e.target) || menuEl.contains(e.target)) return;
+		closeMenu();
+	}
+
+	function onKeyDown(e) {
+		if (e.key === "Escape") closeMenu();
+	}
+
+	function onScroll(e) {
+		if (menuEl.contains(e.target)) return;
+		closeMenu();
+	}
+
+	openMenus.add(closeMenu);
+	document.addEventListener("mousedown", onDocDown, true);
+	document.addEventListener("keydown", onKeyDown, true);
+	window.addEventListener("scroll", onScroll, true);
+	window.addEventListener("resize", closeMenu);
+
+	return { close: closeMenu };
+}
+
+/*
  * openNotePicker(anchorEl, {
  *   openFiles: TFile[],   // notes actuellement ouvertes (ordre des onglets)
  *   allFiles: TFile[],    // toutes les notes du vault (pour la recherche)
@@ -1067,4 +1172,4 @@ function openNotePicker(anchorEl, opts) {
 
 const obsidian = require("obsidian");
 const { createEffortTrackFx } = require("./effort-canvas");
-module.exports = { createSelect, closeAllSelects, openActionMenu, openModelMenu, openEffortSlider, openNotePicker };
+module.exports = { createSelect, closeAllSelects, openActionMenu, openModelMenu, openEffortSlider, openOptionsMenu, openNotePicker };
