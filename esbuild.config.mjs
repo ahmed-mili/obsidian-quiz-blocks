@@ -5,31 +5,56 @@ import path from "path";
 const production = process.argv.includes("production");
 const watch = !production;
 
-const vaultPluginDir = "C:/Obsidian/.obsidian/plugins/quiz-blocks";
+// Racine des vaults Obsidian. Le build déploie automatiquement le plugin dans
+// chaque vault ayant déjà le répertoire `.obsidian/plugins/quiz-blocks`.
+const VAULTS_BASE = "C:\\obsidian-vaults";
+
+function getVaultPluginDirs() {
+	const explicit = process.env.VAULT_PLUGIN_DIR;
+	if (explicit) return [explicit];
+
+	const dirs = [];
+	try {
+		if (fs.existsSync(VAULTS_BASE)) {
+			for (const name of fs.readdirSync(VAULTS_BASE)) {
+				const pluginDir = path.join(VAULTS_BASE, name, ".obsidian", "plugins", "quiz-blocks");
+				if (fs.existsSync(pluginDir)) dirs.push(pluginDir);
+			}
+		}
+	} catch (error) {
+		console.error("Erreur détection vaults :", error);
+	}
+	return dirs.length ? dirs : ["."];
+}
+
+const VAULT_PLUGIN_DIRS = getVaultPluginDirs();
+
+function deployFileToVaults(sourceFile) {
+	for (const dir of VAULT_PLUGIN_DIRS) {
+		fs.mkdirSync(dir, { recursive: true });
+		fs.copyFileSync(path.resolve(sourceFile), path.join(dir, path.basename(sourceFile)));
+	}
+	console.log(`${path.basename(sourceFile)} copié dans ${VAULT_PLUGIN_DIRS.length} vault(s).`);
+}
 
 function copyManifest() {
-	fs.mkdirSync(vaultPluginDir, { recursive: true });
-	fs.copyFileSync(
-		path.resolve("src/assets/manifest.json"),
-		path.join(vaultPluginDir, "manifest.json")
-	);
-	console.log("manifest.json copié.");
+	deployFileToVaults("src/assets/manifest.json");
 }
 
 async function bundleCSS() {
 	await esbuild.build({
 		entryPoints: ["src/assets/css/index.css"],
-		outfile: path.join(vaultPluginDir, "styles.css"),
+		outfile: "styles.css",
 		bundle: true,
 		minify: false,		// Désactivé pour avoir du CSS lisible
 		logLevel: "info",
 	});
 
 	// Supprimer le commentaire d'entry point laissé par esbuild
-	const outPath = path.join(vaultPluginDir, "styles.css");
-	let css = fs.readFileSync(outPath, "utf8");
+	let css = fs.readFileSync("styles.css", "utf8");
 	css = css.replace(/\n\/\* src\/assets\/css\/index\.css \*\/\s*$/, "");
-	fs.writeFileSync(outPath, css);
+	fs.writeFileSync("styles.css", css);
+	deployFileToVaults("styles.css");
 	console.log("styles.css bundlé (tous les @import inlinés).");
 	if (!production) {
 		console.log("Mode dev: CSS non minifié pour faciliter le debug.");
@@ -38,7 +63,7 @@ async function bundleCSS() {
 
 const ctx = await esbuild.context({
 	entryPoints: ["src/main.js"],
-	outfile: path.join(vaultPluginDir, "main.js"),
+	outfile: "main.js",
 	bundle: true,
 	format: "cjs",
 	platform: "node",
@@ -84,6 +109,7 @@ if (watch) {
 	console.log("Build en mode watch démarré.");
 } else {
 	await ctx.rebuild();
+	deployFileToVaults("main.js");
 	copyManifest();
 	await bundleCSS();
 	await ctx.dispose();

@@ -34,3 +34,13 @@ desktop.ini
 
 # Local temp files
 temp/
+
+# Artefacts de build/déploiement à la racine (la release GitHub Actions
+# rebuilde tout depuis src/ ; le build local les copie dans les vaults)
+/main.js
+/styles.css
+/manifest.json
+/data.json
+
+# Sessions Playwright MCP
+.playwright-mcp/
