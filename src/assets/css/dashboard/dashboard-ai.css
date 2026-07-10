@@ -21,33 +21,63 @@
 	align-items: center;
 	justify-content: center;
 	text-align: center;
-	padding: 24px 12px;
+	/* Référence claude.ai : le bloc est centré avec un biais vers le
+	   HAUT (~42 % de la hauteur), pas au centre géométrique. */
+	padding: 24px 12px 12vh;
 }
 
 /* Le composer garde une largeur de lecture, quel que soit l'état —
-   800px : seul au centre de la page, 660 y paraissait perdu (retour
-   Ahmed 2026-07-10, gabarit d'accueil claude.ai). */
+   732px MESURÉS sur l'accueil claude.ai (2026-07-10). */
 .qbd-ai-stage .qbd-ai-composer {
-	width: min(800px, 100%);
+	width: min(732px, 100%);
 	flex-shrink: 0;
 	text-align: left;
 }
 
+/* Proportions internes de la référence : composer ~136px de haut via
+   un PADDING généreux (pas un grand champ vide), placeholder ~15px,
+   une ligne + la barre d'outils. Scopé aux états centrés — en résultat
+   (composer en bas) il garde sa version compacte. */
 .qbd-ai-stage--idle .qbd-ai-composer,
 .qbd-ai-stage--loading .qbd-ai-composer,
 .qbd-ai-stage--error .qbd-ai-composer {
-	margin-top: 8px;
+	margin-top: 10px;
+	padding: 22px 24px 16px;
+	border-radius: 18px;
 }
 
-/* Champ plus aéré quand le composer est la pièce centrale (~4 lignes). */
 .qbd-ai-stage--idle .qbd-ai-composer-input,
 .qbd-ai-stage--loading .qbd-ai-composer-input,
 .qbd-ai-stage--error .qbd-ai-composer-input {
-	min-height: 84px;
+	min-height: 48px;
+	font-size: 15px;
+}
+
+/* Titre à l'échelle de la référence (grand, proche du composer) —
+   la pastille d'icône suit. */
+.qbd-ai-stage--idle .qbd-ai-title,
+.qbd-ai-stage--loading .qbd-ai-title,
+.qbd-ai-stage--error .qbd-ai-title {
+	font-size: 27px;
+}
+
+.qbd-ai-stage--idle .qbd-ai-title-icon,
+.qbd-ai-stage--loading .qbd-ai-title-icon,
+.qbd-ai-stage--error .qbd-ai-title-icon {
+	width: 36px;
+	height: 36px;
+	border-radius: 10px;
+}
+
+.qbd-ai-stage--idle .qbd-ai-title-icon svg,
+.qbd-ai-stage--loading .qbd-ai-title-icon svg,
+.qbd-ai-stage--error .qbd-ai-title-icon svg {
+	width: 20px;
+	height: 20px;
 }
 
 .qbd-ai-stage .qbd-ai-model-hint {
-	width: min(800px, 100%);
+	width: min(732px, 100%);
 	text-align: left;
 }
 
@@ -56,7 +86,7 @@
 .qbd-ai-stage .qbd-ai-preview-loading,
 .qbd-ai-stage .qbd-ai-preview-error {
 	flex: none;
-	width: min(800px, 100%);
+	width: min(732px, 100%);
 	min-height: 200px;
 }
 
