@@ -9,6 +9,7 @@
 
 const aiProviders = require("./ai-providers");
 const { createSelect, closeAllSelects, openActionMenu, openModelMenu, openEffortSlider, openNotePicker } = require("./ui-select");
+const voiceInput = require("./voice-input");
 
 function createAiHandlers(ctx) {
 	let composerText = "";
@@ -350,6 +351,8 @@ function createAiHandlers(ctx) {
 		}
 
 		const composerInput = composer.createEl("textarea", { cls: "qbd-ai-composer-input" });
+		// Dictée vocale push-to-talk (opt-in — réglages « Saisie vocale »).
+		voiceInput.attach(ctx, composerInput);
 		composerInput.placeholder = "Décrivez le sujet du quiz, ou collez votre contenu…";
 		composerInput.value = composerText;
 		composerInput.rows = 2;
