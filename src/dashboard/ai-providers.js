@@ -33,7 +33,10 @@ const PROVIDERS = [
 	{
 		id: "codex",
 		name: "ChatGPT",
-		sub: "Abonnement ChatGPT",
+		// « Codex CLI » explicite : l'application de bureau Codex ne
+		// fournit PAS la commande « codex » — la confusion fait installer
+		// le mauvais outil (vécu Ahmed 2026-07-12).
+		sub: "Codex CLI · Abonnement ChatGPT",
 		logo: "openai",
 		desktopOnly: true,
 		defaultModel: "gpt-5.6-terra",

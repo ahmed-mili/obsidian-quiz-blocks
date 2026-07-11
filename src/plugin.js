@@ -261,6 +261,28 @@ class QuizBlocksSettingTab extends obsidian.PluginSettingTab {
 				warning: "Vos requêtes passent par votre session Claude Code locale et comptent dans l'usage de votre abonnement. Aucune clé n'est stockée dans Obsidian.",
 				docsLink: { label: "Documentation Claude Code", url: "https://code.claude.com/docs" }
 			},
+			codex: {
+				title: "Comment configurer ChatGPT (Codex CLI)",
+				sections: [
+					{
+						heading: "1. Installer le Codex CLI — pas l'application Codex",
+						text: "La génération utilise le Codex CLI, l'outil de terminal d'OpenAI : npm install -g @openai/codex (Node.js requis). L'application de bureau Codex ne suffit pas : elle n'installe pas la commande « codex » que le plugin utilise.",
+						link: { label: "Page npm du Codex CLI", url: "https://www.npmjs.com/package/@openai/codex" }
+					},
+					{
+						heading: "2. Connecter votre compte ChatGPT",
+						text: "Dans un terminal, lancez « codex login » et connectez-vous avec votre compte ChatGPT. Aucune clé API : c'est votre abonnement qui est utilisé.",
+						link: null
+					},
+					{
+						heading: "3. C'est tout",
+						text: "Le plugin détecte le Codex CLI automatiquement — revenez simplement sur Obsidian après l'installation. Choisissez un modèle ci-dessus et générez.",
+						link: null
+					}
+				],
+				warning: "Vos requêtes passent par votre session Codex locale et comptent dans l'usage de votre abonnement ChatGPT. Aucune clé n'est stockée dans Obsidian.",
+				docsLink: { label: "Codex CLI sur GitHub", url: "https://github.com/openai/codex" }
+			},
 			ollama: {
 				title: "Comment configurer Ollama (local + cloud)",
 				sections: [

@@ -24,6 +24,9 @@ function createAiHandlers(ctx) {
 	// (dashboard.bindComposerHotkeys → openAddFiles/openAddNotes).
 	let addBtnRef = null;
 	let fileInputRef = null;
+	// Listener « focus fenêtre » du re-check des statuts CLI (remplacé à
+	// chaque render, retiré quand la zone de hint disparaît).
+	let __focusRecheck = null;
 	let phase = "idle"; // idle | loading | result | error
 	// Client IA de la génération en cours — permet au bouton stop (et à
 	// la touche Esc) d'annuler réellement (kill du CLI / abort du fetch).
@@ -497,13 +500,6 @@ function createAiHandlers(ctx) {
 		generateBtnRef = sendBtn;
 		updateGenerateBtn(generateBtnRef);
 
-		// Détections async (statut fournisseur + modèles réels) : après la
-		// création du contrôle modèle, donc modelSelect existe désormais.
-		// ollamaCtl et buildOllamaList sont locaux à render → passés en
-		// paramètres (les référencer directement depuis la fonction sœur
-		// refreshProviderStatuses lançait un ReferenceError, statut Ollama gelé).
-		refreshProviderStatuses({ providerSelect, hintZone, provider, currentModel, modelSelect, ollamaCtl, buildOllamaList });
-
 		// PAS d'attribut accept : le dialogue Windows affiche alors « Tous
 		// les fichiers (*.*) » (référence claude.ai, capture Ahmed) au lieu
 		// d'une liste d'extensions illisible — la validation par type se
@@ -564,6 +560,31 @@ function createAiHandlers(ctx) {
 		// sous le composer depuis la suppression de la carte « Modèle IA ».
 		// :empty → masqué ; rempli par refreshProviderStatuses/renderHint.
 		if (provider) hintZone = formCol.createDiv({ cls: "qbd-ai-model-hint" });
+
+		// Détections async (statut fournisseur + modèles réels) : APRÈS la
+		// création de hintZone — l'appel fige ses arguments, et un hintZone
+		// encore null rendait renderHint muet : « ChatGPT sélectionné, CLI
+		// absent, aucun message » (vécu Ahmed, Codex CLI). Aussi après le
+		// contrôle modèle (modelSelect existe). ollamaCtl et buildOllamaList
+		// sont locaux à render → passés en paramètres (les référencer depuis
+		// la fonction sœur lançait un ReferenceError, statut Ollama gelé).
+		refreshProviderStatuses({ providerSelect, hintZone, provider, currentModel, modelSelect, ollamaCtl, buildOllamaList });
+
+		// Retour de focus fenêtre = l'utilisateur revient du terminal où il
+		// vient d'installer/connecter un CLI : re-vérifier automatiquement
+		// tant qu'un problème est affiché — sinon le hint d'erreur reste
+		// figé et « l'installation n'est pas détectée » (vécu Codex CLI).
+		if (__focusRecheck) window.removeEventListener("focus", __focusRecheck);
+		__focusRecheck = () => {
+			if (!hintZone || !hintZone.isConnected) {
+				window.removeEventListener("focus", __focusRecheck);
+				__focusRecheck = null;
+				return;
+			}
+			if (!hintZone.querySelector(".qbd-ai-hint--err, .qbd-ai-hint--warn")) return;
+			refreshProviderStatuses({ providerSelect, hintZone, provider, currentModel, modelSelect, ollamaCtl, buildOllamaList, force: true });
+		};
+		window.addEventListener("focus", __focusRecheck);
 
 		// (Les options Questions/Type vivent dans le popover du bouton
 		// sliders du composer — l'ancienne carte « Options » est supprimée.)
@@ -675,11 +696,11 @@ function createAiHandlers(ctx) {
 
 		aiProviders.checkCodex(force).then(res => {
 			if (res.ok) {
-				setStatus("codex", providerSelect, "ok", "Codex v" + res.version);
+				setStatus("codex", providerSelect, "ok", "Codex CLI v" + res.version);
 			} else if (res.reason === "mobile") {
 				setStatus("codex", providerSelect, "warn", "Desktop uniquement");
 			} else {
-				setStatus("codex", providerSelect, "err", "Codex non installé");
+				setStatus("codex", providerSelect, "err", "Codex CLI non installé");
 			}
 			if (provider !== "codex") return;
 			if (res.ok) {
@@ -687,14 +708,19 @@ function createAiHandlers(ctx) {
 			} else if (res.reason === "mobile") {
 				renderHint(hintZone, {
 					type: "warn", icon: "monitor",
-					text: "La génération via ChatGPT (Codex) est disponible sur desktop uniquement."
+					text: "La génération via ChatGPT (Codex CLI) est disponible sur desktop uniquement."
 				});
 			} else {
+				// « Codex CLI », jamais « Codex » nu : l'APPLICATION Codex
+				// (bureau) n'installe pas la commande « codex » — l'installer
+				// ne détecte rien (vécu Ahmed 2026-07-12). La commande npm
+				// affichée évite le mauvais téléchargement.
 				renderHint(hintZone, {
 					type: "err", icon: "download",
-					text: "Codex n'est pas installé. Installez-le puis connectez votre compte ChatGPT avec « codex login ».",
+					text: "Le Codex CLI n'est pas installé — c'est l'outil de terminal d'OpenAI, différent de l'application Codex. Installez-le puis connectez votre compte ChatGPT avec « codex login » :",
+					code: "npm install -g @openai/codex",
 					action: {
-						label: "Installer Codex", icon: "external-link",
+						label: "Installer Codex CLI", icon: "external-link",
 						onClick: () => window.open("https://www.npmjs.com/package/@openai/codex", "_blank")
 					}
 				});
