@@ -501,6 +501,20 @@ function createAiClient(plugin) {
 		return parseOllamaResponse(content);
 	}
 
+	/* Les modèles écrivent le LaTeX avec des backslashes SIMPLES dans les
+	   chaînes JSON5 ($\frac$, $\int$) — or JSON5 transforme \f en form
+	   feed, \t en tab, et AVALE le backslash des séquences inconnues
+	   (\int → int) : LaTeX détruit AVANT le parse, irréparable après
+	   (baseline gemma4 2026-07-11 : « $∆rac{f(x)+h}{h}$ » et
+	   « f'(x) = an(x) » pour \tan). Réparation sur la CHAÎNE BRUTE :
+	   doubler tout \lettre sauf les échappements à préserver — \n et \r
+	   (sauts de ligne voulus dans learn/explain), \" \' \\ \/ \x \u \0.
+	   Sacrifie \t/\f/\b/\v littéraux (jamais voulus dans un quiz) au
+	   profit de \tan, \frac, \beta, \vec… */
+	function repairLatexBackslashes(source) {
+		return source.replace(/\\(?![nr"'\\\/0-9xu])([a-zA-Z,;!])/g, "\\\\$1");
+	}
+
 	function parseOllamaResponse(content) {
 		let cleaned = content.trim();
 
@@ -509,6 +523,7 @@ function createAiClient(plugin) {
 		if (jsonMatch) {
 			cleaned = jsonMatch[1].trim();
 		}
+		cleaned = repairLatexBackslashes(cleaned);
 
 		// Ollama with format: structured JSON wraps the array in an object
 		// e.g. { "questions": [...] }
@@ -539,6 +554,7 @@ function createAiClient(plugin) {
 		if (jsonMatch) {
 			cleaned = jsonMatch[1].trim();
 		}
+		cleaned = repairLatexBackslashes(cleaned);
 
 		const JSON5 = require("json5");
 		const parsed = JSON5.parse(cleaned);
