@@ -231,6 +231,14 @@
 	touch-action: none; /* le drag du pouce ne doit pas scroller la page */
 }
 
+/* Pendant le drag du pouce : resize horizontal maintenu sur tout le
+   slider (ui-select.js pose le même curseur au survol du pouce seul,
+   par hit-test — le pouce est pointer-events: none). */
+.qbd-effort-slider.is-dragging,
+.qbd-effort-slider.is-dragging * {
+	cursor: ew-resize;
+}
+
 .qbd-effort-track {
 	position: absolute;
 	left: 0;
@@ -641,14 +649,6 @@
 
 .qbd-effort-trigger.qbd-composer-plain {
 	margin-left: -6px; /* resserre l'écart modèle ↔ effort */
-}
-
-/* L'effort se règle par un geste HORIZONTAL : le curseur du bouton
-   est le resize horizontal, plus jamais la main (demande Ahmed
-   2026-07-12) — il annonce le geste. Enfants inclus (le label). */
-.qbd-effort-trigger,
-.qbd-effort-trigger * {
-	cursor: ew-resize !important;
 }
 
 .qbd-effort-trigger-label {

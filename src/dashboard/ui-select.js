@@ -873,6 +873,22 @@ function openEffortSlider(anchorEl, opts) {
 		commit();
 	});
 	slider.addEventListener("pointercancel", () => { dragging = false; slider.classList.remove("is-dragging"); });
+	// Curseur « resize horizontal » au survol du POUCE uniquement
+	// (demande Ahmed : le bouton blanc annonce le geste de glissement,
+	// le reste de la piste garde la main du clic-saut). Le pouce est
+	// pointer-events: none (le drag vit sur le slider entier) : un
+	// cursor CSS dessus ne s'appliquerait jamais → hit-test manuel de
+	// ses coordonnées. Pendant le drag, la règle .is-dragging maintient
+	// le resize sur tout le slider (la souris devance le pouce d'une
+	// frame, sinon le curseur clignoterait).
+	slider.addEventListener("pointermove", (e) => {
+		if (dragging) return;
+		const tr = thumb.getBoundingClientRect();
+		const over = e.clientX >= tr.left && e.clientX <= tr.right
+			&& e.clientY >= tr.top && e.clientY <= tr.bottom;
+		slider.style.cursor = over ? "ew-resize" : "";
+	});
+	slider.addEventListener("pointerleave", () => { slider.style.cursor = ""; });
 	slider.addEventListener("keydown", (e) => {
 		let next = idx;
 		if (e.key === "ArrowRight" || e.key === "ArrowUp") next = Math.min(n - 1, idx + 1);
