@@ -849,6 +849,7 @@ function openEffortSlider(anchorEl, opts) {
 	}
 
 	let dragging = false;
+	let interacted = false; // clic/drag déjà fait — reset au pointerleave
 	slider.addEventListener("pointerdown", (e) => {
 		e.preventDefault();
 		slider.focus();
@@ -856,6 +857,7 @@ function openEffortSlider(anchorEl, opts) {
 		// jette InvalidPointerId — le drag suit alors les pointermove simples.
 		try { slider.setPointerCapture(e.pointerId); } catch (err) { /* best effort */ }
 		dragging = true;
+		interacted = true;
 		slider.classList.add("is-dragging"); // press : scale(.94) du pouce (codex)
 		idx = idxFromPointer(e);
 		update();
@@ -870,25 +872,34 @@ function openEffortSlider(anchorEl, opts) {
 		dragging = false;
 		slider.classList.remove("is-dragging");
 		try { slider.releasePointerCapture(e.pointerId); } catch (err) { /* best effort */ }
+		// Après un clic/drag, le curseur RESTE en resize (demande Ahmed :
+		// pas de main → resize → main sur un clic-saut ; le pouce vient
+		// de sauter au cran le plus proche du curseur, l'invite au
+		// glissement reste). Reset au pointerleave uniquement.
+		slider.style.cursor = "ew-resize";
 		commit();
 	});
 	slider.addEventListener("pointercancel", () => { dragging = false; slider.classList.remove("is-dragging"); });
-	// Curseur « resize horizontal » au survol du POUCE uniquement
-	// (demande Ahmed : le bouton blanc annonce le geste de glissement,
-	// le reste de la piste garde la main du clic-saut). Le pouce est
-	// pointer-events: none (le drag vit sur le slider entier) : un
-	// cursor CSS dessus ne s'appliquerait jamais → hit-test manuel de
-	// ses coordonnées. Pendant le drag, la règle .is-dragging maintient
-	// le resize sur tout le slider (la souris devance le pouce d'une
-	// frame, sinon le curseur clignoterait).
+	// Curseur « resize horizontal » au survol du POUCE uniquement en
+	// phase de DÉCOUVERTE (avant toute interaction — demande Ahmed : le
+	// bouton blanc annonce le geste, le reste de la piste garde la main
+	// du clic-saut). Le pouce est pointer-events: none (le drag vit sur
+	// le slider entier) : un cursor CSS dessus ne s'appliquerait jamais
+	// → hit-test manuel de ses coordonnées. Après la première
+	// interaction, le resize est maintenu partout (voir pointerup) ;
+	// pendant le drag, la règle .is-dragging l'assure (la souris devance
+	// le pouce d'une frame, sinon le curseur clignoterait).
 	slider.addEventListener("pointermove", (e) => {
-		if (dragging) return;
+		if (dragging || interacted) return;
 		const tr = thumb.getBoundingClientRect();
 		const over = e.clientX >= tr.left && e.clientX <= tr.right
 			&& e.clientY >= tr.top && e.clientY <= tr.bottom;
 		slider.style.cursor = over ? "ew-resize" : "";
 	});
-	slider.addEventListener("pointerleave", () => { slider.style.cursor = ""; });
+	slider.addEventListener("pointerleave", () => {
+		interacted = false;
+		slider.style.cursor = "";
+	});
 	slider.addEventListener("keydown", (e) => {
 		let next = idx;
 		if (e.key === "ArrowRight" || e.key === "ArrowUp") next = Math.min(n - 1, idx + 1);
