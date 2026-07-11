@@ -72,6 +72,10 @@ class QuizDashboardView extends obsidian.ItemView {
 		this.detail = createDetailHandlers(ctx);
 		this.ai = createAiHandlers(ctx);
 
+		// Raccourcis du composer (menu « + ») : Scope de vue Obsidian —
+		// actif quand la vue est focalisée, même caret dans le textarea.
+		this.bindComposerHotkeys();
+
 		// Écouter les changements du scanner. La SIDEBAR aussi : le badge
 		// « Mes quiz » lit getQuizzes() au render — sans ça il reste figé
 		// sur le compte partiel du scan initial (badge « 1 » au démarrage).
@@ -89,6 +93,31 @@ class QuizDashboardView extends obsidian.ItemView {
 		// Rendu initial
 		this.renderSidebar();
 		this.renderCurrentView();
+	}
+
+	/* (Re)bind les raccourcis du composer depuis les réglages — appelé à
+	   l'ouverture ET par la SettingTab quand l'utilisateur les change (le
+	   Scope existant est conservé, seuls ses handlers sont remplacés :
+	   remplacer this.scope à chaud laisserait l'ancien scope poussé sur
+	   le keymap tant que la vue reste active). Les touches sont CLAIMÉES
+	   même hors de la vue « Générer » : dans une ItemView custom,
+	   Ctrl+F/Ctrl+E natifs ne font rien — les laisser fuir déclencherait
+	   un comportement Obsidian sans rapport (piège hotkey connu). */
+	bindComposerHotkeys() {
+		if (!this.scope) this.scope = new obsidian.Scope(this.app.scope);
+		if (this._hkHandlers) for (const h of this._hkHandlers) this.scope.unregister(h);
+		this._hkHandlers = [];
+		const s = this.plugin.settings;
+		const bind = (hk, action) => {
+			if (!hk || !hk.key) return;
+			this._hkHandlers.push(this.scope.register(hk.modifiers || [], hk.key, (e) => {
+				e.preventDefault();
+				if (this.currentView === "ai") action();
+				return false;
+			}));
+		};
+		bind(s.hotkeyAddFiles, () => { if (this.ai && this.ai.openAddFiles) this.ai.openAddFiles(); });
+		bind(s.hotkeyAddNotes, () => { if (this.ai && this.ai.openAddNotes) this.ai.openAddNotes(); });
 	}
 
 	onClose() {

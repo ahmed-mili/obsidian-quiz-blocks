@@ -674,7 +674,7 @@
 	justify-content: space-between;
 }
 
-/* Bouton « + » — ajouter images / note active.
+/* Bouton « + » — ajouter fichiers/images ou notes (menu d'actions).
    Ghost button (quiet icon button) façon claude.ai : au repos juste
    l'icône, aucun fond ni bordure. Le fond arrondi (carré arrondi)
    n'apparaît qu'au survol — on ne « voit » le bouton qu'à ce moment. */

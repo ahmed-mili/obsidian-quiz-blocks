@@ -9,14 +9,21 @@
 
 const aiProviders = require("./ai-providers");
 const { createSelect, closeAllSelects, openActionMenu, openModelMenu, openEffortSlider, openOptionsMenu, openNotePicker } = require("./ui-select");
+const { formatHotkey } = require("../hotkey-format");
 const voiceInput = require("./voice-input");
 
 function createAiHandlers(ctx) {
 	let composerText = "";
-	let noteAttachment = null; // { name, content }
+	// Sources texte attachées (PLUSIEURS — maquette 2026-07-11 231626) :
+	// notes du vault (path) et fichiers texte du disque (.md/.txt).
+	let noteAttachments = []; // [{ name, content, path? }]
 	let questionCount = 5;
 	let questionType = "Mixte";
 	let images = [];
+	// Refs du dernier render : cibles des raccourcis du composer
+	// (dashboard.bindComposerHotkeys → openAddFiles/openAddNotes).
+	let addBtnRef = null;
+	let fileInputRef = null;
 	let phase = "idle"; // idle | loading | result | error
 	// Client IA de la génération en cours — permet au bouton stop (et à
 	// la touche Esc) d'annuler réellement (kill du CLI / abort du fetch).
@@ -41,7 +48,7 @@ function createAiHandlers(ctx) {
 		// uniquement » explique déjà pourquoi.
 		const provider = aiProviders.getProvider(providerId);
 		if (provider && provider.desktopOnly && ctx.app.isMobile) return false;
-		return !!(composerText.trim() || images.length > 0 || noteAttachment);
+		return !!(composerText.trim() || images.length > 0 || noteAttachments.length > 0);
 	}
 
 	async function render(container) {
@@ -350,8 +357,8 @@ function createAiHandlers(ctx) {
 
 		const composer = formCol.createDiv({ cls: "qbd-ai-composer" });
 
-		// Attachements : vignettes d'images + note attachée
-		if (images.length > 0 || noteAttachment) {
+		// Attachements : vignettes d'images + notes/fichiers texte attachés
+		if (images.length > 0 || noteAttachments.length > 0) {
 			const attachRow = composer.createDiv({ cls: "qbd-ai-composer-attachments" });
 			for (let i = 0; i < images.length; i++) {
 				const thumb = attachRow.createDiv({ cls: "qbd-ai-image-thumb" });
@@ -366,15 +373,16 @@ function createAiHandlers(ctx) {
 					render(containerRef);
 				});
 			}
-			if (noteAttachment) {
+			for (let i = 0; i < noteAttachments.length; i++) {
 				const chip = attachRow.createDiv({ cls: "qbd-ai-note-chip" });
 				const chipIcon = chip.createSpan({ cls: "qbd-ai-note-chip-icon" });
 				obsidian.setIcon(chipIcon, "file-text");
-				chip.createSpan({ cls: "qbd-ai-note-chip-name", text: noteAttachment.name });
+				chip.createSpan({ cls: "qbd-ai-note-chip-name", text: noteAttachments[i].name });
 				const chipRemove = chip.createEl("button", { cls: "qbd-ai-note-chip-remove" });
 				obsidian.setIcon(chipRemove, "x");
+				const idx = i;
 				chipRemove.addEventListener("click", () => {
-					noteAttachment = null;
+					noteAttachments.splice(idx, 1);
 					render(containerRef);
 				});
 			}
@@ -497,27 +505,31 @@ function createAiHandlers(ctx) {
 		refreshProviderStatuses({ providerSelect, hintZone, provider, currentModel, modelSelect, ollamaCtl, buildOllamaList });
 
 		const fileInput = composer.createEl("input", { type: "file", cls: "qbd-ai-file-input" });
-		fileInput.accept = "image/*";
+		fileInput.accept = "image/*,.md,.txt";
 		fileInput.multiple = true;
 		fileInput.addEventListener("change", (e) => {
-			if (e.target.files?.length) addImageFiles(Array.from(e.target.files));
+			if (e.target.files?.length) addComposerFiles(Array.from(e.target.files));
+			// Re-choisir le même fichier doit re-déclencher `change`.
+			e.target.value = "";
 		});
+		fileInputRef = fileInput;
+		addBtnRef = addBtn;
 
+		// Menu « + » (maquette Ahmed 2026-07-11 231626) : deux actions,
+		// raccourci configurable affiché à droite (réglages du plugin).
 		addBtn.addEventListener("click", () => {
-			const activeFile = ctx.getActiveFile ? ctx.getActiveFile() : ctx.app.workspace.getActiveFile();
 			openActionMenu(addBtn, [
 				{
-					icon: "image",
-					label: "Ajouter des images",
-					hint: "PNG · JPG · WEBP",
+					icon: "paperclip",
+					label: "Ajouter des fichiers ou des images",
+					hint: formatHotkey(ctx.plugin.settings.hotkeyAddFiles),
 					onClick: () => fileInput.click()
 				},
 				{
 					icon: "file-text",
-					label: "Utiliser la note active",
-					hint: activeFile ? activeFile.basename : "Aucune note",
-					disabled: !activeFile,
-					onClick: () => attachActiveNote(activeFile)
+					label: "Ajouter des notes",
+					hint: formatHotkey(ctx.plugin.settings.hotkeyAddNotes),
+					onClick: () => openAddNotes()
 				}
 			]);
 		});
@@ -533,7 +545,7 @@ function createAiHandlers(ctx) {
 			composerInput.setSelectionRange(len, len);
 		});
 
-		// Glisser-déposer d'images sur tout le composer
+		// Glisser-déposer de fichiers (images, .md, .txt) sur tout le composer
 		composer.addEventListener("dragover", (e) => {
 			e.preventDefault();
 			composer.classList.add("qbd-ai-composer--dragover");
@@ -542,7 +554,7 @@ function createAiHandlers(ctx) {
 		composer.addEventListener("drop", (e) => {
 			e.preventDefault();
 			composer.classList.remove("qbd-ai-composer--dragover");
-			if (e.dataTransfer?.files?.length) addImageFiles(Array.from(e.dataTransfer.files));
+			if (e.dataTransfer?.files?.length) addComposerFiles(Array.from(e.dataTransfer.files));
 		});
 
 		// Hint contextuel du fournisseur (CLI absent, serveur offline…) :
@@ -724,19 +736,74 @@ function createAiHandlers(ctx) {
 		render(containerRef);
 	}
 
-	/* Attache le contenu de la note active comme source du quiz. */
-	async function attachActiveNote(file) {
-		if (!file) {
-			new obsidian.Notice("Aucune note active");
+	/* Route les fichiers du picker/drop : images → vignettes (vision),
+	   texte (.md/.txt) → sources texte (mêmes chips que les notes).
+	   Autres formats : refusés avec explication (pas d'ingestion PDF/
+	   binaire côté client IA à ce jour). */
+	async function addComposerFiles(files) {
+		const imgs = [];
+		const rejected = [];
+		for (const file of files) {
+			if (file.type.startsWith("image/")) {
+				imgs.push(file);
+			} else if (/\.(md|txt)$/i.test(file.name) || file.type.startsWith("text/")) {
+				try {
+					const content = await file.text();
+					if (!noteAttachments.some(n => n.name === file.name)) {
+						noteAttachments.push({ name: file.name, content });
+					}
+				} catch (e) {
+					rejected.push(file.name);
+				}
+			} else {
+				rejected.push(file.name);
+			}
+		}
+		if (imgs.length) {
+			addImageFiles(imgs); // render inclus
+		} else {
+			render(containerRef);
+		}
+		if (rejected.length) {
+			new obsidian.Notice("Format non pris en charge : " + rejected.join(", ") + " (images, .md, .txt)");
+		}
+	}
+
+	/* Attache une note du vault comme source du quiz (menu « Ajouter des
+	   notes » et raccourci — remplace l'ancienne « note active »). */
+	async function attachNoteVaultFile(file) {
+		if (noteAttachments.some(n => n.path === file.path)) {
+			new obsidian.Notice("« " + file.basename + " » est déjà attachée");
 			return;
 		}
 		try {
 			const content = await ctx.app.vault.read(file);
-			noteAttachment = { name: file.basename, content };
+			noteAttachments.push({ name: file.basename, content, path: file.path });
 			render(containerRef);
 		} catch (e) {
-			new obsidian.Notice("Impossible de lire la note active");
+			new obsidian.Notice("Impossible de lire « " + file.basename + " »");
 		}
+	}
+
+	/* Cibles des raccourcis du composer (Scope de la vue dashboard) et du
+	   menu « + ». Actifs seulement si le composer est rendu (vue Générer). */
+	function openAddFiles() {
+		if (fileInputRef && fileInputRef.isConnected) fileInputRef.click();
+	}
+
+	function openAddNotes() {
+		if (!addBtnRef || !addBtnRef.isConnected) return;
+		const seen = new Set();
+		const openFiles = [];
+		for (const leaf of ctx.app.workspace.getLeavesOfType("markdown")) {
+			const f = leaf.view && leaf.view.file;
+			if (f && !seen.has(f.path)) { seen.add(f.path); openFiles.push(f); }
+		}
+		openNotePicker(addBtnRef, {
+			openFiles,
+			allFiles: ctx.app.vault.getMarkdownFiles(),
+			onPick: (file) => attachNoteVaultFile(file)
+		});
 	}
 
 	/* Loader de génération — l'ANIMATION VALIDÉE (balayage qbd-glide,
@@ -814,7 +881,7 @@ function createAiHandlers(ctx) {
 			generatedQuestions = [];
 			embedEditor = null;
 			composerText = "";
-			noteAttachment = null;
+			noteAttachments = [];
 			images = [];
 			render(containerRef);
 		});
@@ -867,7 +934,7 @@ function createAiHandlers(ctx) {
 		// (aucun fournisseur configuré). Pendant la génération il devient le
 		// bouton stop → toujours visible et cliquable.
 		const loading = phase === "loading";
-		const hasContent = !!(composerText.trim() || images.length > 0 || noteAttachment);
+		const hasContent = !!(composerText.trim() || images.length > 0 || noteAttachments.length > 0);
 		const canGen = canGenerate();
 		btn.classList.toggle("is-visible", hasContent || loading);
 		btn.disabled = loading ? false : !canGen;
@@ -916,12 +983,17 @@ function createAiHandlers(ctx) {
 		try {
 
 			// Source déduite du contenu du composer :
-			// images → vision ; note attachée → texte source ; sinon sujet
-			const source = images.length > 0 ? "image" : noteAttachment ? "text" : "topic";
+			// images → vision ; notes/fichiers attachés → texte source ;
+			// sinon sujet. Chaque source texte est délimitée par son nom
+			// (l'IA distingue les documents d'un envoi multi-notes).
+			const source = images.length > 0 ? "image" : noteAttachments.length > 0 ? "text" : "topic";
+			const notesBlock = noteAttachments
+				.map(n => (noteAttachments.length > 1 ? "--- " + n.name + " ---\n" : "") + n.content)
+				.join("\n\n");
 			const prompt = source === "image"
 				? (composerText.trim() || "Analyse les images fournies")
 				: source === "text"
-				? (composerText.trim() ? composerText.trim() + "\n\n" : "") + noteAttachment.content
+				? (composerText.trim() ? composerText.trim() + "\n\n" : "") + notesBlock
 				: composerText.trim();
 
 			// Convert image files to base64 for vision API
@@ -1008,7 +1080,7 @@ function createAiHandlers(ctx) {
 		}
 	}
 
-	return { render };
+	return { render, openAddFiles, openAddNotes };
 }
 
 const obsidian = require("obsidian");

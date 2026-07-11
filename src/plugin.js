@@ -30,6 +30,11 @@ const DEFAULT_SETTINGS = {
 	// Cache du catalogue cloud récupéré de ollama.com ([{value,label}]) : liste
 	// des modèles récents proposés à l'ajout. null → repli embarqué.
 	aiOllamaCatalog: null,
+	// ── Raccourcis du composer IA (menu « + ») — actifs quand la vue
+	// dashboard a le focus, affichés en hint dans le menu, modifiables
+	// dans les réglages (demande Ahmed, maquette 2026-07-11 231626).
+	hotkeyAddFiles: { modifiers: ["Mod"], key: "f" },
+	hotkeyAddNotes: { modifiers: ["Mod"], key: "e" },
 	// ── Saisie vocale (dictée locale whisper.cpp) — opt-in complet.
 	// Spec : docs/superpowers/specs/2026-07-10-voice-input-design.md
 	voiceEnabled: false,
@@ -547,6 +552,68 @@ class QuizBlocksSettingTab extends obsidian.PluginSettingTab {
 				docsLink.rel = "noopener noreferrer";
 			}
 		}
+
+		// ─── Raccourcis du composer IA ───
+		// Capture au clavier : clic sur le bouton → « Appuyez sur une
+		// combinaison… » → le prochain keydown non-modificateur devient le
+		// raccourci (un modificateur est exigé : une lettre nue taperait
+		// le raccourci en écrivant dans le composer). Les vues dashboard
+		// ouvertes re-bindent leur Scope immédiatement.
+		containerEl.createEl("h3", { text: "Raccourcis du composer IA" });
+		const { formatHotkey, eventToHotkey } = require("./hotkey-format");
+		const rebindDashboards = () => {
+			for (const leaf of this.app.workspace.getLeavesOfType(VIEW_TYPE_DASHBOARD)) {
+				if (leaf.view && leaf.view.bindComposerHotkeys) leaf.view.bindComposerHotkeys();
+			}
+		};
+		const addHotkeySetting = (name, desc, key) => {
+			new obsidian.Setting(containerEl)
+				.setName(name)
+				.setDesc(desc)
+				.addButton((btn) => {
+					btn.buttonEl.addClass("quiz-blocks-hotkey-btn");
+					const paint = () => btn.setButtonText(formatHotkey(this.plugin.settings[key]) || "Aucun");
+					paint();
+					btn.onClick(() => {
+						btn.setButtonText("Appuyez sur une combinaison…");
+						const onKey = async (e) => {
+							e.preventDefault();
+							e.stopPropagation();
+							if (e.key === "Escape") { cleanup(); paint(); return; }
+							const hk = eventToHotkey(e);
+							if (!hk) return; // modificateur seul : on attend la touche
+							if (!hk.modifiers.length) {
+								new obsidian.Notice("Ajoutez un modificateur (Ctrl, Alt ou Shift)");
+								return;
+							}
+							cleanup();
+							this.plugin.settings[key] = hk;
+							await this.plugin.saveSettings();
+							rebindDashboards();
+							paint();
+						};
+						const cleanup = () => {
+							btn.buttonEl.removeEventListener("keydown", onKey, true);
+							btn.buttonEl.removeEventListener("blur", onBlur);
+						};
+						const onBlur = () => { cleanup(); paint(); };
+						btn.buttonEl.addEventListener("keydown", onKey, true);
+						btn.buttonEl.addEventListener("blur", onBlur);
+						btn.buttonEl.focus();
+					});
+				})
+				.addExtraButton((b) => b
+					.setIcon("rotate-ccw")
+					.setTooltip("Restaurer le défaut")
+					.onClick(async () => {
+						this.plugin.settings[key] = JSON.parse(JSON.stringify(DEFAULT_SETTINGS[key]));
+						await this.plugin.saveSettings();
+						rebindDashboards();
+						this.display();
+					}));
+		};
+		addHotkeySetting("Ajouter des fichiers ou des images", "Ouvre le sélecteur de fichiers du composer (menu « + »).", "hotkeyAddFiles");
+		addHotkeySetting("Ajouter des notes", "Ouvre le sélecteur de notes du composer (menu « + »).", "hotkeyAddNotes");
 
 		// ─── Saisie vocale (dictée) ───
 		containerEl.createEl("h3", { text: "Saisie vocale (dictée)" });
