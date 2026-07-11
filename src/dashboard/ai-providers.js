@@ -478,7 +478,9 @@ function buildChildEnv() {
 		"/usr/local/bin",
 		process.env.APPDATA ? path.join(process.env.APPDATA, "npm") : null,
 		process.env.LOCALAPPDATA ? path.join(process.env.LOCALAPPDATA, "Programs", "OpenAI", "Codex", "bin") : null,
-		process.env.CODEX_INSTALL_DIR || null
+		process.env.CODEX_INSTALL_DIR || null,
+		// Installateur Windows d'Ollama (CLI ollama.exe au même endroit).
+		process.env.LOCALAPPDATA ? path.join(process.env.LOCALAPPDATA, "Programs", "Ollama") : null
 	].filter(Boolean);
 	const sep = path.delimiter;
 	const current = process.env.PATH || "";
@@ -589,6 +591,70 @@ async function checkOllama(url) {
 	}
 }
 
+/* Ollama est-il INSTALLÉ, même serveur arrêté ? Le plugin diagnostique
+   lui-même (demande Ahmed : jamais un « si Ollama n'est pas installé »
+   laissé à l'utilisateur) : binaire qui répond à --version (PATH
+   étendu, couvre npm/brew/PATH custom), sinon emplacements
+   d'installation officiels. */
+async function checkOllamaInstalled() {
+	const { Platform } = require("obsidian");
+	if (!Platform.isDesktopApp) return { installed: false };
+	const execOk = await new Promise((resolve) => {
+		try {
+			const cp = require("child_process");
+			cp.exec("ollama --version", {
+				env: buildChildEnv(),
+				timeout: 4000,
+				windowsHide: true
+			}, (err) => resolve(!err));
+		} catch (e) {
+			resolve(false);
+		}
+	});
+	if (execOk) return { installed: true };
+	try {
+		const fs = require("fs");
+		const path = require("path");
+		const candidates = Platform.isWin
+			? [path.join(process.env.LOCALAPPDATA || "", "Programs", "Ollama", "ollama app.exe")]
+			: Platform.isMacOS
+				? ["/Applications/Ollama.app", "/opt/homebrew/bin/ollama", "/usr/local/bin/ollama"]
+				: ["/usr/local/bin/ollama", "/usr/bin/ollama"];
+		return { installed: candidates.some(p => fs.existsSync(p)) };
+	} catch (e) {
+		return { installed: false };
+	}
+}
+
+/* Démarre Ollama (le serveur démarre avec l'application) — détaché,
+   best effort : l'app de bureau sur Windows/macOS, « ollama serve »
+   sur Linux (pas d'app). Les erreurs asynchrones (exe absent) sont
+   avalées : le poll de l'appelant constatera simplement l'échec. */
+function startOllamaApp() {
+	const cp = require("child_process");
+	const path = require("path");
+	const { Platform } = require("obsidian");
+	try {
+		let child;
+		if (Platform.isWin) {
+			const fs = require("fs");
+			const exe = path.join(process.env.LOCALAPPDATA || "", "Programs", "Ollama", "ollama app.exe");
+			child = fs.existsSync(exe)
+				? cp.spawn(exe, [], { detached: true, stdio: "ignore" })
+				: cp.spawn("ollama", ["serve"], { detached: true, stdio: "ignore", env: buildChildEnv() });
+		} else if (Platform.isMacOS) {
+			child = cp.spawn("open", ["-a", "Ollama"], { detached: true, stdio: "ignore" });
+		} else {
+			child = cp.spawn("ollama", ["serve"], { detached: true, stdio: "ignore", env: buildChildEnv() });
+		}
+		child.on("error", () => { /* constaté par le poll de l'appelant */ });
+		child.unref();
+		return true;
+	} catch (e) {
+		return false;
+	}
+}
+
 module.exports = {
 	PROVIDERS,
 	getProvider,
@@ -622,5 +688,7 @@ module.exports = {
 	buildChildEnv,
 	checkClaudeCode,
 	checkCodex,
+	checkOllamaInstalled,
+	startOllamaApp,
 	checkOllama
 };

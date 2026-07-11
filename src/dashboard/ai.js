@@ -752,18 +752,45 @@ function createAiHandlers(ctx) {
 				}
 				renderHint(hintZone, null);
 			} else {
-				// Le geste SIMPLE d'abord (installer / démarrer l'app —
-				// sur desktop le serveur démarre avec elle), le geste
-				// terminal « ollama serve » en dernier recours seulement :
-				// il échoue si Ollama n'est pas installé et fait doublon
-				// si l'app tourne (port occupé). Le re-check au focus de
-				// la fenêtre fait passer le hint au vert au retour.
-				renderHint(hintZone, {
-					type: "err", icon: "power",
-					text: "Le serveur Ollama ne répond pas. Si Ollama n'est pas installé, téléchargez-le ; sinon démarrez l'application Ollama (ou « ollama serve » dans un terminal).",
-					action: {
-						label: "Télécharger Ollama", icon: "external-link",
-						onClick: () => window.open("https://ollama.com/download", "_blank")
+				// Le plugin DIAGNOSTIQUE lui-même (demande Ahmed : jamais
+				// de « si Ollama n'est pas installé » laissé à
+				// l'utilisateur) : installé mais arrêté → « Démarrer
+				// Ollama » (le plugin lance l'app et re-render dès que le
+				// serveur répond) ; absent → « Télécharger Ollama ».
+				aiProviders.checkOllamaInstalled().then(inst => {
+					if (!hintZone || !hintZone.isConnected) return;
+					if (inst.installed) {
+						renderHint(hintZone, {
+							type: "warn", icon: "server-off",
+							text: "Ollama est installé mais son serveur ne tourne pas.",
+							action: {
+								label: "Démarrer Ollama", icon: "play",
+								onClick: () => {
+									aiProviders.startOllamaApp();
+									// Poll : vert automatique dès que le
+									// serveur répond (10 s max).
+									let tries = 0;
+									const poll = window.setInterval(() => {
+										tries++;
+										aiProviders.checkOllama(settings.aiOllamaUrl).then(r2 => {
+											if (r2.ok || tries >= 10) {
+												window.clearInterval(poll);
+												if (r2.ok) render(containerRef);
+											}
+										});
+									}, 1000);
+								}
+							}
+						});
+					} else {
+						renderHint(hintZone, {
+							type: "err", icon: "download",
+							text: "Ollama n'est pas installé. Téléchargez-le, lancez-le, et le plugin le détectera automatiquement.",
+							action: {
+								label: "Télécharger Ollama", icon: "external-link",
+								onClick: () => window.open("https://ollama.com/download", "_blank")
+							}
+						});
 					}
 				});
 			}
