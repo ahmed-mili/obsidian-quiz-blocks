@@ -82,7 +82,8 @@ function createAiClient(plugin) {
 	- multiSelect: true si choix multiple
 	- type: "text" pour texte libre, absent sinon
 	- answer: réponse attendue (pour texte libre)
-	- mathInput: true pour une question texte dont la réponse est une expression mathématique (l'élève répondra avec un éditeur d'équations)
+	- mathInput: true pour une question texte dont la réponse est une expression mathématique (l'élève répondra dans un ÉDITEUR D'ÉQUATIONS visuel)
+	- answerTemplate: gabarit LaTeX pré-écrit dans le champ de réponse d'une question mathInput, avec \\\\placeholder{} pour chaque trou à remplir (ex: 'x = \\\\placeholder{}' ; deux solutions : 'x_1 = \\\\placeholder{},\\\\; x_2 = \\\\placeholder{}'). RÈGLES pour mathInput : l'énoncé ne donne JAMAIS d'instructions de format de réponse (pas de « sous forme de fraction », « séparées par une virgule », « ex: 1/2 ») — l'éditeur d'équations rend tout cela inutile ; préfère un answerTemplate qui guide ; les acceptedAnswers sont le contenu COMPLET du champ une fois le gabarit rempli, en LaTeX (ex: 'x_1 = \\\\frac{1}{2},\\\\; x_2 = 3'), et ajoute si pertinent des variantes (ordre inversé des solutions)
 	- learn: un paragraphe de leçon explicative qui enseigne le concept avant la question (optionnel mais recommandé pour les quiz éducatifs)
 
 	MATHÉMATIQUES : toute expression mathématique (formule, fonction, équation, intégrale, fraction, exposant, symbole grec…) s'écrit OBLIGATOIREMENT en LaTeX délimité par des dollars, comme dans Obsidian : $f(x) = x^3$ en ligne, $$\\int_0^2 2x\\,dx$$ pour une formule isolée. Jamais de pseudo-notation type f(x) = x^3 ou ∫ de 0 à 2 hors des dollars. Cela vaut pour title, prompt, options, answer, learn et explain. IMPORTANT : dans les chaînes JSON5, DOUBLE chaque backslash — LaTeX (écris '$\\\\frac{a}{b}$' pour obtenir \\frac) comme chemins Windows (écris 'C:\\\\Users\\\\dev') — un backslash simple serait détruit par le parseur.

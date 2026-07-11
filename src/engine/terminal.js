@@ -332,8 +332,10 @@ module.exports = function createTerminalHandlers(ctx) {
 		};
 
 		const field = mathInput.createMathField(host, {
-			question: q,
 			value: typeof ctx.quizState.selections[qi] === "string" ? ctx.quizState.selections[qi] : "",
+			// Gabarit guidé optionnel de l'IA (« x = ▯ ») — seulement si
+			// l'élève n'a encore rien saisi.
+			template: q?.answerTemplate || "",
 			readOnly: !!ctx.quizState.locked,
 			placeholder: q?.placeholder || "",
 			onInput: (latex) => {

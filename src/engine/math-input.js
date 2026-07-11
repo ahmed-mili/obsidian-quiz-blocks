@@ -108,7 +108,13 @@ function createMathField(host, opts = {}) {
 	mf.mathModeSpace = "\\;";
 	if (opts.readOnly) mf.readOnly = true;
 	if (opts.placeholder) mf.setAttribute("placeholder", opts.placeholder);
-	if (opts.value) mf.setValue(String(opts.value).replace(/^\$\$?|\$\$?$/g, ""));
+	if (opts.value) {
+		mf.setValue(String(opts.value).replace(/^\$\$?|\$\$?$/g, ""));
+	} else if (opts.template) {
+		// Gabarit guidé (« x = ▯ ») : pré-écrit, l'élève remplit les
+		// \placeholder{} (navigation Tab native MathLive).
+		mf.setValue(String(opts.template).replace(/^\$\$?|\$\$?$/g, ""));
+	}
 	host.appendChild(mf);
 
 	if (opts.onInput) {
