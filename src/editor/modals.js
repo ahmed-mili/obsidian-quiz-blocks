@@ -255,12 +255,18 @@ class ImportQuizModal extends obsidian.Modal {
 		}
 
 		if (["text", "cmd", "powershell", "bash"].includes(type)) {
-			question.acceptedAnswers = q.acceptedAnswers || q.acceptableAnswers || [""];
-			if (question.acceptedAnswers.length === 1 && question.acceptedAnswers[0] === "") {
-				// `answer` (string) : format émis par la génération IA et
-				// accepté par le moteur (terminal.js) — cf. editor.js.
-				const single = q.correctText || q.answer;
-				if (single) question.acceptedAnswers = [String(single)];
+			question.acceptedAnswers = (q.acceptedAnswers || q.acceptableAnswers || [""]).slice();
+			// Union answer/correctText comme le moteur (terminal.js) —
+			// même logique que editor.js (copie à factoriser un jour).
+			for (const extra of [q.correctText, q.answer]) {
+				if (extra == null) continue;
+				if (typeof extra !== "string" && typeof extra !== "number") continue;
+				const v = String(extra);
+				if (question.acceptedAnswers.length === 1 && question.acceptedAnswers[0] === "") {
+					question.acceptedAnswers = [v];
+				} else if (!question.acceptedAnswers.includes(v)) {
+					question.acceptedAnswers.push(v);
+				}
 			}
 			question.caseSensitive = q.caseSensitive || false;
 			question.placeholder = q.placeholder || "";

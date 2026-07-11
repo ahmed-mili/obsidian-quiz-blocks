@@ -344,13 +344,22 @@ function attachQuizEditorCore(view, host, app, plugin) {
 		}
 
 		if (["text", "cmd", "powershell", "bash"].includes(type)) {
-			question.acceptedAnswers = q.acceptedAnswers || q.acceptableAnswers || [""];
-			if (question.acceptedAnswers.length === 1 && question.acceptedAnswers[0] === "") {
-				// `answer` (string) : format émis par la génération IA et
-				// accepté par le moteur (terminal.js) — sans ce repli le champ
-				// « Réponses acceptées » arrive VIDE dans l'éditeur embarqué.
-				const single = q.correctText || q.answer;
-				if (single) question.acceptedAnswers = [String(single)];
+			question.acceptedAnswers = (q.acceptedAnswers || q.acceptableAnswers || [""]).slice();
+			// `answer`/`correctText` : formats émis par la génération IA et
+			// UNIONNÉS aux acceptedAnswers par le moteur (terminal.js:166-170)
+			// — les fusionner pareil ici, sinon le round-trip éditeur→export
+			// PERD une réponse valide (answer est dans knownKeys, donc plus
+			// réémis via _extraFields). String/number seulement (le moteur
+			// ignore les autres types) ; `!= null` : answer 0 est légitime.
+			for (const extra of [q.correctText, q.answer]) {
+				if (extra == null) continue;
+				if (typeof extra !== "string" && typeof extra !== "number") continue;
+				const v = String(extra);
+				if (question.acceptedAnswers.length === 1 && question.acceptedAnswers[0] === "") {
+					question.acceptedAnswers = [v];
+				} else if (!question.acceptedAnswers.includes(v)) {
+					question.acceptedAnswers.push(v);
+				}
 			}
 			question.caseSensitive = q.caseSensitive || false;
 			question.placeholder = q.placeholder || "";

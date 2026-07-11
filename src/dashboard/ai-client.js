@@ -84,7 +84,7 @@ function createAiClient(plugin) {
 	- answer: réponse attendue (pour texte libre)
 	- learn: un paragraphe de leçon explicative qui enseigne le concept avant la question (optionnel mais recommandé pour les quiz éducatifs)
 
-	MATHÉMATIQUES : toute expression mathématique (formule, fonction, équation, intégrale, fraction, exposant, symbole grec…) s'écrit OBLIGATOIREMENT en LaTeX délimité par des dollars, comme dans Obsidian : $f(x) = x^3$ en ligne, $$\\int_0^2 2x\\,dx$$ pour une formule isolée. Jamais de pseudo-notation type f(x) = x^3 ou ∫ de 0 à 2 hors des dollars. Cela vaut pour title, prompt, options, answer, learn et explain. IMPORTANT : dans les chaînes JSON5, DOUBLE chaque backslash LaTeX (écris '$\\\\frac{a}{b}$' pour obtenir \\frac) — un backslash simple serait détruit par le parseur.
+	MATHÉMATIQUES : toute expression mathématique (formule, fonction, équation, intégrale, fraction, exposant, symbole grec…) s'écrit OBLIGATOIREMENT en LaTeX délimité par des dollars, comme dans Obsidian : $f(x) = x^3$ en ligne, $$\\int_0^2 2x\\,dx$$ pour une formule isolée. Jamais de pseudo-notation type f(x) = x^3 ou ∫ de 0 à 2 hors des dollars. Cela vaut pour title, prompt, options, answer, learn et explain. IMPORTANT : dans les chaînes JSON5, DOUBLE chaque backslash — LaTeX (écris '$\\\\frac{a}{b}$' pour obtenir \\frac) comme chemins Windows (écris 'C:\\\\Users\\\\dev') — un backslash simple serait détruit par le parseur.
 
 	Le dernier élément du tableau peut être un objet de configuration de mode (sans champ prompt) :
 	  - { mode: "exam", examDurationMinutes: 10, examAutoSubmit: true, examShowTimer: true } pour un mode examen chronométré
@@ -503,21 +503,37 @@ function createAiClient(plugin) {
 
 	/* Les modèles écrivent le LaTeX avec des backslashes SIMPLES dans les
 	   chaînes JSON5 ($\frac$, $\int$) — or JSON5 transforme \f en form
-	   feed, \t en tab, et AVALE le backslash des séquences inconnues
-	   (\int → int) : LaTeX détruit AVANT le parse, irréparable après
-	   (baseline gemma4 2026-07-11 : « $∆rac{f(x)+h}{h}$ » et
-	   « f'(x) = an(x) » pour \tan). Réparation sur la CHAÎNE BRUTE :
-	   doubler tout \lettre sauf les échappements à préserver — \n et \r
-	   (sauts de ligne voulus dans learn/explain), \" \' \\ \/ \x \u \0.
-	   Sacrifie \t/\f/\b/\v littéraux (jamais voulus dans un quiz) au
-	   profit de \tan, \frac, \beta, \vec… */
+	   feed, \t en tab, AVALE le backslash des séquences inconnues
+	   (\int → int) et JETTE une SyntaxError sur \x/\u non-hex ($\xi$,
+	   \underline) : LaTeX détruit AVANT le parse, irréparable après
+	   (baselines gemma4 + review multi-angles 2026-07-11). Réparation
+	   SCOPÉE AUX SEGMENTS MATH de la chaîne brute : dans $...$ / $$...$$
+	   TOUT backslash simple est du LaTeX (aucun échappement JSON n'y est
+	   légitime) → doublé, paires déjà correctes préservées ; hors
+	   segments, RIEN n'est touché (\n, \t, \" restent des échappements
+	   voulus — un placeholder « col1\tcol2 » garde sa tabulation, et
+	   \right/\neq/\xi ne peuvent plus être corrompus puisqu'ils vivent
+	   dans les dollars). */
 	function repairLatexBackslashes(source) {
-		// L'alternative (\\\\) CONSOMME les paires déjà correctes en
-		// premier : sans elle, le 2e backslash de « \\frac » (modèle qui
-		// échappe bien, ex. Claude/Codex) matcherait et produirait
-		// « \\\frac » → form feed de retour au parse.
-		return source.replace(/(\\\\)|\\(?![nr"'\\\/0-9xu])([a-zA-Z,;!])/g,
-			(m, pair, ch) => pair ? pair : "\\\\" + ch);
+		// Segments : $$...$$ d'abord (sauts de ligne possibles), puis
+		// $...$ inline (mêmes gardes anti-dollar-monétaire que le rendu :
+		// collé au contenu des deux côtés, pas de \n).
+		const mathFixed = source.replace(/\$\$[^$]+?\$\$|\$(?!\s)[^$\n]*?[^$\s]\$/g, (seg) =>
+			// L'alternative (\\\\) consomme les paires correctes en
+			// premier — sans elle le 2e backslash de « \\frac » (modèle
+			// qui échappe bien) produirait « \\\frac » → form feed.
+			seg.replace(/(\\\\)|\\([a-zA-Z,;! ])/g,
+				(m, pair, ch) => pair ? pair : "\\\\" + ch));
+		// Hors math : SEULS les \x/\u NON suivis d'hexa valide sont
+		// doublés — un \xGG/\uGGGG invalide fait JETER JSON5.parse
+		// (SyntaxError), donc ce doublement ne peut jamais casser un
+		// échappement légitime. Sauve les chemins Windows des quiz cmd
+		// (« cd C:\utils », « C:\x64 ») : sans ça, génération perdue.
+		// (\t/\n dans « C:\temp\new » restent indécidables — le prompt
+		// système exige désormais les backslashes doublés partout.)
+		return mathFixed
+			.replace(/(\\\\)|\\x(?![0-9a-fA-F]{2})/g, (m, pair) => pair ? pair : "\\\\x")
+			.replace(/(\\\\)|\\u(?![0-9a-fA-F]{4})/g, (m, pair) => pair ? pair : "\\\\u");
 	}
 
 	function parseOllamaResponse(content) {

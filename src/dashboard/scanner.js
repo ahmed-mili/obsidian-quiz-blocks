@@ -131,14 +131,19 @@ function createScanner(app) {
 				return;
 			}
 
-			cache.set(file.path, {
+			const entry = {
 				path: file.path,
 				basename: file.basename,
 				...meta,
 				mtime: file.stat?.mtime || 0
-			});
-
-			notifyListeners();
+			};
+			// L'autosave d'Obsidian déclenche `modify` toutes les ~2 s
+			// pendant la frappe : ne notifier (→ re-render sidebar + vue)
+			// que si les données AFFICHÉES ont changé — mtime exclu.
+			const prev = cache.get(file.path);
+			cache.set(file.path, entry);
+			const changed = !prev || JSON.stringify({ ...prev, mtime: 0 }) !== JSON.stringify({ ...entry, mtime: 0 });
+			if (changed) notifyListeners();
 		} catch {
 			// Fichier inaccessible, on l'enlève du cache
 			const removed = cache.delete(file.path);

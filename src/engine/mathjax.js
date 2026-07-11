@@ -17,6 +17,10 @@ let __mathJaxReady = null;
 function ensureMathJax() {
 	if (!__mathJaxReady) {
 		__mathJaxReady = require("obsidian").loadMathJax();
+		// Un échec ne doit pas être mémoïsé : sinon UNE erreur transitoire
+		// (appel très tôt, environnement dégradé) tue le rendu math pour
+		// toute la session. On retentera au prochain mathifyElement.
+		__mathJaxReady.catch(() => { __mathJaxReady = null; });
 	}
 	return __mathJaxReady;
 }
@@ -44,7 +48,10 @@ async function mathifyElement(root) {
 		acceptNode(node) {
 			if (!node.nodeValue || node.nodeValue.indexOf("$") === -1) return NodeFilter.FILTER_REJECT;
 			const p = node.parentElement;
-			if (!p || p.closest("code, pre, textarea, script, style, mjx-container, .math")) {
+			// .quiz-terminal : zones shell (bash/cmd/powershell) — les $ y
+			// sont des variables ($PATH:$HOME), pas des maths ; review
+			// 2026-07-11. code/pre/textarea/mjx : zones littérales.
+			if (!p || p.closest("code, pre, textarea, script, style, mjx-container, .math, .quiz-terminal")) {
 				return NodeFilter.FILTER_REJECT;
 			}
 			return NodeFilter.FILTER_ACCEPT;
@@ -56,7 +63,15 @@ async function mathifyElement(root) {
 	}
 	if (!jobs.length) return;
 
-	await ensureMathJax();
+	// Appels fire-and-forget : un échec de chargement MathJax ne doit pas
+	// remonter en unhandled rejection — les dollars restent en texte brut
+	// (dégradation douce), retentative au prochain rendu (cf. ensureMathJax).
+	try {
+		await ensureMathJax();
+	} catch (e) {
+		console.warn("[quiz-blocks] MathJax indisponible:", e);
+		return;
+	}
 	const { renderMath, finishRenderMath } = require("obsidian");
 	for (const node of jobs) {
 		// replaceWith exige un parent ; un re-render a pu orpheliner le
