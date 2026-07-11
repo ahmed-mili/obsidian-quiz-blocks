@@ -96,49 +96,51 @@ module.exports = function createPreviewHandlers(ctx) {
 		}
 
 		if (t === "text") {
+			// FIDÉLITÉ au quiz réel : l'élève voit une zone VIDE avec le
+			// placeholder — pré-remplir avec acceptedAnswers[0] SPOILAIT la
+			// réponse dès l'arrivée sur l'aperçu (demande 2026-07-11),
+			// en LaTeX brut de surcroît.
 			const wrap = card.createDiv({ cls: "qcm-options quiz-text-wrap" });
 			const ta = wrap.createEl("textarea", {
-				cls: "quiz-textarea correct",
-				attr: { readonly: true, "aria-readonly": "true" },
+				cls: "quiz-textarea",
+				attr: { readonly: true, "aria-readonly": "true", placeholder: q.placeholder || "Votre réponse..." },
 			});
-			ta.value = (q.acceptedAnswers || [])[0] || q.placeholder || "";
+			ta.value = "";
 		}
 
 		if (t === "cmd") {
+			// Zone VIDE, comme dans le quiz réel (pas de spoiler — cf. text).
 			const wrap = card.createDiv({ cls: "qcm-options quiz-text-wrap quiz-text-wrap-command" });
-			const shell = wrap.createDiv({ cls: "quiz-command-shell quiz-terminal-variant-cmd correct" });
+			const shell = wrap.createDiv({ cls: "quiz-command-shell quiz-terminal-variant-cmd" });
 			shell.createSpan({ cls: "quiz-command-prefix", text: q.commandPrefix || "C:\\>" });
 			const inputWrap = shell.createDiv({ cls: "quiz-command-input-wrap" });
-			const ta = inputWrap.createEl("textarea", {
+			inputWrap.createEl("textarea", {
 				cls: "quiz-textarea quiz-textarea-command",
 				attr: { readonly: true, rows: "1", wrap: "off" },
 			});
-			ta.value = (q.acceptedAnswers || [])[0] || "";
 		}
 
 		if (t === "powershell") {
 			const wrap = card.createDiv({ cls: "qcm-options quiz-text-wrap quiz-text-wrap-command" });
-			const shell = wrap.createDiv({ cls: "quiz-command-shell quiz-terminal-variant-powershell correct" });
+			const shell = wrap.createDiv({ cls: "quiz-command-shell quiz-terminal-variant-powershell" });
 			shell.createSpan({ cls: "quiz-command-prefix", text: q.commandPrefix || "PS>" });
 			const inputWrap = shell.createDiv({ cls: "quiz-command-input-wrap" });
-			const ta = inputWrap.createEl("textarea", {
+			inputWrap.createEl("textarea", {
 				cls: "quiz-textarea quiz-textarea-command",
 				attr: { readonly: true, rows: "1", wrap: "off" },
 			});
-			ta.value = (q.acceptedAnswers || [])[0] || "";
 		}
 
 		if (t === "bash") {
 			const wrap = card.createDiv({ cls: "qcm-options quiz-text-wrap quiz-text-wrap-command" });
-			const shell = wrap.createDiv({ cls: "quiz-command-shell quiz-terminal-variant-bash correct" });
+			const shell = wrap.createDiv({ cls: "quiz-command-shell quiz-terminal-variant-bash" });
 			const prefixSpan = shell.createSpan({ cls: "quiz-command-prefix quiz-command-prefix-bash" });
 			prefixSpan.innerHTML = '<span class="quiz-bash-prefix-userhost">user@hostname</span><span class="quiz-bash-prefix-colon">:</span><span class="quiz-bash-prefix-path">~</span><span class="quiz-bash-prefix-dollar">$ </span>';
 			const inputWrap = shell.createDiv({ cls: "quiz-command-input-wrap" });
-			const ta = inputWrap.createEl("textarea", {
+			inputWrap.createEl("textarea", {
 				cls: "quiz-textarea quiz-textarea-command",
 				attr: { readonly: true, rows: "1", wrap: "off" },
 			});
-			ta.value = (q.acceptedAnswers || [])[0] || "";
 		}
 
 		if (q.hint && q.hint.trim()) {
