@@ -643,6 +643,14 @@
 	margin-left: -6px; /* resserre l'écart modèle ↔ effort */
 }
 
+/* L'effort se règle par un geste HORIZONTAL : le curseur du bouton
+   est le resize horizontal, plus jamais la main (demande Ahmed
+   2026-07-12) — il annonce le geste. Enfants inclus (le label). */
+.qbd-effort-trigger,
+.qbd-effort-trigger * {
+	cursor: ew-resize !important;
+}
+
 .qbd-effort-trigger-label {
 	font-weight: 500;
 	color: var(--text-muted);
