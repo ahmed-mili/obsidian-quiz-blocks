@@ -76,7 +76,7 @@ function cancelKeyboardExit() {
 	clearTimeout(__kbExitTimer);
 	__kbExitTimer = 0;
 	const b = document.querySelector(".ML__keyboard .MLK__backdrop");
-	if (b) { b.style.opacity = ""; b.style.transform = ""; }
+	if (b) b.style.opacity = "";
 }
 
 /* MathLive pousse l'app en posant un padding-bottom INLINE sur <body>
@@ -216,13 +216,13 @@ function hideKeyboardSoftly() {
 		clearKeyboardBodyPadding();
 		return;
 	}
+	// Fondu seul : en mode flottant le transform est interdit (résidus
+	// MathLive → positions décalées), l'opacité suffit.
 	b.style.opacity = "0";
-	b.style.transform = "translateY(105%)";
 	if (__kbExitTimer) clearTimeout(__kbExitTimer);
 	__kbExitTimer = window.setTimeout(() => {
 		__kbExitTimer = 0;
 		b.style.opacity = "";
-		b.style.transform = "";
 		try { window.mathVirtualKeyboard?.hide({ animate: false }); } catch (e) { /* transitoire */ }
 		clearKeyboardBodyPadding();
 	}, 260);
