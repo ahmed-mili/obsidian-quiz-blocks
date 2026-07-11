@@ -504,8 +504,11 @@ function createAiHandlers(ctx) {
 		// refreshProviderStatuses lançait un ReferenceError, statut Ollama gelé).
 		refreshProviderStatuses({ providerSelect, hintZone, provider, currentModel, modelSelect, ollamaCtl, buildOllamaList });
 
+		// PAS d'attribut accept : le dialogue Windows affiche alors « Tous
+		// les fichiers (*.*) » (référence claude.ai, capture Ahmed) au lieu
+		// d'une liste d'extensions illisible — la validation par type se
+		// fait dans addComposerFiles, avec explication en cas de refus.
 		const fileInput = composer.createEl("input", { type: "file", cls: "qbd-ai-file-input" });
-		fileInput.accept = "image/*,.md,.txt";
 		fileInput.multiple = true;
 		fileInput.addEventListener("change", (e) => {
 			if (e.target.files?.length) addComposerFiles(Array.from(e.target.files));
@@ -737,15 +740,26 @@ function createAiHandlers(ctx) {
 	}
 
 	/* Route les fichiers du picker/drop : images → vignettes (vision),
-	   texte (.md/.txt) → sources texte (mêmes chips que les notes).
-	   Autres formats : refusés avec explication (pas d'ingestion PDF/
-	   binaire côté client IA à ce jour). */
+	   texte (.md/.txt) et PDF (texte extrait localement) → sources texte
+	   (mêmes chips que les notes). Autres formats : refusés avec
+	   explication. */
 	async function addComposerFiles(files) {
 		const imgs = [];
 		const rejected = [];
 		for (const file of files) {
 			if (file.type.startsWith("image/")) {
 				imgs.push(file);
+			} else if (/\.pdf$/i.test(file.name) || file.type === "application/pdf") {
+				try {
+					const content = await extractPdfText(file);
+					if (!content.trim()) {
+						new obsidian.Notice("« " + file.name + " » : aucun texte extractible (PDF scanné ?)");
+					} else if (!noteAttachments.some(n => n.name === file.name)) {
+						noteAttachments.push({ name: file.name, content });
+					}
+				} catch (e) {
+					rejected.push(file.name);
+				}
 			} else if (/\.(md|txt)$/i.test(file.name) || file.type.startsWith("text/")) {
 				try {
 					const content = await file.text();
@@ -765,8 +779,25 @@ function createAiHandlers(ctx) {
 			render(containerRef);
 		}
 		if (rejected.length) {
-			new obsidian.Notice("Format non pris en charge : " + rejected.join(", ") + " (images, .md, .txt)");
+			new obsidian.Notice("Format non pris en charge : " + rejected.join(", ") + " (images, PDF, .md, .txt)");
 		}
+	}
+
+	/* Texte d'un PDF via le pdf.js EMBARQUÉ d'Obsidian (loadPdfJs, API
+	   officielle — worker configuré par l'app, aucune dépendance
+	   ajoutée). Une section par page. Les PDF scannés (images) n'ont pas
+	   de couche texte → chaîne vide, signalée à l'appelant. */
+	async function extractPdfText(file) {
+		const pdfjs = await obsidian.loadPdfJs();
+		const buf = await file.arrayBuffer();
+		const pdf = await pdfjs.getDocument({ data: new Uint8Array(buf) }).promise;
+		const pages = [];
+		for (let i = 1; i <= pdf.numPages; i++) {
+			const page = await pdf.getPage(i);
+			const content = await page.getTextContent();
+			pages.push(content.items.map(it => it.str).join(" "));
+		}
+		return pages.join("\n\n");
 	}
 
 	/* Attache une note du vault comme source du quiz (menu « Ajouter des

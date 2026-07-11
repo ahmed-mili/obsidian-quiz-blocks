@@ -33,7 +33,10 @@ const DEFAULT_SETTINGS = {
 	// ── Raccourcis du composer IA (menu « + ») — actifs quand la vue
 	// dashboard a le focus, affichés en hint dans le menu, modifiables
 	// dans les réglages (demande Ahmed, maquette 2026-07-11 231626).
-	hotkeyAddFiles: { modifiers: ["Mod"], key: "f" },
+	// Ctrl+U = le raccourci de claude.ai pour « Ajouter des fichiers »
+	// (captures Ahmed 2026-07-11 2357xx) — et Ctrl+F reste le réflexe
+	// « recherche » partout ailleurs.
+	hotkeyAddFiles: { modifiers: ["Mod"], key: "u" },
 	hotkeyAddNotes: { modifiers: ["Mod"], key: "e" },
 	// ── Saisie vocale (dictée locale whisper.cpp) — opt-in complet.
 	// Spec : docs/superpowers/specs/2026-07-10-voice-input-design.md
@@ -918,6 +921,16 @@ module.exports = class InteractiveQuizPlugin extends obsidian.Plugin {
 				this.settings.aiModel = "";
 			}
 			delete this.settings.aiApiKey;
+			await this.saveSettings();
+		}
+
+		// Migration 2026-07-12 : le défaut « Ajouter des fichiers » passe
+		// de Ctrl+F à Ctrl+U (référence claude.ai). Un Ctrl+F stocké ne
+		// peut être que l'ancien défaut resauvé tel quel, pas un choix.
+		const hf = this.settings.hotkeyAddFiles;
+		if (hf && hf.key === "f" && Array.isArray(hf.modifiers)
+			&& hf.modifiers.length === 1 && hf.modifiers[0] === "Mod") {
+			this.settings.hotkeyAddFiles = { modifiers: ["Mod"], key: "u" };
 			await this.saveSettings();
 		}
 	}
