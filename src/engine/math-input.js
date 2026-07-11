@@ -170,10 +170,13 @@ function makeKeyboardFloating(attempt = 0) {
 		const dx = e.clientX - r.left;
 		const dy = e.clientY - r.top;
 		backdrop.classList.add("is-dragging");
+		// PENDANT le drag : suivi EXACT du curseur, AUCUN clamp — le
+		// point cliqué reste collé sous la souris jusqu'au relâchement
+		// (demande Ahmed, comportement clavier visuel Windows). Le
+		// rattrapage ne se fait qu'AU DROP.
 		const onMove = (ev) => {
-			const pos = clampKbPos(ev.clientX - dx, ev.clientY - dy, r.width, r.height);
-			backdrop.style.left = pos.left + "px";
-			backdrop.style.top = pos.top + "px";
+			backdrop.style.left = (ev.clientX - dx) + "px";
+			backdrop.style.top = (ev.clientY - dy) + "px";
 		};
 		const onUp = (ev) => {
 			backdrop.removeEventListener("pointermove", onMove);
@@ -181,9 +184,20 @@ function makeKeyboardFloating(attempt = 0) {
 			backdrop.removeEventListener("pointercancel", onUp);
 			try { backdrop.releasePointerCapture(ev.pointerId); } catch (err) { /* best effort */ }
 			backdrop.classList.remove("is-dragging");
+			// Clamp de récupération : jamais irrécupérable (au moins la
+			// zone de saisie accessible), mais on laisse dépasser
+			// partiellement comme le clavier Windows.
 			const rr = backdrop.getBoundingClientRect();
+			const MIN_VISIBLE = 90;
+			const left = Math.min(
+				Math.max(rr.left, MIN_VISIBLE - rr.width),
+				window.innerWidth - MIN_VISIBLE
+			);
+			const top = Math.min(Math.max(rr.top, 0), window.innerHeight - MIN_VISIBLE);
+			backdrop.style.left = Math.round(left) + "px";
+			backdrop.style.top = Math.round(top) + "px";
 			__kbPos = {
-				left: Math.round(rr.left), top: Math.round(rr.top),
+				left: Math.round(left), top: Math.round(top),
 				w: Math.round(rr.width), h: Math.round(rr.height),
 			};
 			__kbDragging = false;
