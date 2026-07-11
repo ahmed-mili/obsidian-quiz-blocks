@@ -687,7 +687,7 @@ function createAiHandlers(ctx) {
 					type: "err", icon: "download",
 					text: "Claude Code n'est pas installé. Installez-le puis connectez votre compte avec /login.",
 					action: {
-						label: "Installer Claude Code", icon: "external-link",
+						label: "Installer Claude Code", icon: "arrow-up-right",
 						onClick: () => window.open("https://claude.com/claude-code", "_blank")
 					}
 				});
@@ -724,7 +724,7 @@ function createAiHandlers(ctx) {
 						? 'powershell -ExecutionPolicy ByPass -c "irm https://chatgpt.com/codex/install.ps1 | iex"'
 						: "curl -fsSL https://chatgpt.com/codex/install.sh | sh",
 					action: {
-						label: "Installer Codex CLI", icon: "external-link",
+						label: "Installer Codex CLI", icon: "arrow-up-right",
 						onClick: () => window.open("https://learn.chatgpt.com/docs/codex/cli#getting-started", "_blank")
 					}
 				});
@@ -789,7 +789,7 @@ function createAiHandlers(ctx) {
 						type: "err", icon: "download",
 						text: "Ollama n'est pas installé. Téléchargez-le, lancez-le, et le plugin le détectera automatiquement.",
 						action: {
-							label: "Télécharger Ollama", icon: "external-link",
+							label: "Télécharger Ollama", icon: "arrow-up-right",
 							onClick: () => window.open("https://ollama.com/download", "_blank")
 						}
 					});
