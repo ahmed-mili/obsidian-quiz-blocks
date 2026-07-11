@@ -79,10 +79,29 @@ function cancelKeyboardExit() {
 	if (b) { b.style.opacity = ""; b.style.transform = ""; }
 }
 
+/* MathLive pousse l'app en posant un padding-bottom INLINE sur <body>
+   à l'ouverture du clavier. Si le hide est court-circuité (reload du
+   plugin clavier ouvert, erreur interne), ce padding reste orphelin :
+   grande bande vide sous l'app (baseline Ahmed 2026-07-11, 313px).
+   À appeler quand AUCUN clavier n'est visible. */
+function clearKeyboardBodyPadding() {
+	if (document.querySelector(".ML__keyboard.is-visible")) return;
+	if (document.body.style.paddingBottom) document.body.style.paddingBottom = "";
+	// Le singleton MathLive MÉMORISE le « padding original » et le
+	// restaure à chaque hide (et l'ADDITIONNE au show suivant) : un
+	// résidu pollué s'auto-entretient — 313 → 625 → … (mesuré). Purger
+	// aussi le mémo.
+	const kb = window.mathVirtualKeyboard;
+	if (kb && kb.originalContainerBottomPadding) {
+		try { kb.originalContainerBottomPadding = null; } catch (e) { /* lecture seule ? tant pis */ }
+	}
+}
+
 function hideKeyboardSoftly() {
 	const b = document.querySelector(".ML__keyboard.is-visible .MLK__backdrop");
 	if (!b) {
 		try { window.mathVirtualKeyboard?.hide({ animate: false }); } catch (e) { /* déjà fermé */ }
+		clearKeyboardBodyPadding();
 		return;
 	}
 	b.style.opacity = "0";
@@ -93,6 +112,7 @@ function hideKeyboardSoftly() {
 		b.style.opacity = "";
 		b.style.transform = "";
 		try { window.mathVirtualKeyboard?.hide({ animate: false }); } catch (e) { /* transitoire */ }
+		clearKeyboardBodyPadding();
 	}, 260);
 }
 
@@ -112,6 +132,9 @@ function configureMathlive() {
 	// ne tente AUCUN chargement (doc officielle). Sons désactivés.
 	MFE.fontsDirectory = null;
 	MFE.soundsDirectory = null;
+	// Purge un padding orphelin d'une session précédente (reload plugin
+	// pendant que le clavier était ouvert).
+	clearKeyboardBodyPadding();
 	// Clavier virtuel NATIF MathLive (choix Ahmed 2026-07-11 : « c'est
 	// propre ce clavier-là ») — sans l'onglet alphabétique (« abc »,
 	// inutile avec un clavier physique) : 123, symboles, grec.
