@@ -609,6 +609,16 @@ class QuizBlocksSettingTab extends obsidian.PluginSettingTab {
 				// État d'installation + téléchargements (rien sans clic explicite).
 				const st = voiceInstall.getStatus(this.plugin.settings);
 				const fmtPct = (d, t) => (t ? Math.round((d / t) * 100) + " %" : Math.round(d / 1e6) + " Mo");
+			// onProgress arrive à CHAQUE chunk (~16 Ko) : sur le zip CUDA
+			// (~678 Mo) ça ferait des dizaines de milliers de setButtonText.
+			// Ne toucher au DOM que quand le libellé change réellement.
+			const throttledProgress = (btn) => {
+				let last = "";
+				return (d, t) => {
+					const label = fmtPct(d, t);
+					if (label !== last) { last = label; btn.setButtonText(label); }
+				};
+			};
 
 				const binRow = new obsidian.Setting(containerEl)
 					.setName("Binaire whisper.cpp (" + this.plugin.settings.voiceBackend + ")")
@@ -620,7 +630,7 @@ class QuizBlocksSettingTab extends obsidian.PluginSettingTab {
 						b.setDisabled(true);
 						try {
 							await voiceInstall.installBinary(this.plugin.settings.voiceBackend,
-								(d, t) => b.setButtonText(fmtPct(d, t)));
+								throttledProgress(b));
 							new obsidian.Notice("Binaire whisper.cpp installé.");
 						} catch (e) {
 							console.error("[quiz-blocks] install binaire:", e);
@@ -639,7 +649,7 @@ class QuizBlocksSettingTab extends obsidian.PluginSettingTab {
 						b.setDisabled(true);
 						try {
 							await voiceInstall.installModel(this.plugin.settings.voiceModel,
-								(d, t) => b.setButtonText(fmtPct(d, t)));
+								throttledProgress(b));
 							new obsidian.Notice("Modèle installé.");
 						} catch (e) {
 							console.error("[quiz-blocks] install modèle:", e);

@@ -162,7 +162,14 @@ function attach(ctx, textarea) {
 	// ── Transcription ──
 	function runTranscription(data) {
 		const st = voiceInstall.getStatus(settings());
-		if (!st.ready) { hidePillOnly(); state = "idle"; return; }
+		if (!st.ready) {
+			// Installation disparue ENTRE l'armement et le relâchement
+			// (modèle supprimé…) : prévenir plutôt qu'avaler la dictée.
+			hidePillOnly();
+			state = "idle";
+			new obsidian.Notice("Dictée : binaire ou modèle manquant — réglages de Quiz Blocks.");
+			return;
+		}
 		state = "transcribing";
 		showPill(true);
 		const fs = require("fs");
