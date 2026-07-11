@@ -99,6 +99,8 @@ function suppressKeyboardPush() {
    hide → tout est (ré)appliqué après chaque show : classe flottante,
    position mémorisée (session), poignée de drag + bouton fermer. ── */
 let __kbPos = null; // { left, top } mémorisée pour la session
+let __kbDragging = false; // drag en cours : ne pas fermer le clavier
+let __lastMathfield = null; // dernier champ focalisé (refocus post-drag)
 
 function clampKbPos(left, top, w, h) {
 	return {
@@ -143,9 +145,17 @@ function makeKeyboardFloating(attempt = 0) {
 	handle.append(grip, close);
 	backdrop.prepend(handle);
 
+	// CAPTURE + stopPropagation : le « sink » de MathLive écoute les
+	// pointerdown du clavier et les avalerait ; et le clic sur la
+	// poignée blur le champ → un focusout part : __kbDragging le
+	// neutralise, et on refocus le champ au relâchement.
 	handle.addEventListener("pointerdown", (e) => {
 		if (e.target.closest(".qbd-kb-handle-close")) return;
 		e.preventDefault();
+		e.stopPropagation();
+		__kbDragging = true;
+		cancelKeyboardExit();
+		try { handle.setPointerCapture(e.pointerId); } catch (err) { /* best effort */ }
 		const r = backdrop.getBoundingClientRect();
 		const dx = e.clientX - r.left;
 		const dy = e.clientY - r.top;
@@ -155,16 +165,22 @@ function makeKeyboardFloating(attempt = 0) {
 			backdrop.style.left = pos.left + "px";
 			backdrop.style.top = pos.top + "px";
 		};
-		const onUp = () => {
-			document.removeEventListener("pointermove", onMove);
-			document.removeEventListener("pointerup", onUp);
+		const onUp = (ev) => {
+			handle.removeEventListener("pointermove", onMove);
+			handle.removeEventListener("pointerup", onUp);
+			handle.removeEventListener("pointercancel", onUp);
+			try { handle.releasePointerCapture(ev.pointerId); } catch (err) { /* best effort */ }
 			backdrop.classList.remove("is-dragging");
 			const rr = backdrop.getBoundingClientRect();
 			__kbPos = { left: Math.round(rr.left), top: Math.round(rr.top) };
+			__kbDragging = false;
+			// Rendre le focus au champ : la saisie continue sans re-clic.
+			if (__lastMathfield && __lastMathfield.isConnected) __lastMathfield.focus();
 		};
-		document.addEventListener("pointermove", onMove);
-		document.addEventListener("pointerup", onUp);
-	});
+		handle.addEventListener("pointermove", onMove);
+		handle.addEventListener("pointerup", onUp);
+		handle.addEventListener("pointercancel", onUp);
+	}, { capture: true });
 }
 
 function clearKeyboardBodyPadding() {
@@ -275,6 +291,7 @@ function createMathField(host, opts = {}) {
 	// transitoires (reload plugin, champ détaché) — dégradation douce.
 	if (!opts.readOnly) {
 		mf.addEventListener("focusin", () => {
+			__lastMathfield = mf;
 			cancelKeyboardExit();
 			try { window.mathVirtualKeyboard?.show({ animate: true }); } catch (e) { /* transitoire */ }
 			// OVERLAY, pas poussée : MathLive contracte l'app (padding
@@ -291,6 +308,9 @@ function createMathField(host, opts = {}) {
 			});
 		});
 		mf.addEventListener("focusout", () => {
+			// Blur causé par la saisie de la poignée de drag : ignorer,
+			// le clavier reste ouvert et le champ sera refocalisé au drop.
+			if (__kbDragging) return;
 			hideKeyboardSoftly();
 		});
 	}

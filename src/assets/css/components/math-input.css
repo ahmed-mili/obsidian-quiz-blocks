@@ -80,6 +80,15 @@ math-field.quiz-mathfield:focus-within {
 	.ML__keyboard .MLK__backdrop { transition: none !important; }
 }
 
+/* Le clavier est en OVERLAY : la poussée de l'app par MathLive
+   (padding-bottom INLINE posé sur body, y compris EN FIN d'animation,
+   après nos purges JS) est neutralisée structurellement — une règle
+   de feuille !important BAT un style inline. Scopé à la présence du
+   clavier. Baseline : bande vide résiduelle, 2 captures Ahmed. */
+body:has(.ML__keyboard) {
+	padding-bottom: 0 !important;
+}
+
 /* ── Clavier FLOTTANT déplaçable (référence clavier visuel Windows) :
    fenêtre compacte aux coins arrondis, positionnée en left/top par
    math-input.js, poignée de drag en tête. ── */
