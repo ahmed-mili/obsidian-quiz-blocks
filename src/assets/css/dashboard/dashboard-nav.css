@@ -48,11 +48,6 @@
 	margin: 6px 14px 8px;
 }
 
-/* ── Spacer ── */
-.qbd-nav-spacer {
-	flex: 1;
-}
-
 /* ── Nav items ── */
 .qbd-nav-items {
 	padding: 4px 10px;
@@ -153,46 +148,3 @@
 	text-align: center;
 }
 
-/* ── Footer ── */
-.qbd-nav-footer {
-	padding: 12px 14px 16px;
-	border-top: 1px solid var(--background-modifier-border);
-}
-
-.qbd-nav-footer-label-row {
-	display: flex;
-	align-items: center;
-	gap: 5px;
-	margin-bottom: 5px;
-}
-
-.qbd-nav-footer-icon {
-	display: flex;
-	align-items: center;
-	justify-content: center;
-	width: 12px;
-	height: 12px;
-	color: var(--text-faint);
-}
-
-.qbd-nav-footer-icon svg {
-	width: 12px;
-	height: 12px;
-}
-
-.qbd-nav-footer-label-row span {
-	font-size: 9px;
-	color: var(--text-faint);
-	letter-spacing: 0.08em;
-	text-transform: uppercase;
-	font-weight: 500;
-}
-
-.qbd-nav-footer-path {
-	font-size: 10px;
-	color: var(--text-muted);
-	font-family: var(--font-monospace, monospace);
-	word-break: break-all;
-	line-height: 1.5;
-	margin: 0;
-}

@@ -2,7 +2,7 @@
 
 /* ══════════════════════════════════════════════════════════
    NAVIGATION SIDEBAR — Dashboard
-   Sidebar avec brand, nav items stylisés, note active.
+   Sidebar avec brand et nav items stylisés.
 ══════════════════════════════════════════════════════════ */
 
 function createNavHandlers(ctx) {
@@ -51,37 +51,13 @@ function createNavHandlers(ctx) {
 			});
 		}
 
-		// Spacer pushes footer down
-		container.createDiv({ cls: "qbd-nav-spacer" });
-
-		// Footer — Active note
-		const footer = container.createDiv({ cls: "qbd-nav-footer" });
-		const footerLabel = footer.createDiv({ cls: "qbd-nav-footer-label-row" });
-		const footerIcon = footerLabel.createSpan({ cls: "qbd-nav-footer-icon" });
-		obsidian.setIcon(footerIcon, "file-text");
-		footerLabel.createSpan({ text: "Note active" });
-
-		const activeFile = ctx.getActiveFile();
-		const notePath = activeFile ? activeFile.path : "Aucune note ouverte";
-		footer.createEl("p", { cls: "qbd-nav-footer-path", text: notePath });
 	}
 
 	function setActive(key) {
 		activeNav = key;
 	}
 
-	function updateActiveNote() {
-		const footerEl = ctx.navEl.querySelector(".qbd-nav-footer");
-		if (footerEl) {
-			const pathEl = footerEl.querySelector(".qbd-nav-footer-path");
-			if (pathEl) {
-				const activeFile = ctx.getActiveFile();
-				pathEl.textContent = activeFile ? activeFile.path : "Aucune note ouverte";
-			}
-		}
-	}
-
-	return { render, setActive, updateActiveNote };
+	return { render, setActive };
 }
 
 const obsidian = require("obsidian");

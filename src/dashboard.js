@@ -86,13 +86,6 @@ class QuizDashboardView extends obsidian.ItemView {
 			});
 		}
 
-		// Écouter le changement de note active
-		this.registerEvent(
-			this.app.workspace.on("active-leaf-change", () => {
-				if (this.nav) this.nav.updateActiveNote();
-			})
-		);
-
 		// Rendu initial
 		this.renderSidebar();
 		this.renderCurrentView();

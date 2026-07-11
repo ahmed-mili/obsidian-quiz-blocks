@@ -81,8 +81,7 @@
 	.qbd-nav-brand-title,
 	.qbd-nav-brand-sub,
 	.qbd-nav-label,
-	.qbd-nav-badge,
-	.qbd-nav-footer {
+	.qbd-nav-badge {
 		display: none;
 	}
 
@@ -238,8 +237,6 @@
 
 .is-mobile .qbd-nav-brand,
 .is-mobile .qbd-nav-sep,
-.is-mobile .qbd-nav-spacer,
-.is-mobile .qbd-nav-footer,
 .is-mobile .qbd-nav-badge {
 	display: none;
 }
