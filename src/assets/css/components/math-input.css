@@ -45,82 +45,50 @@ math-field.quiz-mathfield:focus-within {
 	border-color: var(--color-red, #f87171);
 }
 
-/* ── Panneau de symboles ── */
-.quiz-math-panel {
-	border: 1px solid var(--background-modifier-border);
-	border-radius: 10px;
-	background: color-mix(in srgb, var(--background-primary) 92%, transparent);
-	backdrop-filter: blur(10px);
-	-webkit-backdrop-filter: blur(10px);
-	overflow: hidden;
+/* ── Clavier virtuel NATIF MathLive, aux couleurs du thème Obsidian
+   (choix Ahmed 2026-07-11 : le clavier MathLive remplace le panneau
+   custom, mais theme-aware — il était blanc en permanence). Le
+   conteneur .ML__keyboard est portalé au body → les variables natives
+   d'Obsidian (body.theme-dark/light) résolvent, le clavier suit
+   automatiquement les DEUX thèmes. ── */
+body > .ML__keyboard,
+.ML__keyboard {
+	--keyboard-background: var(--background-secondary);
+	--keyboard-border: var(--background-modifier-border);
+	--keyboard-accent-color: var(--interactive-accent);
+	--keyboard-toolbar-background: transparent;
+	--keyboard-toolbar-background-hover: var(--background-modifier-hover);
+	--keyboard-toolbar-background-selected: transparent;
+	--keyboard-toolbar-text: var(--text-muted);
+	--keyboard-toolbar-text-active: var(--interactive-accent);
+	--keyboard-horizontal-rule: 1px solid var(--background-modifier-border);
+	--keycap-background: var(--background-primary);
+	--keycap-background-hover: var(--background-modifier-hover);
+	--keycap-background-active: color-mix(in srgb, var(--interactive-accent) 22%, var(--background-primary));
+	--keycap-background-pressed: color-mix(in srgb, var(--interactive-accent) 30%, var(--background-primary));
+	--keycap-border: var(--background-modifier-border);
+	--keycap-border-bottom: var(--background-modifier-border);
+	--keycap-text: var(--text-normal);
+	--keycap-text-active: var(--text-normal);
+	--keycap-secondary-background: color-mix(in srgb, var(--text-normal) 9%, var(--background-secondary));
+	--keycap-secondary-background-hover: var(--background-modifier-hover);
+	--keycap-secondary-text: var(--text-normal);
+	--keycap-secondary-border: var(--background-modifier-border);
+	--keycap-secondary-border-bottom: var(--background-modifier-border);
+	--keycap-primary-background: var(--interactive-accent);
+	--keycap-primary-text: var(--text-on-accent);
+	--keycap-shift-color: var(--interactive-accent);
 }
 
-.quiz-math-panel.is-hidden {
-	display: none;
-}
-
-.quiz-math-panel-tabs {
-	display: flex;
-	gap: 2px;
-	padding: 6px 8px 0;
-	overflow-x: auto;
-	border-bottom: 1px solid var(--background-modifier-border);
-}
-
-.quiz-math-panel-tab {
-	appearance: none;
-	background: transparent !important;
-	border: none;
-	box-shadow: none !important;
-	padding: 6px 10px 7px;
-	font-size: 12px;
-	font-weight: 500;
-	color: var(--text-muted);
-	border-radius: 6px 6px 0 0;
-	cursor: pointer;
-	white-space: nowrap;
-}
-
-.quiz-math-panel-tab:hover {
-	color: var(--text-normal);
-	background: var(--background-modifier-hover) !important;
-}
-
-.quiz-math-panel-tab.is-active {
-	color: var(--text-normal);
-	font-weight: 600;
-	box-shadow: inset 0 -2px 0 var(--interactive-accent) !important;
-}
-
-.quiz-math-panel-keys {
-	display: flex;
-	flex-wrap: wrap;
-	gap: 4px;
-	padding: 8px;
-}
-
-.quiz-math-key {
-	appearance: none;
-	display: inline-flex;
-	align-items: center;
-	justify-content: center;
-	min-width: 40px;
-	height: 36px;
-	padding: 0 8px;
-	background: color-mix(in srgb, var(--text-normal) 5%, transparent) !important;
-	border: 1px solid var(--background-modifier-border);
-	box-shadow: none !important;
-	border-radius: 7px;
-	color: var(--text-normal);
-	cursor: pointer;
-	font-size: 14px;
-}
-
-.quiz-math-key:hover {
-	background: var(--background-modifier-hover) !important;
-	border-color: color-mix(in srgb, var(--interactive-accent) 45%, var(--background-modifier-border));
-}
-
-.quiz-math-key mjx-container {
-	pointer-events: none;
+/* ── Menu contextuel MathLive (≡ : matrice, couper/copier…) : mêmes
+   variables que nos menus glass, sur le conteneur portalé. ── */
+.ui-menu-container {
+	--ui-menu-bg: var(--background-primary);
+	--ui-menu-text: var(--text-normal);
+	--ui-menu-bg-active: var(--interactive-accent);
+	--ui-menu-text-active: var(--text-on-accent);
+	--ui-menu-bg-active-muted: var(--background-modifier-hover);
+	--ui-menu-divider: var(--background-modifier-border);
+	--ui-menu-shadow: 0 8px 20px -6px rgba(0, 0, 0, 0.45);
+	--ui-font-family: var(--font-interface, inherit);
 }

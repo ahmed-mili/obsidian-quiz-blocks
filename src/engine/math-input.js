@@ -61,111 +61,51 @@ function matchesMathAnswer(studentLatex, q) {
 	return accepted.some(a => normalizeMathAnswer(a, opts) === student);
 }
 
-/* ── Panneau de symboles (référence Overleaf, capture Ahmed) ── */
-const PALETTE = [
-	{
-		id: "base", label: "Bases",
-		keys: [
-			{ latex: "\\times" }, { latex: "\\div" }, { latex: "\\pm" },
-			{ latex: "=" }, { latex: "\\neq" }, { latex: "<" }, { latex: ">" },
-			{ latex: "\\leq" }, { latex: "\\geq" }, { insert: "\\placeholder{}%" , show: "\\%" },
-		],
-	},
-	{
-		id: "frac", label: "Fractions & exposants",
-		keys: [
-			{ insert: "\\frac{#@}{#?}", show: "\\frac{a}{b}" },
-			{ insert: "#@^{#?}", show: "x^n" },
-			{ insert: "#@_{#?}", show: "x_n" },
-			{ insert: "#@^2", show: "x^2" },
-			{ insert: "\\left|#?\\right|", show: "\\left|x\\right|" },
-		],
-	},
-	{
-		id: "roots", label: "Racines",
-		keys: [
-			{ insert: "\\sqrt{#?}", show: "\\sqrt{x}" },
-			{ insert: "\\sqrt[3]{#?}", show: "\\sqrt[3]{x}" },
-			{ insert: "\\sqrt[#?]{#?}", show: "\\sqrt[n]{x}" },
-		],
-	},
-	{
-		id: "calc", label: "Calcul",
-		keys: [
-			{ insert: "\\int", show: "\\int" },
-			{ insert: "\\int_{#?}^{#?}", show: "\\int_a^b" },
-			{ insert: "\\sum_{#?}^{#?}", show: "\\sum" },
-			{ insert: "\\lim_{#?\\to#?}", show: "\\lim" },
-			{ insert: "\\frac{d}{dx}", show: "\\frac{d}{dx}" },
-			{ latex: "\\infty" }, { latex: "\\partial" },
-		],
-	},
-	{
-		id: "greek", label: "Grec",
-		keys: [
-			{ latex: "\\alpha" }, { latex: "\\beta" }, { latex: "\\gamma" },
-			{ latex: "\\delta" }, { latex: "\\theta" }, { latex: "\\lambda" },
-			{ latex: "\\mu" }, { latex: "\\pi" }, { latex: "\\sigma" },
-			{ latex: "\\phi" }, { latex: "\\omega" }, { latex: "\\Delta" },
-			{ latex: "\\Omega" },
-		],
-	},
-	{
-		id: "rel", label: "Flèches & ensembles",
-		keys: [
-			{ latex: "\\to" }, { latex: "\\Rightarrow" }, { latex: "\\Leftrightarrow" },
-			{ latex: "\\in" }, { latex: "\\notin" }, { latex: "\\subset" },
-			{ latex: "\\cup" }, { latex: "\\cap" }, { latex: "\\mathbb{R}" },
-			{ latex: "\\mathbb{N}" },
-		],
-	},
-];
-
-/* Catégorie par défaut : celle qui sert à ÉCRIRE la réponse attendue
-   (demande explicite d'Ahmed). Analyse de la première réponse acceptée. */
-function detectCategory(q) {
-	const ref = [...(q.acceptedAnswers || []), typeof q.answer === "string" ? q.answer : ""]
-		.filter(Boolean).join(" ");
-	if (/\\int|\\sum|\\lim|\\infty|\\partial|\\frac\{d\}/.test(ref)) return "calc";
-	if (/\\sqrt/.test(ref)) return "roots";
-	if (/\\(alpha|beta|gamma|delta|theta|lambda|mu|pi|sigma|phi|omega)/i.test(ref)) return "greek";
-	if (/\\to|\\Rightarrow|\\in\b|\\subset|\\cup|\\cap|\\mathbb/.test(ref)) return "rel";
-	if (/\\frac|\^|_/.test(ref)) return "frac";
-	return "base";
-}
-
 let __mathliveConfigured = false;
 
 function configureMathlive() {
 	if (__mathliveConfigured) return;
-	const { MathfieldElement } = require("mathlive");
+	const lib = require("mathlive");
+	// PIÈGE reload plugin : customElements.define('math-field') ne peut
+	// arriver qu'UNE fois par page — après un disable/enable, l'élément
+	// enregistré reste la classe de l'ANCIEN bundle. document.createElement
+	// utilise l'enregistrée : c'est ELLE qu'il faut configurer, sinon
+	// fontsDirectory retombe sur './fonts' (requêtes mortes, erreurs au
+	// focus/blur). Un redémarrage complet d'Obsidian reste l'état propre.
+	const MFE = customElements.get("math-field") || lib.MathfieldElement;
 	// Fonts fournies par styles.css (data-URI au build) ; null = MathLive
 	// ne tente AUCUN chargement (doc officielle). Sons désactivés.
-	MathfieldElement.fontsDirectory = null;
-	MathfieldElement.soundsDirectory = null;
+	MFE.fontsDirectory = null;
+	MFE.soundsDirectory = null;
+	// Clavier virtuel NATIF MathLive (choix Ahmed 2026-07-11 : « c'est
+	// propre ce clavier-là ») — sans l'onglet alphabétique (« abc »,
+	// inutile avec un clavier physique) : 123, symboles, grec.
+	if (window.mathVirtualKeyboard) {
+		window.mathVirtualKeyboard.layouts = ["numeric", "symbols", "greek"];
+	}
 	__mathliveConfigured = true;
 }
 
 /*
  * createMathField(host, {
- *   question,            // pour la catégorie par défaut du panneau
  *   value?, readOnly?, placeholder?,
  *   onInput?(latex), onEnter?()
- * }) → { el, panel, getValue(), setValue(l), focus(), destroy() }
- * Le panneau de symboles est monté APRÈS le champ dans `host` et
- * affiché au focus (masqué au blur, sauf clic dans le panneau).
+ * }) → { el, getValue(), setValue(l), focus(), destroy() }
+ * Le clavier virtuel NATIF MathLive s'ouvre automatiquement au focus
+ * (demande Ahmed : pas besoin de cliquer le bouton clavier) et se
+ * referme au blur. Thème : variables CSS dans math-input.css.
  */
 function createMathField(host, opts = {}) {
 	configureMathlive();
-	const { renderMath } = require("obsidian");
 
 	const mf = document.createElement("math-field");
 	mf.classList.add("quiz-mathfield");
-	// Pas de clavier plein écran MathLive sur desktop : notre panneau.
-	// (Sur tactile, le clavier virtuel MathLive standard reste utile.)
+	// Ouverture pilotée par nous (focusin) — pas seulement tactile.
 	mf.mathVirtualKeyboardPolicy = "manual";
-	// Pas de menu hamburger (il expose « LaTeX » — jamais de code visible).
-	try { mf.menuItems = []; } catch (e) { /* API absente sur vieille version */ }
+	// Barre espace active (en mode math l'espace ne fait rien par
+	// défaut) : insère une espace fine — neutralisée par
+	// normalizeMathAnswer à la correction, purement visuelle.
+	mf.mathModeSpace = "\\;";
 	if (opts.readOnly) mf.readOnly = true;
 	if (opts.placeholder) mf.setAttribute("placeholder", opts.placeholder);
 	if (opts.value) mf.setValue(String(opts.value).replace(/^\$\$?|\$\$?$/g, ""));
@@ -183,75 +123,24 @@ function createMathField(host, opts = {}) {
 		});
 	}
 
-	// ── Panneau de symboles ──
-	let panel = null;
-	let hideTimer = 0;
+	// Clavier virtuel : ouvert dès qu'on écrit (focus), refermé au blur.
+	// try/catch : le show/hide de MathLive peut jeter dans des états
+	// transitoires (reload plugin, champ détaché) — dégradation douce.
 	if (!opts.readOnly) {
-		panel = host.createDiv({ cls: "quiz-math-panel" });
-		const tabs = panel.createDiv({ cls: "quiz-math-panel-tabs" });
-		const keysHost = panel.createDiv({ cls: "quiz-math-panel-keys" });
-		let activeCat = opts.question ? detectCategory(opts.question) : "base";
-
-		const renderKeys = () => {
-			keysHost.empty();
-			const cat = PALETTE.find(c => c.id === activeCat) || PALETTE[0];
-			for (const k of cat.keys) {
-				const btn = keysHost.createEl("button", { cls: "quiz-math-key" });
-				btn.type = "button";
-				// Aperçu du symbole rendu par MathJax (jamais de code brut).
-				try {
-					btn.appendChild(renderMath(k.show || k.latex, false));
-				} catch (e) {
-					btn.setText(k.show || k.latex);
-				}
-				// mousedown : insérer SANS voler le focus du champ.
-				btn.addEventListener("mousedown", (e) => {
-					e.preventDefault();
-					mf.executeCommand(["insert", k.insert || k.latex]);
-					mf.focus();
-				});
-			}
-			for (const c of PALETTE) {
-				const tab = tabs.querySelector(`[data-cat="${c.id}"]`);
-				if (tab) tab.classList.toggle("is-active", c.id === activeCat);
-			}
-		};
-
-		for (const c of PALETTE) {
-			const tab = tabs.createEl("button", { cls: "quiz-math-panel-tab", text: c.label });
-			tab.type = "button";
-			tab.dataset.cat = c.id;
-			tab.addEventListener("mousedown", (e) => {
-				e.preventDefault();
-				activeCat = c.id;
-				renderKeys();
-				mf.focus();
-			});
-		}
-		renderKeys();
-		require("./mathjax").mathifyElement(panel); // au cas où renderMath a différé
-
-		// Visible au focus, masqué au blur (le mousedown du panneau garde
-		// le focus sur le champ → pas de fermeture pendant l'usage).
-		panel.classList.add("is-hidden");
 		mf.addEventListener("focusin", () => {
-			if (hideTimer) { clearTimeout(hideTimer); hideTimer = 0; }
-			panel.classList.remove("is-hidden");
+			try { window.mathVirtualKeyboard?.show({ animate: true }); } catch (e) { /* transitoire */ }
 		});
 		mf.addEventListener("focusout", () => {
-			hideTimer = window.setTimeout(() => panel.classList.add("is-hidden"), 120);
+			try { window.mathVirtualKeyboard?.hide({ animate: true }); } catch (e) { /* transitoire */ }
 		});
 	}
 
 	return {
 		el: mf,
-		panel,
 		getValue: () => mf.getValue("latex"),
 		setValue: (l) => mf.setValue(String(l ?? "").replace(/^\$\$?|\$\$?$/g, "")),
 		focus: () => mf.focus(),
 		destroy: () => {
-			if (hideTimer) clearTimeout(hideTimer);
-			if (panel) panel.remove();
 			mf.remove();
 		},
 	};
@@ -259,5 +148,5 @@ function createMathField(host, opts = {}) {
 
 module.exports = {
 	isMathQuestion, normalizeMathAnswer, matchesMathAnswer,
-	detectCategory, createMathField, PALETTE,
+	createMathField,
 };
