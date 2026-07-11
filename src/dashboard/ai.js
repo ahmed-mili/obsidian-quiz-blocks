@@ -435,7 +435,7 @@ function createAiHandlers(ctx) {
 		obsidian.setIcon(optsBtn, "sliders-horizontal");
 		optsBtn.addEventListener("click", () => {
 			openOptionsMenu(optsBtn, {
-				count: questionCount, minCount: 2, maxCount: 20,
+				count: questionCount,
 				type: questionType, types: TYPES,
 				onCount: (n) => { questionCount = n; },
 				onType: (t) => { questionType = t; }

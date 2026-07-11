@@ -325,9 +325,10 @@
 	height: 40px;
 }
 
-/* Slider : zone tactile verticale plus haute (track fin de 4px). */
-.is-mobile .qbd-opts-range {
-	height: 36px;
+/* Items du dropdown Questions : cible tactile plus haute. */
+.is-mobile .qbd-opts-dd-item {
+	padding-top: 9px;
+	padding-bottom: 9px;
 }
 
 /* Options des menus portalés (ui-select, model menu, action menu) :

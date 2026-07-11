@@ -955,36 +955,77 @@ function openOptionsMenu(anchorEl, opts) {
 	const menuEl = document.body.createDiv({ cls: "qbd-select-menu qbd-options-pop" });
 	menuEl.setAttribute("role", "menu");
 
-	// ── Questions : slider custom (piste remplie) + champ ÉDITABLE ──
-	// Le champ accepte un nombre personnalisé au-delà des crans du
-	// slider (clamp 1-100) ; le slider se cale alors à sa borne.
+	// ── Questions : DROPDOWN à presets + « Personnalisé » (référence
+	// sélecteur de durée d'Ahmed, 2026-07-11) — Personnalisé révèle un
+	// champ nombre à côté (« Custom | 5 m : 00 s »). Dropdown LOCAL au
+	// popover : createSelect appellerait closeAllSelects() et fermerait
+	// le popover parent. ──
+	const PRESETS = [5, 10, 15, 20, 30];
+	let count = Math.min(100, Math.max(1, Math.round(Number(opts.count) || 5)));
+	let isCustom = !PRESETS.includes(count);
+
 	menuEl.createDiv({ cls: "qbd-options-pop-title", text: "Questions" });
 	const countRow = menuEl.createDiv({ cls: "qbd-options-pop-row" });
-	const range = countRow.createEl("input", { type: "range", cls: "qbd-opts-range" });
-	range.min = String(opts.minCount);
-	range.max = String(opts.maxCount);
+	const ddWrap = countRow.createDiv({ cls: "qbd-opts-dd-wrap" });
+	const trigger = ddWrap.createEl("button", { cls: "qbd-opts-dd" });
+	trigger.type = "button";
+	const trigLabel = trigger.createSpan({ cls: "qbd-opts-dd-label" });
+	const trigChev = trigger.createSpan({ cls: "qbd-select-chevron" });
+	obsidian.setIcon(trigChev, "chevron-down");
+	const ddMenu = ddWrap.createDiv({ cls: "qbd-opts-dd-menu is-hidden" });
 	const field = countRow.createEl("input", {
 		type: "number", cls: "qbd-opts-count",
 		attr: { min: "1", max: "100", inputmode: "numeric" }
 	});
 
-	const syncRange = (v) => {
-		range.value = String(Math.min(opts.maxCount, Math.max(opts.minCount, v)));
-		const p = (Number(range.value) - opts.minCount) / (opts.maxCount - opts.minCount);
-		range.style.setProperty("--qbd-p", String(p));
+	const commitCount = (n) => {
+		count = Math.min(100, Math.max(1, Math.round(Number(n) || count)));
+		field.value = String(count);
+		if (opts.onCount) opts.onCount(count);
 	};
-	const commitCount = (v) => {
-		const n = Math.min(100, Math.max(1, Math.round(Number(v) || opts.minCount)));
-		field.value = String(n);
-		syncRange(n);
-		if (opts.onCount) opts.onCount(n);
-	};
-	field.value = String(opts.count);
-	syncRange(opts.count);
 
-	range.addEventListener("input", () => commitCount(range.value));
-	// Champ : commit à la validation (Enter/blur), sélection au clic —
-	// « cliquer pour choisir un nombre personnalisé ».
+	const refreshCountUI = () => {
+		trigLabel.setText(isCustom ? "Personnalisé" : count + " questions");
+		field.classList.toggle("is-hidden", !isCustom);
+		trigger.setAttribute("aria-expanded", ddMenu.classList.contains("is-hidden") ? "false" : "true");
+		for (const b of ddMenu.querySelectorAll(".qbd-opts-dd-item")) {
+			const active = b.dataset.preset === "custom"
+				? isCustom
+				: (!isCustom && Number(b.dataset.preset) === count);
+			b.classList.toggle("is-active", active);
+			const check = b.querySelector(".qbd-select-check");
+			check.empty();
+			if (active) obsidian.setIcon(check, "check");
+		}
+	};
+
+	const closeDd = () => { ddMenu.classList.add("is-hidden"); refreshCountUI(); };
+
+	for (const p of [...PRESETS.map(String), "custom"]) {
+		const item = ddMenu.createEl("button", { cls: "qbd-opts-dd-item" });
+		item.type = "button";
+		item.dataset.preset = p;
+		item.createSpan({ cls: "qbd-select-check" });
+		item.createSpan({ text: p === "custom" ? "Personnalisé" : p + " questions" });
+		item.addEventListener("click", () => {
+			if (p === "custom") {
+				isCustom = true;
+				closeDd();
+				field.focus();
+			} else {
+				isCustom = false;
+				commitCount(Number(p));
+				closeDd();
+			}
+		});
+	}
+
+	trigger.addEventListener("click", () => {
+		ddMenu.classList.toggle("is-hidden");
+		refreshCountUI();
+	});
+
+	// Champ nombre : sélection au focus, commit Enter/blur, Échap annule.
 	field.addEventListener("focus", () => field.select());
 	field.addEventListener("change", () => commitCount(field.value));
 	field.addEventListener("keydown", (e) => {
@@ -993,12 +1034,14 @@ function openOptionsMenu(anchorEl, opts) {
 			commitCount(field.value);
 			field.blur();
 		} else if (e.key === "Escape") {
-			// 1er Échap : sortir du champ (le 2e ferme le popover).
 			e.stopPropagation();
-			field.value = String(range.value);
+			field.value = String(count);
 			field.blur();
 		}
 	});
+
+	commitCount(count);
+	refreshCountUI();
 
 	// ── Type : items à coche (même anatomie que les options de select) ──
 	menuEl.createDiv({ cls: "qbd-options-pop-title", text: "Type" });

@@ -1016,6 +1016,9 @@
 .qbd-options-pop {
 	width: 252px;
 	padding: 12px;
+	/* Le mini-menu du dropdown Questions (absolute) doit pouvoir sortir
+	   du cadre — la base .qbd-select-menu est overflow-y: auto. */
+	overflow: visible;
 }
 
 .qbd-options-pop-row {
@@ -1043,50 +1046,101 @@
 	padding-top: 10px;
 }
 
-/* ── Slider custom : piste fine remplie jusqu'à la valeur (--qbd-p),
-   pouce rond accent — le range natif brut détonnait. ── */
-.qbd-opts-range {
+/* ── Dropdown Questions : presets + « Personnalisé » (référence
+   sélecteur de durée). Trigger au style champ, mini-menu LOCAL en
+   absolute sous le trigger (pas de portal : le popover l'est déjà). ── */
+.qbd-opts-dd-wrap {
+	position: relative;
 	flex: 1;
 	min-width: 0;
+}
+
+.qbd-opts-dd {
 	appearance: none;
-	-webkit-appearance: none;
-	height: 18px;
-	background: transparent;
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 8px;
+	width: 100%;
+	height: 28px;
+	padding: 0 8px 0 10px;
+	font-size: 13px;
+	font-weight: 500;
+	color: var(--text-normal);
+	background-color: var(--background-modifier-form-field) !important;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 7px;
+	box-shadow: none !important;
 	cursor: pointer;
-	margin: 0;
+	transition: border-color 0.12s ease, background-color 0.12s ease;
 }
 
-.qbd-opts-range::-webkit-slider-runnable-track {
-	height: 4px;
-	border-radius: 2px;
-	background: linear-gradient(to right,
-		var(--interactive-accent) calc(var(--qbd-p, 0) * 100%),
-		var(--background-modifier-border) calc(var(--qbd-p, 0) * 100%));
+.qbd-opts-dd:hover {
+	background-color: var(--background-modifier-hover) !important;
 }
 
-.qbd-opts-range::-webkit-slider-thumb {
-	-webkit-appearance: none;
-	width: 14px;
-	height: 14px;
-	margin-top: -5px;
-	border-radius: 50%;
-	background: var(--text-on-accent);
-	border: 2px solid var(--interactive-accent);
-	box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
-	transition: transform 0.12s ease;
+.qbd-opts-dd[aria-expanded="true"] {
+	border-color: var(--interactive-accent);
 }
 
-.qbd-opts-range:hover::-webkit-slider-thumb {
-	transform: scale(1.12);
+.qbd-opts-dd[aria-expanded="true"] .qbd-select-chevron {
+	transform: rotate(180deg);
 }
 
-.qbd-opts-range:focus-visible {
-	outline: 2px solid color-mix(in srgb, var(--interactive-accent) 60%, transparent);
-	outline-offset: 2px;
-	border-radius: 4px;
+.qbd-opts-dd .qbd-select-chevron {
+	transition: transform 0.15s ease;
 }
 
-/* ── Champ nombre ÉDITABLE (clic → nombre personnalisé, 1-100) ── */
+.qbd-opts-dd-menu {
+	position: absolute;
+	top: calc(100% + 4px);
+	left: 0;
+	min-width: 100%;
+	z-index: 10;
+	display: flex;
+	flex-direction: column;
+	gap: 1px;
+	padding: 4px;
+	background: color-mix(in srgb, var(--background-primary) 96%, transparent);
+	backdrop-filter: blur(12px);
+	-webkit-backdrop-filter: blur(12px);
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 9px;
+	box-shadow: 0 14px 28px -6px rgba(0, 0, 0, 0.4);
+}
+
+.qbd-opts-dd-menu.is-hidden {
+	display: none;
+}
+
+.qbd-opts-dd-item {
+	appearance: none;
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	padding: 5px 8px;
+	background: transparent !important;
+	border: none;
+	box-shadow: none !important;
+	border-radius: 6px;
+	color: var(--text-normal);
+	font-size: 13px;
+	text-align: left;
+	white-space: nowrap;
+	cursor: pointer;
+}
+
+.qbd-opts-dd-item:hover {
+	background: var(--background-modifier-hover) !important;
+}
+
+.qbd-opts-dd-item.is-active {
+	color: var(--interactive-accent);
+}
+
+/* ── Champ nombre (visible quand « Personnalisé », 1-100) ──
+   Police d'interface + chiffres tabulaires (la mono rendait le « 20 »
+   bizarre — retour Ahmed). */
 .qbd-opts-count {
 	appearance: none;
 	-webkit-appearance: none;
@@ -1094,9 +1148,10 @@
 	height: 28px;
 	padding: 0 4px;
 	text-align: center;
-	font-size: 13px;
-	font-weight: 700;
-	font-family: var(--font-monospace, monospace);
+	font-size: 13.5px;
+	font-weight: 600;
+	font-family: var(--font-interface, inherit);
+	font-variant-numeric: tabular-nums;
 	color: var(--text-normal);
 	background-color: var(--background-modifier-form-field);
 	border: 1px solid var(--background-modifier-border);
@@ -1119,6 +1174,10 @@
 .qbd-opts-count::-webkit-outer-spin-button {
 	-webkit-appearance: none;
 	margin: 0;
+}
+
+.qbd-opts-count.is-hidden {
+	display: none;
 }
 
 /* ── Generate button ── */
