@@ -585,19 +585,20 @@
 		color 0.16s ease, transform 0.16s ease, box-shadow 0.16s ease;
 }
 
-/* Hover : teinte accent subtile + micro-lift, au lieu du gris terne
-   de --background-modifier-hover (« c'est moche » — retour Ahmed). */
+/* Hover : élévation NEUTRE (fond gris subtil theme-aware, ombre
+   noire douce, micro-lift) avec un simple liseré accent adouci —
+   la v1 tout-accent faisait « trop de bleu » (retour Ahmed), le gris
+   --background-modifier-hover d'origine était terne. */
 .qbd-ai-hint-action:hover {
-	border-color: var(--interactive-accent);
-	background: color-mix(in srgb, var(--interactive-accent) 16%, var(--background-primary)) !important;
-	color: color-mix(in srgb, var(--interactive-accent) 60%, var(--text-normal));
+	border-color: color-mix(in srgb, var(--interactive-accent) 55%, var(--background-modifier-border));
+	background: color-mix(in srgb, var(--text-normal) 6%, var(--background-primary)) !important;
 	transform: translateY(-1px);
-	box-shadow: 0 3px 10px -4px color-mix(in srgb, var(--interactive-accent) 45%, transparent) !important;
+	box-shadow: 0 3px 8px -4px rgba(0, 0, 0, 0.4) !important;
 }
 
 .qbd-ai-hint-action:active {
 	transform: translateY(0);
-	background: color-mix(in srgb, var(--interactive-accent) 26%, var(--background-primary)) !important;
+	background: color-mix(in srgb, var(--text-normal) 10%, var(--background-primary)) !important;
 	box-shadow: none !important;
 }
 
