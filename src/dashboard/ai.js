@@ -752,10 +752,19 @@ function createAiHandlers(ctx) {
 				}
 				renderHint(hintZone, null);
 			} else {
+				// Le geste SIMPLE d'abord (installer / démarrer l'app —
+				// sur desktop le serveur démarre avec elle), le geste
+				// terminal « ollama serve » en dernier recours seulement :
+				// il échoue si Ollama n'est pas installé et fait doublon
+				// si l'app tourne (port occupé). Le re-check au focus de
+				// la fenêtre fait passer le hint au vert au retour.
 				renderHint(hintZone, {
 					type: "err", icon: "power",
-					text: "Serveur Ollama non détecté. Dans un terminal, lancez :",
-					code: "ollama serve"
+					text: "Le serveur Ollama ne répond pas. Si Ollama n'est pas installé, téléchargez-le ; sinon démarrez l'application Ollama (ou « ollama serve » dans un terminal).",
+					action: {
+						label: "Télécharger Ollama", icon: "external-link",
+						onClick: () => window.open("https://ollama.com/download", "_blank")
+					}
 				});
 			}
 		});
