@@ -94,6 +94,79 @@ function suppressKeyboardPush() {
 	}
 }
 
+/* ── Clavier FLOTTANT déplaçable (référence : clavier visuel Windows,
+   demande Ahmed 2026-07-11). Le DOM du clavier est DÉTRUIT à chaque
+   hide → tout est (ré)appliqué après chaque show : classe flottante,
+   position mémorisée (session), poignée de drag + bouton fermer. ── */
+let __kbPos = null; // { left, top } mémorisée pour la session
+
+function clampKbPos(left, top, w, h) {
+	return {
+		left: Math.min(Math.max(8, left), window.innerWidth - w - 8),
+		top: Math.min(Math.max(8, top), window.innerHeight - h - 8),
+	};
+}
+
+function makeKeyboardFloating(attempt = 0) {
+	const backdrop = document.querySelector(".ML__keyboard.is-visible .MLK__backdrop");
+	if (!backdrop) {
+		// Le show peut poser is-visible une frame plus tard : retenter
+		// brièvement (10 frames max) avant d'abandonner.
+		if (attempt < 10) requestAnimationFrame(() => makeKeyboardFloating(attempt + 1));
+		return;
+	}
+	if (backdrop.classList.contains("qbd-kb-floating")) return;
+	backdrop.classList.add("qbd-kb-floating");
+
+	// Position : mémorisée, sinon centré bas (marge 14px).
+	requestAnimationFrame(() => {
+		const r = backdrop.getBoundingClientRect();
+		const pos = __kbPos
+			? clampKbPos(__kbPos.left, __kbPos.top, r.width, r.height)
+			: { left: Math.round((window.innerWidth - r.width) / 2), top: Math.round(window.innerHeight - r.height - 14) };
+		backdrop.style.left = pos.left + "px";
+		backdrop.style.top = pos.top + "px";
+	});
+
+	// Poignée de drag + fermer.
+	const handle = document.createElement("div");
+	handle.className = "qbd-kb-handle";
+	const grip = document.createElement("span");
+	grip.className = "qbd-kb-handle-grip";
+	require("obsidian").setIcon(grip, "grip-horizontal");
+	const close = document.createElement("button");
+	close.type = "button";
+	close.className = "qbd-kb-handle-close";
+	close.setAttribute("aria-label", "Fermer le clavier");
+	require("obsidian").setIcon(close, "x");
+	close.addEventListener("click", () => hideKeyboardSoftly());
+	handle.append(grip, close);
+	backdrop.prepend(handle);
+
+	handle.addEventListener("pointerdown", (e) => {
+		if (e.target.closest(".qbd-kb-handle-close")) return;
+		e.preventDefault();
+		const r = backdrop.getBoundingClientRect();
+		const dx = e.clientX - r.left;
+		const dy = e.clientY - r.top;
+		backdrop.classList.add("is-dragging");
+		const onMove = (ev) => {
+			const pos = clampKbPos(ev.clientX - dx, ev.clientY - dy, r.width, r.height);
+			backdrop.style.left = pos.left + "px";
+			backdrop.style.top = pos.top + "px";
+		};
+		const onUp = () => {
+			document.removeEventListener("pointermove", onMove);
+			document.removeEventListener("pointerup", onUp);
+			backdrop.classList.remove("is-dragging");
+			const rr = backdrop.getBoundingClientRect();
+			__kbPos = { left: Math.round(rr.left), top: Math.round(rr.top) };
+		};
+		document.addEventListener("pointermove", onMove);
+		document.addEventListener("pointerup", onUp);
+	});
+}
+
 function clearKeyboardBodyPadding() {
 	if (document.querySelector(".ML__keyboard.is-visible")) return;
 	if (document.body.style.paddingBottom) document.body.style.paddingBottom = "";
@@ -211,6 +284,7 @@ function createMathField(host, opts = {}) {
 			// contenu. Le champ est recentré s'il tombe dessous.
 			requestAnimationFrame(() => {
 				suppressKeyboardPush();
+				makeKeyboardFloating();
 				const kbTop = document.querySelector(".ML__keyboard.is-visible .MLK__backdrop")?.getBoundingClientRect().top;
 				const r = mf.getBoundingClientRect();
 				if (kbTop && r.bottom > kbTop) mf.scrollIntoView({ block: "center", behavior: "smooth" });

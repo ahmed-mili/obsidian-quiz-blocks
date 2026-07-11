@@ -80,6 +80,80 @@ math-field.quiz-mathfield:focus-within {
 	.ML__keyboard .MLK__backdrop { transition: none !important; }
 }
 
+/* ── Clavier FLOTTANT déplaçable (référence clavier visuel Windows) :
+   fenêtre compacte aux coins arrondis, positionnée en left/top par
+   math-input.js, poignée de drag en tête. ── */
+.MLK__backdrop.qbd-kb-floating {
+	position: fixed;
+	right: auto;
+	bottom: auto;
+	width: min(880px, 94vw);
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 14px;
+	overflow: hidden;
+	box-shadow: 0 18px 44px -10px rgba(0, 0, 0, 0.55), 0 4px 12px -2px rgba(0, 0, 0, 0.3);
+}
+
+.MLK__backdrop.qbd-kb-floating.is-dragging {
+	transition: none !important;
+	cursor: grabbing;
+}
+
+.qbd-kb-handle {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	position: relative;
+	height: 24px;
+	cursor: grab;
+	color: var(--text-faint);
+	border-bottom: 1px solid color-mix(in srgb, var(--background-modifier-border) 60%, transparent);
+	touch-action: none;
+}
+
+.qbd-kb-handle:active {
+	cursor: grabbing;
+}
+
+.qbd-kb-handle-grip {
+	display: inline-flex;
+	pointer-events: none;
+}
+
+.qbd-kb-handle-grip svg {
+	width: 16px;
+	height: 16px;
+}
+
+.qbd-kb-handle-close {
+	appearance: none;
+	position: absolute;
+	right: 4px;
+	top: 3px;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 18px;
+	height: 18px;
+	padding: 0;
+	background: transparent !important;
+	border: none;
+	box-shadow: none !important;
+	border-radius: 5px;
+	color: var(--text-muted);
+	cursor: pointer;
+}
+
+.qbd-kb-handle-close:hover {
+	background: var(--background-modifier-hover) !important;
+	color: var(--text-normal);
+}
+
+.qbd-kb-handle-close svg {
+	width: 13px;
+	height: 13px;
+}
+
 body > .ML__keyboard,
 .ML__keyboard {
 	--keyboard-background: var(--background-secondary);
