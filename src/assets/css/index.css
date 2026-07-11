@@ -2,6 +2,10 @@
    STYLES.CSS SPLIT - INDEX FILE
    ========================================================= */
 
+/* Fonts MathLive (éditeur d'équations) — inlinées en data-URI au build
+   (loader esbuild), MathfieldElement.fontsDirectory = null côté JS. */
+@import "mathlive/fonts.css";
+
 @import url('./tokens.css');
 @import url('./base.css');
 @import url('./layout.css');
@@ -27,6 +31,7 @@
 @import url('./components/ui-select.css');
 @import url('./components/effort-slider.css');
 @import url('./components/voice-input.css');
+@import url('./components/math-input.css');
 
 /* Pages */
 @import url('./pages/results.css');

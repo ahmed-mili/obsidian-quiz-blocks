@@ -1,5 +1,5 @@
 {
-  "name": "quiz-blocks", 
+  "name": "quiz-blocks",
   "version": "1.0.0",
   "private": true,
   "main": "main.js",
@@ -9,7 +9,8 @@
     "release": "cmd /c call scripts\\release.bat"
   },
   "dependencies": {
-    "json5": "^2.2.3"
+    "json5": "^2.2.3",
+    "mathlive": "^0.110.0"
   },
   "devDependencies": {
     "esbuild": "^0.25.5"

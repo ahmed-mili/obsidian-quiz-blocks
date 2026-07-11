@@ -48,6 +48,9 @@ async function bundleCSS() {
 		bundle: true,
 		minify: false,		// Désactivé pour avoir du CSS lisible
 		logLevel: "info",
+		// Fonts MathLive (≈300 Ko woff2) inlinées en data-URI : le plugin
+		// reste 3 fichiers (main.js/styles.css/manifest.json), pas de CDN.
+		loader: { ".woff2": "dataurl", ".woff": "dataurl", ".ttf": "dataurl" },
 	});
 
 	// Supprimer le commentaire d'entry point laissé par esbuild

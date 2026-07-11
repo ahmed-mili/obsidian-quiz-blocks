@@ -82,6 +82,7 @@ function createAiClient(plugin) {
 	- multiSelect: true si choix multiple
 	- type: "text" pour texte libre, absent sinon
 	- answer: réponse attendue (pour texte libre)
+	- mathInput: true pour une question texte dont la réponse est une expression mathématique (l'élève répondra avec un éditeur d'équations)
 	- learn: un paragraphe de leçon explicative qui enseigne le concept avant la question (optionnel mais recommandé pour les quiz éducatifs)
 
 	MATHÉMATIQUES : toute expression mathématique (formule, fonction, équation, intégrale, fraction, exposant, symbole grec…) s'écrit OBLIGATOIREMENT en LaTeX délimité par des dollars, comme dans Obsidian : $f(x) = x^3$ en ligne, $$\\int_0^2 2x\\,dx$$ pour une formule isolée. Jamais de pseudo-notation type f(x) = x^3 ou ∫ de 0 à 2 hors des dollars. Cela vaut pour title, prompt, options, answer, learn et explain. IMPORTANT : dans les chaînes JSON5, DOUBLE chaque backslash — LaTeX (écris '$\\\\frac{a}{b}$' pour obtenir \\frac) comme chemins Windows (écris 'C:\\\\Users\\\\dev') — un backslash simple serait détruit par le parseur.

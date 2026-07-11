@@ -186,6 +186,12 @@ module.exports = function createTerminalHandlers(ctx) {
 	}
 
 	function isTextAnswerCorrect(q, value) {
+		// Question math (éditeur d'équations) : comparaison de LaTeX
+		// normalisé en FORME (math-input.js) — la normalisation texte
+		// ci-dessous (strip accents, espaces→' ') casserait le LaTeX.
+		const mathInput = require("./math-input");
+		if (mathInput.isMathQuestion(q)) return mathInput.matchesMathAnswer(value, q);
+
 		const accepted = getTextAcceptedAnswers(q);
 		if (!accepted.length) return false;
 
@@ -285,6 +291,13 @@ module.exports = function createTerminalHandlers(ctx) {
 				</div>`;
 		}
 
+		// Question math : HOST vide — le <math-field> (custom element à
+		// configurer) est créé au bind, jamais via innerHTML.
+		if (require("./math-input").isMathQuestion(q)) {
+			return `
+				<div class="qcm-options quiz-text-wrap quiz-math-wrap ${statusClass}" data-math-input="1"></div>`;
+		}
+
 		return `
 			<div class="qcm-options quiz-text-wrap">
 				<textarea
@@ -302,12 +315,62 @@ module.exports = function createTerminalHandlers(ctx) {
 			</div>`;
 	}
 
+	/* Question math : monte le <math-field> + panneau dans le host émis
+	   par textQuestionCardHtml. Même cycle de vie que la textarea :
+	   selections[qi] à chaque saisie, statut live, cleanup au refresh. */
+	function bindMathQuestion(trackItem, qi, host) {
+		const mathInput = require("./math-input");
+		const q = ctx.quiz[qi];
+
+		const applyStatus = (latex) => {
+			host.classList.remove("filled", "correct", "wrong");
+			if (ctx.quizState.locked) {
+				host.classList.add(isTextAnswerCorrect(q, latex) ? "correct" : "wrong");
+			} else if (String(latex || "").trim()) {
+				host.classList.add("filled");
+			}
+		};
+
+		const field = mathInput.createMathField(host, {
+			question: q,
+			value: typeof ctx.quizState.selections[qi] === "string" ? ctx.quizState.selections[qi] : "",
+			readOnly: !!ctx.quizState.locked,
+			placeholder: q?.placeholder || "",
+			onInput: (latex) => {
+				if (ctx.quizState.locked) return;
+				ctx.invalidateSavedResults?.();
+				ctx.quizState.selections[qi] = latex;
+				applyStatus(latex);
+				if (!ctx.quizState.isSliding) {
+					ctx.updateNavHighlight();
+					ctx.cards.refreshMetaSlides();
+				}
+			},
+			onEnter: () => {
+				if (ctx.quizState.isSliding || ctx.quizState.locked) return;
+				if (qi < ctx.quiz.length - 1) ctx.goToQuestion(qi + 1);
+			},
+		});
+		applyStatus(field.getValue());
+
+		trackItem.__quizTextQuestionCleanup = () => {
+			field.destroy();
+			trackItem.__quizTextQuestionCleanup = null;
+		};
+	}
+
 	function bindTextQuestion(trackItem, qi) {
 		if (!trackItem) return;
 
 		if (typeof trackItem.__quizTextQuestionCleanup === "function") {
 			try { trackItem.__quizTextQuestionCleanup(); } catch (_) {}
 			trackItem.__quizTextQuestionCleanup = null;
+		}
+
+		const mathHost = trackItem.querySelector("[data-math-input]");
+		if (mathHost) {
+			bindMathQuestion(trackItem, qi, mathHost);
+			return;
 		}
 
 		const textarea = trackItem.querySelector(".quiz-textarea[data-text-answer]");
