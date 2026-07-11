@@ -459,7 +459,16 @@ function getDefaultModels(providerId) {
 
 /* ── PATH étendu pour child_process ──
    Obsidian lancé depuis l'UI n'hérite pas toujours du PATH
-   complet du shell (npm global, ~/.local/bin, homebrew). */
+   complet du shell (npm global, ~/.local/bin, homebrew) — et un
+   installateur qui modifie le PATH du REGISTRE (Codex CLI officiel)
+   n'atteint jamais un process déjà lancé : sans ces chemins en dur,
+   « installé mais pas détecté » tant qu'Obsidian n'est pas redémarré
+   (vécu Ahmed 2026-07-12, install.ps1 officiel sur desktop). Chemins
+   vérifiés DANS les scripts d'installation d'OpenAI :
+   - install.ps1 → %LOCALAPPDATA%\Programs\OpenAI\Codex\bin
+   - install.sh  → ~/.local/bin (déjà couvert)
+   - npm         → %APPDATA%\npm (déjà couvert)
+   - CODEX_INSTALL_DIR : override honoré par les deux scripts. */
 function buildChildEnv() {
 	const os = require("os");
 	const path = require("path");
@@ -467,7 +476,9 @@ function buildChildEnv() {
 		path.join(os.homedir(), ".local", "bin"),
 		"/opt/homebrew/bin",
 		"/usr/local/bin",
-		process.env.APPDATA ? path.join(process.env.APPDATA, "npm") : null
+		process.env.APPDATA ? path.join(process.env.APPDATA, "npm") : null,
+		process.env.LOCALAPPDATA ? path.join(process.env.LOCALAPPDATA, "Programs", "OpenAI", "Codex", "bin") : null,
+		process.env.CODEX_INSTALL_DIR || null
 	].filter(Boolean);
 	const sep = path.delimiter;
 	const current = process.env.PATH || "";

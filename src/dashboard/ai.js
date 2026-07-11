@@ -713,15 +713,19 @@ function createAiHandlers(ctx) {
 			} else {
 				// « Codex CLI », jamais « Codex » nu : l'APPLICATION Codex
 				// (bureau) n'installe pas la commande « codex » — l'installer
-				// ne détecte rien (vécu Ahmed 2026-07-12). La commande npm
-				// affichée évite le mauvais téléchargement.
+				// ne détecte rien (vécu Ahmed 2026-07-12). Commande = celle
+				// de l'installateur OFFICIEL de la plateforme
+				// (learn.chatgpt.com, « la meilleure méthode » — choix
+				// Ahmed) ; npm reste détecté aussi.
 				renderHint(hintZone, {
 					type: "err", icon: "download",
 					text: "Le Codex CLI n'est pas installé — c'est l'outil de terminal d'OpenAI, différent de l'application Codex. Installez-le puis connectez votre compte ChatGPT avec « codex login » :",
-					code: "npm install -g @openai/codex",
+					code: require("obsidian").Platform.isWin
+						? 'powershell -ExecutionPolicy ByPass -c "irm https://chatgpt.com/codex/install.ps1 | iex"'
+						: "curl -fsSL https://chatgpt.com/codex/install.sh | sh",
 					action: {
 						label: "Installer Codex CLI", icon: "external-link",
-						onClick: () => window.open("https://www.npmjs.com/package/@openai/codex", "_blank")
+						onClick: () => window.open("https://learn.chatgpt.com/docs/codex/cli#getting-started", "_blank")
 					}
 				});
 			}

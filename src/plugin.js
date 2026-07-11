@@ -266,8 +266,8 @@ class QuizBlocksSettingTab extends obsidian.PluginSettingTab {
 				sections: [
 					{
 						heading: "1. Installer le Codex CLI — pas l'application Codex",
-						text: "La génération utilise le Codex CLI, l'outil de terminal d'OpenAI : npm install -g @openai/codex (Node.js requis). L'application de bureau Codex ne suffit pas : elle n'installe pas la commande « codex » que le plugin utilise.",
-						link: { label: "Page npm du Codex CLI", url: "https://www.npmjs.com/package/@openai/codex" }
+						text: "La génération utilise le Codex CLI, l'outil de terminal d'OpenAI. L'application de bureau Codex ne suffit pas : elle n'installe pas la commande « codex » que le plugin utilise. Installateur officiel — Windows : powershell -ExecutionPolicy ByPass -c \"irm https://chatgpt.com/codex/install.ps1 | iex\" · macOS/Linux : curl -fsSL https://chatgpt.com/codex/install.sh | sh (alternative : npm install -g @openai/codex).",
+						link: { label: "Guide d'installation officiel", url: "https://learn.chatgpt.com/docs/codex/cli#getting-started" }
 					},
 					{
 						heading: "2. Connecter votre compte ChatGPT",
@@ -276,12 +276,12 @@ class QuizBlocksSettingTab extends obsidian.PluginSettingTab {
 					},
 					{
 						heading: "3. C'est tout",
-						text: "Le plugin détecte le Codex CLI automatiquement — revenez simplement sur Obsidian après l'installation. Choisissez un modèle ci-dessus et générez.",
+						text: "Le plugin détecte le Codex CLI automatiquement, quelle que soit la méthode d'installation — revenez simplement sur Obsidian après l'installation. Choisissez un modèle ci-dessus et générez.",
 						link: null
 					}
 				],
 				warning: "Vos requêtes passent par votre session Codex locale et comptent dans l'usage de votre abonnement ChatGPT. Aucune clé n'est stockée dans Obsidian.",
-				docsLink: { label: "Codex CLI sur GitHub", url: "https://github.com/openai/codex" }
+				docsLink: { label: "Documentation Codex CLI", url: "https://learn.chatgpt.com/docs/codex/cli" }
 			},
 			ollama: {
 				title: "Comment configurer Ollama (local + cloud)",
