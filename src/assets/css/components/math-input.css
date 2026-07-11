@@ -52,6 +52,20 @@ math-field.quiz-mathfield:focus-within {
 	border-color: var(--color-red, #f87171);
 }
 
+/* Champ SANS aucun bouton (demande Ahmed) :
+   - virtual-keyboard-toggle : le clavier s'ouvre tout seul au focus
+     (createMathField → focusin), le toggle ne sert plus ;
+   - menu-toggle : menu ≡ retiré (menuItems=[] en JS neutralise son contenu ;
+     ici on masque le bouton résiduel du menu vide). Anti-triche : le menu
+     exposait « Résoudre / Évaluer / Simplifier ». Structures désormais dans
+     l'onglet « Matrices » du clavier.
+   Parts officielles MathLive (cf. types/mathfield-element.d.ts :
+   « to hide the menu button: math-field::part(menu-toggle) »). */
+math-field.quiz-mathfield::part(virtual-keyboard-toggle),
+math-field.quiz-mathfield::part(menu-toggle) {
+	display: none;
+}
+
 /* ── Clavier virtuel NATIF MathLive, aux couleurs du thème Obsidian
    (choix Ahmed 2026-07-11 : le clavier MathLive remplace le panneau
    custom, mais theme-aware — il était blanc en permanence). Le
@@ -168,6 +182,16 @@ body:has(.MLK__backdrop.is-dragging) {
 	align-items: center;
 	justify-content: center;
 	position: relative;
+	/* Le .MLK__plate de MathLive est position:absolute (top: padding) : il
+	   ignore la poignée insérée en flux et se cale tout en haut du backdrop,
+	   PAR-DESSUS elle. Sans z-index, le plate (pointer-events:all) recouvre la
+	   croix → le clic sur le ✕ visible déclenchait en fait le bouton
+	   presse-papiers (elementFromPoint confirmé). On hisse la poignée au-dessus
+	   du plate, mais transparente aux pointeurs : la toolbar/les touches dessous
+	   restent cliquables, le drag passe par le listener capture du backdrop, et
+	   seule la croix rétablit pointer-events (voir .qbd-kb-handle-close). */
+	z-index: 2;
+	pointer-events: none;
 	height: 24px;
 	cursor: grab;
 	color: var(--text-faint);
@@ -206,6 +230,8 @@ body:has(.MLK__backdrop.is-dragging) {
 	border-radius: 5px;
 	color: var(--text-muted);
 	cursor: pointer;
+	/* Rétablit le clic sur la croix (poignée en pointer-events:none). */
+	pointer-events: auto;
 }
 
 .qbd-kb-handle-close:hover {
@@ -216,6 +242,15 @@ body:has(.MLK__backdrop.is-dragging) {
 .qbd-kb-handle-close svg {
 	width: 13px;
 	height: 13px;
+}
+
+/* Décale la toolbar d'édition MathLive (undo/redo/presse-papiers, à droite)
+   vers la gauche pour libérer l'extrême droite où vit la croix : sans ce
+   décalage, le bouton presse-papiers tombe PILE sous la croix (mêmes
+   coordonnées, mesuré — poignée et toolbar partagent la même bande, cf.
+   .qbd-kb-handle). Réserve la largeur de la croix + un intervalle visible. */
+.qbd-kb-floating .MLK__toolbar .ML__edit-toolbar {
+	margin-right: 30px;
 }
 
 body > .ML__keyboard,

@@ -178,7 +178,21 @@ function makeKeyboardFloating(attempt = 0) {
 	close.className = "qbd-kb-handle-close";
 	close.setAttribute("aria-label", "Fermer le clavier");
 	require("obsidian").setIcon(close, "x");
-	close.addEventListener("click", () => hideKeyboardSoftly());
+	close.addEventListener("click", () => {
+		// La croix ferme le clavier ET désélectionne le champ (demande Ahmed) :
+		// blur du dernier champ focalisé → le caret et l'anneau de focus
+		// disparaissent. __lastMathfield est remis à null AVANT le blur pour
+		// neutraliser le refocus post-drag qui, sinon, rouvrirait le clavier.
+		// Le blur déclenche le focusout du champ → hideKeyboardSoftly ; on
+		// rappelle hide en filet de sécurité (cas d'un champ sans focus DOM
+		// réel) — le clearTimeout de __kbExitTimer dans hideKeyboardSoftly
+		// déduplique le fondu : pas de double déclenchement.
+		const mf = (__lastMathfield && __lastMathfield.isConnected) ? __lastMathfield
+			: (document.activeElement && document.activeElement.tagName === "MATH-FIELD" ? document.activeElement : null);
+		__lastMathfield = null;
+		if (mf && typeof mf.blur === "function") mf.blur();
+		hideKeyboardSoftly();
+	});
 	handle.append(grip, close);
 	backdrop.prepend(handle);
 
@@ -296,6 +310,44 @@ function hideKeyboardSoftly() {
 	}, 260);
 }
 
+/* Onglet custom « Matrices et structures » du clavier virtuel (demande Ahmed
+   2026-07-11 : remplacer le menu ≡ par un onglet, pour ne plus jongler entre le
+   champ et le clavier). Les \placeholder{} sont navigables au Tab, comme
+   answerTemplate. Format keycap officiel (types/virtual-keyboard.d.ts : `latex`
+   = label rendu ET fragment inséré ; `command` = action, qui prime sur `latex`
+   réduit alors au rôle de label). */
+const __PH = "\\placeholder{}";
+function __mkMatrix(env, rows, cols) {
+	// Une rangée = cols placeholders séparés par & ; les rangées séparées par
+	// \\ (double backslash LaTeX → quadruple en chaîne JS).
+	const line = new Array(cols).fill(__PH).join("&");
+	return "\\begin{" + env + "}" + new Array(rows).fill(line).join("\\\\") + "\\end{" + env + "}";
+}
+const MATRIX_LAYOUT = {
+	// Le label de l'onglet est injecté en markup brut par MathLive (pas de rendu
+	// LaTeX) → glyphe Unicode évoquant une matrice, cohérent avec 123/∫/αβγ.
+	label: "[∷]",
+	labelClass: "MLK__tex-math",
+	tooltip: "Matrices et structures",
+	rows: [
+		[
+			{ latex: __mkMatrix("pmatrix", 2, 2), class: "small", tooltip: "Matrice 2×2 (parenthèses)" },
+			{ latex: __mkMatrix("pmatrix", 3, 3), class: "small", tooltip: "Matrice 3×3 (parenthèses)" },
+			{ latex: __mkMatrix("bmatrix", 2, 2), class: "small", tooltip: "Matrice 2×2 (crochets)" },
+			{ latex: __mkMatrix("vmatrix", 2, 2), class: "small", tooltip: "Déterminant 2×2" },
+		],
+		[
+			{ latex: __mkMatrix("cases", 2, 1), class: "small", tooltip: "Système d'équations" },
+			{ latex: "\\vec{" + __PH + "}", class: "small", tooltip: "Vecteur" },
+			{ latex: "\\overline{" + __PH + "}", class: "small", tooltip: "Barre (conjugué / moyenne)" },
+			// command prime : ces touches n'agissent que si le caret est DANS une
+			// matrice (sinon sans effet, comportement attendu).
+			{ latex: "+\\,\\downarrow", command: "addRowAfter", class: "small", tooltip: "Ajouter une ligne à la matrice" },
+			{ latex: "+\\,\\rightarrow", command: "addColumnAfter", class: "small", tooltip: "Ajouter une colonne à la matrice" },
+		],
+	],
+};
+
 let __mathliveConfigured = false;
 
 function configureMathlive() {
@@ -319,7 +371,7 @@ function configureMathlive() {
 	// propre ce clavier-là ») — sans l'onglet alphabétique (« abc »,
 	// inutile avec un clavier physique) : 123, symboles, grec.
 	if (window.mathVirtualKeyboard) {
-		window.mathVirtualKeyboard.layouts = ["numeric", "symbols", "greek"];
+		window.mathVirtualKeyboard.layouts = ["numeric", "symbols", "greek", MATRIX_LAYOUT];
 	}
 	__mathliveConfigured = true;
 }
@@ -354,6 +406,21 @@ function createMathField(host, opts = {}) {
 		mf.setValue(String(opts.template).replace(/^\$\$?|\$\$?$/g, ""));
 	}
 	host.appendChild(mf);
+
+	// Menu MathLive retiré (bouton ≡ ET menu clic-droit, même source) : son menu
+	// par défaut expose « Résoudre / Évaluer / Simplifier » (Compute Engine) —
+	// dans un quiz, l'élève ferait résoudre l'équation à sa place (anti-triche).
+	// Le bouton ≡ résiduel est masqué en CSS (::part(menu-toggle)). Les
+	// structures (matrices, système…) passent par l'onglet clavier dédié.
+	// Le setter menuItems exige le mathfield MONTÉ (« Mathfield not mounted »
+	// sinon) : or le host est souvent détaché à la création (l'éditeur insère
+	// l'arbre ensuite → appendChild ne monte pas encore). On l'applique sur
+	// l'événement 'mount' de MathLive (émis à chaque connexion → menu re-vidé
+	// même après un re-mount de carousel), et tout de suite si déjà monté.
+	// Setter et event officiels (types/mathfield-element.d.ts).
+	const clearMenu = () => { try { mf.menuItems = []; } catch (e) { /* pas encore monté */ } };
+	mf.addEventListener("mount", clearMenu);
+	clearMenu();
 
 	if (opts.onInput) {
 		mf.addEventListener("input", () => opts.onInput(mf.getValue("latex")));
