@@ -110,27 +110,44 @@ body:has(.ML__keyboard) {
 	transition: opacity 0.22s ease !important;
 }
 
-/* Pendant le déplacement : AUCUN changement de curseur (demande
-   Ahmed) — la flèche par défaut partout, y compris au passage sur
-   touches/champ/poignée. Le déplacement passe par un transform
-   COMPOSITÉ (--qbd-kb-drag, posé par math-input.js) : synchrone du
-   curseur, sans le lag de layout de left/top — le curseur reste
-   visuellement fixe sur le point du clavier saisi. La variable est
-   le SEUL transform autorisé (le verrou transform: none reste actif
-   hors drag contre les résidus MathLive). */
+/* Pendant le déplacement : transform COMPOSITÉ (--qbd-kb-drag, posé
+   par math-input.js) — pas de layout par frame. La variable est le
+   SEUL transform autorisé (le verrou transform: none reste actif hors
+   drag contre les résidus MathLive). */
 .MLK__backdrop.qbd-kb-floating.is-dragging {
 	transition: none !important;
 	transform: var(--qbd-kb-drag, none) !important;
 	will-change: transform;
 }
 
+/* Le curseur SYSTÈME est masqué pendant le drag : rendu hardware par
+   l'OS (latence ~0), il devance fatalement le clavier d'1-2 frames de
+   compositing et « glisse » dessus à grande vitesse. Sa réplique
+   (.qbd-kb-cursor, même flèche) est rendue dans la même frame que le
+   clavier → les deux sont soudés. L'intention historique « aucun
+   changement de curseur pendant le drag » est conservée : la réplique
+   est la flèche par défaut, partout, en continu. */
 .MLK__backdrop.qbd-kb-floating.is-dragging,
 .MLK__backdrop.qbd-kb-floating.is-dragging * {
-	cursor: default !important;
+	cursor: none !important;
 }
 
 body:has(.MLK__backdrop.is-dragging) {
-	cursor: default !important;
+	cursor: none !important;
+}
+
+/* Réplique du curseur système pendant le drag (math-input.js la
+   positionne par transform dans le même handler que le clavier).
+   Enfant de body — PAS du backdrop : le backdrop transformé pendant
+   le drag deviendrait le containing block du position: fixed. */
+.qbd-kb-cursor {
+	position: fixed;
+	left: 0;
+	top: 0;
+	z-index: 99999;
+	pointer-events: none;
+	will-change: transform;
+	filter: drop-shadow(0 1px 1.5px rgba(0, 0, 0, 0.3));
 }
 
 .qbd-kb-handle {

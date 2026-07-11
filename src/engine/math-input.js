@@ -101,6 +101,28 @@ function suppressKeyboardPush() {
 let __kbPos = null; // { left, top } mémorisée pour la session
 let __kbDragging = false; // drag en cours : ne pas fermer le clavier
 let __lastMathfield = null; // dernier champ focalisé (refocus post-drag)
+let __kbCursorEl = null; // réplique du curseur système pendant le drag
+
+/* Le curseur système est rendu par l'OS (hardware, latence ~0) ; tout
+   élément DOM le suit avec 1-2 frames de compositing de retard — à
+   grande vitesse le vrai curseur « glisse » sur le clavier, quel que
+   soit le code (mesuré : le style suit la cible à chaque frame, le
+   décalage vient de la couche de présentation). Pendant le drag on
+   masque donc le curseur OS (cursor: none) et on affiche SA réplique,
+   mise à jour dans le même handler que le clavier → présentés dans la
+   MÊME frame compositée : écart relatif nul par construction. Pointe
+   du glyphe à (1,1) dans le SVG (marge anti-rognage du contour) :
+   compenser d'1px au positionnement. */
+function getDragCursor() {
+	if (__kbCursorEl) return __kbCursorEl;
+	const c = document.createElement("div");
+	c.className = "qbd-kb-cursor";
+	c.innerHTML = '<svg width="16" height="22" viewBox="0 0 16 22">'
+		+ '<path d="M1 1 L1 17.6 L5.1 13.8 L7.6 19.6 L10.4 18.4 L7.9 12.7 L13.3 12.7 Z"'
+		+ ' fill="#fff" stroke="#000" stroke-width="1.1" stroke-linejoin="round"/></svg>';
+	__kbCursorEl = c;
+	return c;
+}
 
 function clampKbPos(left, top, w, h) {
 	return {
@@ -119,6 +141,10 @@ function makeKeyboardFloating(attempt = 0) {
 	}
 	if (backdrop.classList.contains("qbd-kb-floating")) return;
 	backdrop.classList.add("qbd-kb-floating");
+	// Réplique de curseur orpheline (drag interrompu par une destruction
+	// du clavier) : purge au show — elle vit dans body, pas dans le DOM
+	// du clavier détruit à chaque hide.
+	if (__kbCursorEl) __kbCursorEl.remove();
 
 	// Position : mémorisée (revient EXACTEMENT où l'utilisateur l'a
 	// laissée — clamp avec les dimensions MÉMORISÉES au drop, jamais
@@ -179,18 +205,30 @@ function makeKeyboardFloating(attempt = 0) {
 		const startLeft = r.left;
 		const startTop = r.top;
 
+		// Réplique du curseur (voir getDragCursor) : posée à la position
+		// exacte du vrai curseur au moment du grab → le swap OS↔réplique
+		// est invisible. Souris uniquement (au tactile, pas de curseur).
+		const ghost = e.pointerType === "mouse" ? getDragCursor() : null;
+		if (ghost) {
+			ghost.style.transform = "translate(" + (e.clientX - 1) + "px, " + (e.clientY - 1) + "px)";
+			document.body.appendChild(ghost);
+		}
+
 		// Déplacement par transform composité (pas de layout par frame) :
-		// le clavier colle au curseur sans lag — left/top consolidés au
+		// clavier ET réplique du curseur mis à jour dans le même handler,
+		// composités dans la même frame — left/top consolidés au
 		// relâchement seulement.
 		const onMove = (ev) => {
 			const pos = clampKbPos(ev.clientX - dx, ev.clientY - dy, r.width, r.height);
 			backdrop.style.setProperty("--qbd-kb-drag",
 				"translate(" + (pos.left - startLeft) + "px, " + (pos.top - startTop) + "px)");
+			if (ghost) ghost.style.transform = "translate(" + (ev.clientX - 1) + "px, " + (ev.clientY - 1) + "px)";
 		};
 		const onUp = () => {
 			document.removeEventListener("pointermove", onMove);
 			document.removeEventListener("pointerup", onUp);
 			document.removeEventListener("pointercancel", onUp);
+			if (ghost) ghost.remove();
 			// Consolider AVANT de retirer la classe (pas de flash) :
 			// position visuelle finale → left/top, puis transform relâché.
 			const rr = backdrop.getBoundingClientRect();
