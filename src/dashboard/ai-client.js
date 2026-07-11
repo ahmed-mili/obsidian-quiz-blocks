@@ -512,7 +512,12 @@ function createAiClient(plugin) {
 	   Sacrifie \t/\f/\b/\v littéraux (jamais voulus dans un quiz) au
 	   profit de \tan, \frac, \beta, \vec… */
 	function repairLatexBackslashes(source) {
-		return source.replace(/\\(?![nr"'\\\/0-9xu])([a-zA-Z,;!])/g, "\\\\$1");
+		// L'alternative (\\\\) CONSOMME les paires déjà correctes en
+		// premier : sans elle, le 2e backslash de « \\frac » (modèle qui
+		// échappe bien, ex. Claude/Codex) matcherait et produirait
+		// « \\\frac » → form feed de retour au parse.
+		return source.replace(/(\\\\)|\\(?![nr"'\\\/0-9xu])([a-zA-Z,;!])/g,
+			(m, pair, ch) => pair ? pair : "\\\\" + ch);
 	}
 
 	function parseOllamaResponse(content) {

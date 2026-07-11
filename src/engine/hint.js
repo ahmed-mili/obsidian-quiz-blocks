@@ -112,7 +112,11 @@ module.exports = function createHintHandlers(ctx) {
 		const overlay = ensureHintModal();
 		const body = overlay.querySelector(".quiz-hint-modal-body");
 		const modal = overlay.querySelector(".quiz-hint-modal");
-		if (body) body.innerHTML = ctx.sanitize.renderHintWithCodeAndEmbeds(text);
+		if (body) {
+			body.innerHTML = ctx.sanitize.renderHintWithCodeAndEmbeds(text);
+			// LaTeX $...$ des indices : même rendu MathJax que les slides.
+			require("./mathjax").mathifyElement(body);
+		}
 		applyHintModalTheme();
 		if (__quizHintCloseTimer) { clearTimeout(__quizHintCloseTimer); __quizHintCloseTimer = 0; }
 		if (__quizHintOpenRaf1) cancelAnimationFrame(__quizHintOpenRaf1);
