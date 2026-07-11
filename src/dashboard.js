@@ -72,10 +72,17 @@ class QuizDashboardView extends obsidian.ItemView {
 		this.detail = createDetailHandlers(ctx);
 		this.ai = createAiHandlers(ctx);
 
-		// Écouter les changements du scanner
+		// Écouter les changements du scanner. La SIDEBAR aussi : le badge
+		// « Mes quiz » lit getQuizzes() au render — sans ça il reste figé
+		// sur le compte partiel du scan initial (badge « 1 » au démarrage).
+		// La vue « Générer » est exclue du re-render : elle n'affiche rien
+		// du scan, et un re-render intempestif (n'importe quel fichier du
+		// vault modifié) fermerait le popover d'options ou couperait la
+		// dictée en cours.
 		if (this.scanner) {
 			this._unregisterScanner = this.scanner.onChange(() => {
-				this.renderCurrentView();
+				this.renderSidebar();
+				if (this.currentView !== "ai") this.renderCurrentView();
 			});
 		}
 
