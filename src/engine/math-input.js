@@ -167,46 +167,59 @@ function makeKeyboardFloating(attempt = 0) {
 		cancelKeyboardExit();
 		try { backdrop.setPointerCapture(e.pointerId); } catch (err) { /* best effort */ }
 		const r = backdrop.getBoundingClientRect();
+		backdrop.classList.add("is-dragging");
+		// CURSEUR FIGÉ pendant tout le drag (demande Ahmed : « il reste
+		// collé à l'endroit où j'avais cliqué ») : Pointer Lock — le
+		// curseur système ne bouge plus, le clavier se déplace via les
+		// mouvements RELATIFS (movementX/Y). À la sortie du lock, le
+		// curseur réapparaît exactement au point du clic. Clamp CONTINU
+		// aux bords (comportement validé), positions cumulées clampées
+		// pour un retour de bord immédiat (pas d'effet élastique).
+		let curLeft = r.left;
+		let curTop = r.top;
 		const dx = e.clientX - r.left;
 		const dy = e.clientY - r.top;
-		backdrop.classList.add("is-dragging");
-		// PENDANT le drag : suivi EXACT du curseur, AUCUN clamp — le
-		// point cliqué reste collé sous la souris jusqu'au relâchement
-		// (demande Ahmed, comportement clavier visuel Windows). Le
-		// rattrapage ne se fait qu'AU DROP.
+		let locked = false;
+		try {
+			backdrop.requestPointerLock();
+			locked = true;
+		} catch (err) { /* fallback : drag classique par offset */ }
+
 		const onMove = (ev) => {
-			backdrop.style.left = (ev.clientX - dx) + "px";
-			backdrop.style.top = (ev.clientY - dy) + "px";
+			if (document.pointerLockElement === backdrop) {
+				curLeft += ev.movementX;
+				curTop += ev.movementY;
+			} else {
+				// Lock refusé/perdu : suivi classique par position absolue.
+				curLeft = ev.clientX - dx;
+				curTop = ev.clientY - dy;
+			}
+			const pos = clampKbPos(curLeft, curTop, r.width, r.height);
+			curLeft = pos.left;
+			curTop = pos.top;
+			backdrop.style.left = pos.left + "px";
+			backdrop.style.top = pos.top + "px";
 		};
-		const onUp = (ev) => {
-			backdrop.removeEventListener("pointermove", onMove);
-			backdrop.removeEventListener("pointerup", onUp);
-			backdrop.removeEventListener("pointercancel", onUp);
-			try { backdrop.releasePointerCapture(ev.pointerId); } catch (err) { /* best effort */ }
+		const onUp = () => {
+			document.removeEventListener("pointermove", onMove);
+			document.removeEventListener("pointerup", onUp);
+			document.removeEventListener("pointercancel", onUp);
+			if (locked && document.pointerLockElement === backdrop) {
+				try { document.exitPointerLock(); } catch (err) { /* best effort */ }
+			}
 			backdrop.classList.remove("is-dragging");
-			// Clamp de récupération : jamais irrécupérable (au moins la
-			// zone de saisie accessible), mais on laisse dépasser
-			// partiellement comme le clavier Windows.
 			const rr = backdrop.getBoundingClientRect();
-			const MIN_VISIBLE = 90;
-			const left = Math.min(
-				Math.max(rr.left, MIN_VISIBLE - rr.width),
-				window.innerWidth - MIN_VISIBLE
-			);
-			const top = Math.min(Math.max(rr.top, 0), window.innerHeight - MIN_VISIBLE);
-			backdrop.style.left = Math.round(left) + "px";
-			backdrop.style.top = Math.round(top) + "px";
 			__kbPos = {
-				left: Math.round(left), top: Math.round(top),
+				left: Math.round(rr.left), top: Math.round(rr.top),
 				w: Math.round(rr.width), h: Math.round(rr.height),
 			};
 			__kbDragging = false;
 			// Rendre le focus au champ : la saisie continue sans re-clic.
 			if (__lastMathfield && __lastMathfield.isConnected) __lastMathfield.focus();
 		};
-		backdrop.addEventListener("pointermove", onMove);
-		backdrop.addEventListener("pointerup", onUp);
-		backdrop.addEventListener("pointercancel", onUp);
+		document.addEventListener("pointermove", onMove);
+		document.addEventListener("pointerup", onUp);
+		document.addEventListener("pointercancel", onUp);
 	}, { capture: true });
 }
 
