@@ -84,6 +84,16 @@ function cancelKeyboardExit() {
    plugin clavier ouvert, erreur interne), ce padding reste orphelin :
    grande bande vide sous l'app (baseline Ahmed 2026-07-11, 313px).
    À appeler quand AUCUN clavier n'est visible. */
+/* Retire la poussée de l'app par le clavier — MÊME clavier visible
+   (mode overlay) : le padding inline du body ET le mémo du singleton. */
+function suppressKeyboardPush() {
+	if (document.body.style.paddingBottom) document.body.style.paddingBottom = "";
+	const kb = window.mathVirtualKeyboard;
+	if (kb && kb.originalContainerBottomPadding) {
+		try { kb.originalContainerBottomPadding = null; } catch (e) { /* best effort */ }
+	}
+}
+
 function clearKeyboardBodyPadding() {
 	if (document.querySelector(".ML__keyboard.is-visible")) return;
 	if (document.body.style.paddingBottom) document.body.style.paddingBottom = "";
@@ -194,6 +204,17 @@ function createMathField(host, opts = {}) {
 		mf.addEventListener("focusin", () => {
 			cancelKeyboardExit();
 			try { window.mathVirtualKeyboard?.show({ animate: true }); } catch (e) { /* transitoire */ }
+			// OVERLAY, pas poussée : MathLive contracte l'app (padding
+			// body) → zone morte sans wallpaper derrière le clavier
+			// (capture Ahmed). On retire la poussée : le clavier (fixed)
+			// recouvre le bas de l'app et son verre floute du VRAI
+			// contenu. Le champ est recentré s'il tombe dessous.
+			requestAnimationFrame(() => {
+				suppressKeyboardPush();
+				const kbTop = document.querySelector(".ML__keyboard.is-visible .MLK__backdrop")?.getBoundingClientRect().top;
+				const r = mf.getBoundingClientRect();
+				if (kbTop && r.bottom > kbTop) mf.scrollIntoView({ block: "center", behavior: "smooth" });
+			});
 		});
 		mf.addEventListener("focusout", () => {
 			hideKeyboardSoftly();
