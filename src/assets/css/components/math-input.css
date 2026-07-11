@@ -112,9 +112,16 @@ body:has(.ML__keyboard) {
 
 /* Pendant le déplacement : AUCUN changement de curseur (demande
    Ahmed) — la flèche par défaut partout, y compris au passage sur
-   touches/champ/poignée. */
+   touches/champ/poignée. Le déplacement passe par un transform
+   COMPOSITÉ (--qbd-kb-drag, posé par math-input.js) : synchrone du
+   curseur, sans le lag de layout de left/top — le curseur reste
+   visuellement fixe sur le point du clavier saisi. La variable est
+   le SEUL transform autorisé (le verrou transform: none reste actif
+   hors drag contre les résidus MathLive). */
 .MLK__backdrop.qbd-kb-floating.is-dragging {
 	transition: none !important;
+	transform: var(--qbd-kb-drag, none) !important;
+	will-change: transform;
 }
 
 .MLK__backdrop.qbd-kb-floating.is-dragging,

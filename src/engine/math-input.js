@@ -176,18 +176,28 @@ function makeKeyboardFloating(attempt = 0) {
 		// corrigé par transform: none — pas de ce calcul.
 		const dx = e.clientX - r.left;
 		const dy = e.clientY - r.top;
+		const startLeft = r.left;
+		const startTop = r.top;
 
+		// Déplacement par transform composité (pas de layout par frame) :
+		// le clavier colle au curseur sans lag — left/top consolidés au
+		// relâchement seulement.
 		const onMove = (ev) => {
 			const pos = clampKbPos(ev.clientX - dx, ev.clientY - dy, r.width, r.height);
-			backdrop.style.left = pos.left + "px";
-			backdrop.style.top = pos.top + "px";
+			backdrop.style.setProperty("--qbd-kb-drag",
+				"translate(" + (pos.left - startLeft) + "px, " + (pos.top - startTop) + "px)");
 		};
 		const onUp = () => {
 			document.removeEventListener("pointermove", onMove);
 			document.removeEventListener("pointerup", onUp);
 			document.removeEventListener("pointercancel", onUp);
-			backdrop.classList.remove("is-dragging");
+			// Consolider AVANT de retirer la classe (pas de flash) :
+			// position visuelle finale → left/top, puis transform relâché.
 			const rr = backdrop.getBoundingClientRect();
+			backdrop.style.left = Math.round(rr.left) + "px";
+			backdrop.style.top = Math.round(rr.top) + "px";
+			backdrop.style.removeProperty("--qbd-kb-drag");
+			backdrop.classList.remove("is-dragging");
 			__kbPos = {
 				left: Math.round(rr.left), top: Math.round(rr.top),
 				w: Math.round(rr.width), h: Math.round(rr.height),
