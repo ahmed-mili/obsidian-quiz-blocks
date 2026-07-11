@@ -57,13 +57,16 @@ module.exports = function createPreviewHandlers(ctx) {
 			});
 		}
 
+		// ── APERÇU = ÉTAT INITIAL du quiz, jamais l'état corrigé (demande
+		// Ahmed 2026-07-11) : aucune option verte, aucun slot pré-rempli,
+		// pas d'explication — les réponses ne se voient QUE dans le
+		// panneau Éditeur, ouvert volontairement. ──
 		if (t === "single" || t === "multi") {
 			const isMulti = t === "multi";
 			if (isMulti) card.createDiv({ cls: "quiz-multi-indicator", text: "Sélectionnez une ou plusieurs réponses" });
 
-			(q.options || []).forEach((o, i) => {
-				const isCorrect = isMulti ? (q.correctIndices || []).includes(i) : i === q.correctIndex;
-				const cls = `quiz-option ${isMulti ? "multi" : ""} ${isCorrect ? "correct" : ""}`.trim();
+			(q.options || []).forEach((o) => {
+				const cls = `quiz-option ${isMulti ? "multi" : ""}`.trim();
 				const opt = card.createDiv({ cls, attr: { role: "button", tabindex: "0" } });
 				opt.innerHTML = _resolveImagesInHtml(md2html(o || "..."));
 			});
@@ -73,13 +76,15 @@ module.exports = function createPreviewHandlers(ctx) {
 			card.createDiv({ cls: "quiz-multi-indicator", text: "Classez les éléments dans le bon ordre" });
 			const orderingWrap = card.createDiv({ cls: "quiz-ordering" });
 			const slotsWrap = orderingWrap.createDiv({ cls: "quiz-ordering-slots" });
-			(q.slots || []).forEach((slotLabel, si) => {
-				const oi = q.correctOrder?.[si];
-				const itemText = q.possibilities?.[oi] || "?";
-				const slot = slotsWrap.createDiv({ cls: "quiz-slot filled correct" });
+			(q.slots || []).forEach((slotLabel) => {
+				const slot = slotsWrap.createDiv({ cls: "quiz-slot" });
 				slot.createDiv({ cls: "quiz-slot-label", text: slotLabel });
-				slot.createDiv({ cls: "quiz-slot-value", text: itemText });
+				slot.createDiv({ cls: "quiz-slot-value", text: "…" });
 			});
+			// Pool des possibilités dans l'ordre STOCKÉ (celui affiché à
+			// l'élève) — pas l'ordre correct.
+			const pool = orderingWrap.createDiv({ cls: "quiz-ordering-pool" });
+			(q.possibilities || []).forEach(p => pool.createSpan({ cls: "quiz-pool-item", text: p }));
 		}
 
 		if (t === "matching") {
@@ -87,12 +92,12 @@ module.exports = function createPreviewHandlers(ctx) {
 			const matchWrap = card.createDiv({ cls: "quiz-ordering" });
 			const slotsWrap = matchWrap.createDiv({ cls: "quiz-ordering-slots" });
 			(q.rows || []).forEach((row, ri) => {
-				const ci = q.correctMap?.[ri];
-				const choiceText = q.choices?.[ci] || "?";
-				const slot = slotsWrap.createDiv({ cls: "quiz-slot filled correct" });
+				const slot = slotsWrap.createDiv({ cls: "quiz-slot" });
 				slot.createDiv({ cls: "quiz-slot-label", text: row || `Ligne ${ri}` });
-				slot.createDiv({ cls: "quiz-slot-value", text: choiceText });
+				slot.createDiv({ cls: "quiz-slot-value", text: "…" });
 			});
+			const pool = matchWrap.createDiv({ cls: "quiz-ordering-pool" });
+			(q.choices || []).forEach(c => pool.createSpan({ cls: "quiz-pool-item", text: c }));
 		}
 
 		if (t === "text") {
@@ -159,13 +164,9 @@ module.exports = function createPreviewHandlers(ctx) {
 			hintBtn.addEventListener("click", () => view._openHint(q.hint));
 		}
 
-		if (q._explainHtml) {
-			const explainEl = card.createDiv({ cls: "quiz-explain good" });
-			explainEl.innerHTML = q._explainHtml;
-		} else if (q.explain && q.explain.trim()) {
-			const explainEl = card.createDiv({ cls: "quiz-explain good" });
-			explainEl.innerHTML = _resolveImagesInHtml(md2html(q.explain));
-		}
+		// Pas d'explication dans l'aperçu : elle contient la réponse (le
+		// quiz réel ne la montre qu'après validation) — elle se relit dans
+		// le panneau Éditeur.
 
 		// LaTeX $...$ / $$...$$ : même rendu MathJax natif que le moteur —
 		// l'aperçu doit être fidèle au quiz final (titre, énoncé, options,
