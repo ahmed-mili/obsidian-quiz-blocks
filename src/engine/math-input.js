@@ -145,17 +145,21 @@ function makeKeyboardFloating(attempt = 0) {
 	handle.append(grip, close);
 	backdrop.prepend(handle);
 
-	// CAPTURE + stopPropagation : le « sink » de MathLive écoute les
-	// pointerdown du clavier et les avalerait ; et le clic sur la
-	// poignée blur le champ → un focusout part : __kbDragging le
-	// neutralise, et on refocus le champ au relâchement.
-	handle.addEventListener("pointerdown", (e) => {
-		if (e.target.closest(".qbd-kb-handle-close")) return;
+	// Drag depuis N'IMPORTE QUELLE zone non interactive du clavier
+	// (référence clavier visuel Windows — demande Ahmed) : le listener
+	// vit sur le BACKDROP en phase capture (le « sink » MathLive
+	// avalerait l'événement sinon). Touches/onglets/toolbar/variantes
+	// restent cliquables ; tout le reste (poignée, bordures, espaces
+	// entre touches) déplace. Le blur du champ pendant le drag est
+	// neutralisé par __kbDragging, focus rendu au relâchement.
+	const INTERACTIVE = ".MLK__keycap, .MLK__shift, [data-command], button, [role=button], .MLK__toolbar *, .MLK__variant-panel, .layer-switch, .qbd-kb-handle-close";
+	backdrop.addEventListener("pointerdown", (e) => {
+		if (e.target.closest(INTERACTIVE)) return;
 		e.preventDefault();
 		e.stopPropagation();
 		__kbDragging = true;
 		cancelKeyboardExit();
-		try { handle.setPointerCapture(e.pointerId); } catch (err) { /* best effort */ }
+		try { backdrop.setPointerCapture(e.pointerId); } catch (err) { /* best effort */ }
 		const r = backdrop.getBoundingClientRect();
 		const dx = e.clientX - r.left;
 		const dy = e.clientY - r.top;
@@ -166,10 +170,10 @@ function makeKeyboardFloating(attempt = 0) {
 			backdrop.style.top = pos.top + "px";
 		};
 		const onUp = (ev) => {
-			handle.removeEventListener("pointermove", onMove);
-			handle.removeEventListener("pointerup", onUp);
-			handle.removeEventListener("pointercancel", onUp);
-			try { handle.releasePointerCapture(ev.pointerId); } catch (err) { /* best effort */ }
+			backdrop.removeEventListener("pointermove", onMove);
+			backdrop.removeEventListener("pointerup", onUp);
+			backdrop.removeEventListener("pointercancel", onUp);
+			try { backdrop.releasePointerCapture(ev.pointerId); } catch (err) { /* best effort */ }
 			backdrop.classList.remove("is-dragging");
 			const rr = backdrop.getBoundingClientRect();
 			__kbPos = { left: Math.round(rr.left), top: Math.round(rr.top) };
@@ -177,9 +181,9 @@ function makeKeyboardFloating(attempt = 0) {
 			// Rendre le focus au champ : la saisie continue sans re-clic.
 			if (__lastMathfield && __lastMathfield.isConnected) __lastMathfield.focus();
 		};
-		handle.addEventListener("pointermove", onMove);
-		handle.addEventListener("pointerup", onUp);
-		handle.addEventListener("pointercancel", onUp);
+		backdrop.addEventListener("pointermove", onMove);
+		backdrop.addEventListener("pointerup", onUp);
+		backdrop.addEventListener("pointercancel", onUp);
 	}, { capture: true });
 }
 
