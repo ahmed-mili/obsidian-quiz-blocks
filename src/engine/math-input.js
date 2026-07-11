@@ -115,11 +115,16 @@ let __kbCursorEl = null; // réplique du curseur système pendant le drag
    compenser d'1px au positionnement. */
 function getDragCursor() {
 	if (__kbCursorEl) return __kbCursorEl;
+	// Couleurs du curseur natif de CHAQUE OS : macOS = flèche noire à
+	// liseré blanc ; Windows/Linux = blanche à contour noir. Même
+	// silhouette, le swap reste discret pour tout utilisateur.
+	const mac = require("obsidian").Platform.isMacOS;
 	const c = document.createElement("div");
 	c.className = "qbd-kb-cursor";
 	c.innerHTML = '<svg width="16" height="22" viewBox="0 0 16 22">'
 		+ '<path d="M1 1 L1 17.6 L5.1 13.8 L7.6 19.6 L10.4 18.4 L7.9 12.7 L13.3 12.7 Z"'
-		+ ' fill="#fff" stroke="#000" stroke-width="1.1" stroke-linejoin="round"/></svg>';
+		+ ' fill="' + (mac ? "#000" : "#fff") + '" stroke="' + (mac ? "#fff" : "#000")
+		+ '" stroke-width="1.1" stroke-linejoin="round"/></svg>';
 	__kbCursorEl = c;
 	return c;
 }
@@ -208,21 +213,30 @@ function makeKeyboardFloating(attempt = 0) {
 		// Réplique du curseur (voir getDragCursor) : posée à la position
 		// exacte du vrai curseur au moment du grab → le swap OS↔réplique
 		// est invisible. Souris uniquement (au tactile, pas de curseur).
+		// Le curseur OS ignore le zoom d'interface d'Obsidian : la
+		// réplique compense par scale(1/zoom), hotspot (1px) scalé aussi.
 		const ghost = e.pointerType === "mouse" ? getDragCursor() : null;
+		let ghostScale = "", hot = 1;
 		if (ghost) {
-			ghost.style.transform = "translate(" + (e.clientX - 1) + "px, " + (e.clientY - 1) + "px)";
+			let zf = 1;
+			try { zf = require("electron").webFrame.getZoomFactor() || 1; } catch (err) { /* desktop only */ }
+			if (zf !== 1) { ghostScale = " scale(" + (1 / zf) + ")"; hot = 1 / zf; }
+			ghost.style.transform = "translate(" + (e.clientX - hot) + "px, " + (e.clientY - hot) + "px)" + ghostScale;
 			document.body.appendChild(ghost);
 		}
 
-		// Déplacement par transform composité (pas de layout par frame) :
-		// clavier ET réplique du curseur mis à jour dans le même handler,
-		// composités dans la même frame — left/top consolidés au
-		// relâchement seulement.
+		// Déplacement par transform INLINE !important (seul à battre le
+		// verrou transform:none de la feuille) : translation pure d'une
+		// layer déjà rasterisée, pas de layout par frame — et pas de
+		// custom property, dont l'héritage invaliderait le style de tout
+		// le sous-arbre du clavier à chaque frame. Clavier ET réplique
+		// mis à jour dans le même handler → composités dans la même
+		// frame. left/top consolidés au relâchement seulement.
 		const onMove = (ev) => {
 			const pos = clampKbPos(ev.clientX - dx, ev.clientY - dy, r.width, r.height);
-			backdrop.style.setProperty("--qbd-kb-drag",
-				"translate(" + (pos.left - startLeft) + "px, " + (pos.top - startTop) + "px)");
-			if (ghost) ghost.style.transform = "translate(" + (ev.clientX - 1) + "px, " + (ev.clientY - 1) + "px)";
+			backdrop.style.setProperty("transform",
+				"translate(" + (pos.left - startLeft) + "px, " + (pos.top - startTop) + "px)", "important");
+			if (ghost) ghost.style.transform = "translate(" + (ev.clientX - hot) + "px, " + (ev.clientY - hot) + "px)" + ghostScale;
 		};
 		const onUp = () => {
 			document.removeEventListener("pointermove", onMove);
@@ -234,7 +248,7 @@ function makeKeyboardFloating(attempt = 0) {
 			const rr = backdrop.getBoundingClientRect();
 			backdrop.style.left = Math.round(rr.left) + "px";
 			backdrop.style.top = Math.round(rr.top) + "px";
-			backdrop.style.removeProperty("--qbd-kb-drag");
+			backdrop.style.removeProperty("transform");
 			backdrop.classList.remove("is-dragging");
 			__kbPos = {
 				left: Math.round(rr.left), top: Math.round(rr.top),

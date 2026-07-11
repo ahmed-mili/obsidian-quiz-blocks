@@ -105,19 +105,29 @@ body:has(.ML__keyboard) {
 	   résiduels (état « rangé » à -319px) → position visuelle décalée
 	   de left/top (clavier hors écran par le haut, saut au drag —
 	   2 captures Ahmed). En flottant : AUCUN transform, jamais ;
-	   ouverture/fermeture = fondu d'opacité uniquement. */
+	   ouverture/fermeture = fondu d'opacité uniquement. Pendant le
+	   drag, math-input.js pose un transform INLINE !important — seul
+	   moyen de battre ce verrou, retiré à la consolidation du drop. */
 	transform: none !important;
 	transition: opacity 0.22s ease !important;
+	/* Layer compositée PERMANENTE tant que le clavier flotte : le drag
+	   démarre sans re-raster (pas d'à-coup au grab) et le toggle du
+	   verre en .is-dragging ne détruit/recrée pas la layer. */
+	will-change: transform;
 }
 
-/* Pendant le déplacement : transform COMPOSITÉ (--qbd-kb-drag, posé
-   par math-input.js) — pas de layout par frame. La variable est le
-   SEUL transform autorisé (le verrou transform: none reste actif hors
-   drag contre les résidus MathLive). */
+/* Pendant le déplacement : le VERRE est GELÉ — un backdrop-filter
+   ré-échantillonne et re-floute le fond à CHAQUE frame de mouvement
+   (coût GPU majeur, chauffe) ; Windows désactive pareillement
+   l'Acrylic de ses fenêtres pendant leur drag. Fond quasi opaque en
+   compensation. Le clavier n'est plus alors qu'une texture déjà
+   rasterisée que le compositeur translate : le coût par frame d'un
+   déplacement de fenêtre native. */
 .MLK__backdrop.qbd-kb-floating.is-dragging {
 	transition: none !important;
-	transform: var(--qbd-kb-drag, none) !important;
-	will-change: transform;
+	backdrop-filter: none;
+	-webkit-backdrop-filter: none;
+	background: color-mix(in srgb, var(--background-secondary) 97%, transparent) !important;
 }
 
 /* Le curseur SYSTÈME est masqué pendant le drag : rendu hardware par
@@ -147,6 +157,9 @@ body:has(.MLK__backdrop.is-dragging) {
 	z-index: 99999;
 	pointer-events: none;
 	will-change: transform;
+	/* Origine à la pointe : la compensation de zoom (scale 1/zoom,
+	   posée par math-input.js) ne doit pas déplacer le hotspot. */
+	transform-origin: 0 0;
 	filter: drop-shadow(0 1px 1.5px rgba(0, 0, 0, 0.3));
 }
 
