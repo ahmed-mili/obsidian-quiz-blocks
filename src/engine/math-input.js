@@ -120,14 +120,20 @@ function makeKeyboardFloating(attempt = 0) {
 	if (backdrop.classList.contains("qbd-kb-floating")) return;
 	backdrop.classList.add("qbd-kb-floating");
 
-	// Position : mémorisée, sinon centré bas (marge 14px).
+	// Position : mémorisée (revient EXACTEMENT où l'utilisateur l'a
+	// laissée — clamp avec les dimensions MÉMORISÉES au drop, jamais
+	// celles du clavier en cours d'animation, faussées), sinon centré
+	// bas (marge 14px).
 	requestAnimationFrame(() => {
+		if (__kbPos) {
+			const pos = clampKbPos(__kbPos.left, __kbPos.top, __kbPos.w || 880, __kbPos.h || 330);
+			backdrop.style.left = pos.left + "px";
+			backdrop.style.top = pos.top + "px";
+			return;
+		}
 		const r = backdrop.getBoundingClientRect();
-		const pos = __kbPos
-			? clampKbPos(__kbPos.left, __kbPos.top, r.width, r.height)
-			: { left: Math.round((window.innerWidth - r.width) / 2), top: Math.round(window.innerHeight - r.height - 14) };
-		backdrop.style.left = pos.left + "px";
-		backdrop.style.top = pos.top + "px";
+		backdrop.style.left = Math.round((window.innerWidth - r.width) / 2) + "px";
+		backdrop.style.top = Math.round(window.innerHeight - r.height - 14) + "px";
 	});
 
 	// Poignée de drag + fermer.
@@ -176,7 +182,10 @@ function makeKeyboardFloating(attempt = 0) {
 			try { backdrop.releasePointerCapture(ev.pointerId); } catch (err) { /* best effort */ }
 			backdrop.classList.remove("is-dragging");
 			const rr = backdrop.getBoundingClientRect();
-			__kbPos = { left: Math.round(rr.left), top: Math.round(rr.top) };
+			__kbPos = {
+				left: Math.round(rr.left), top: Math.round(rr.top),
+				w: Math.round(rr.width), h: Math.round(rr.height),
+			};
 			__kbDragging = false;
 			// Rendre le focus au champ : la saisie continue sans re-clic.
 			if (__lastMathfield && __lastMathfield.isConnected) __lastMathfield.focus();

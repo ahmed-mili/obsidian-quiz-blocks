@@ -103,9 +103,20 @@ body:has(.ML__keyboard) {
 	box-shadow: 0 18px 44px -10px rgba(0, 0, 0, 0.55), 0 4px 12px -2px rgba(0, 0, 0, 0.3);
 }
 
+/* Pendant le déplacement : AUCUN changement de curseur (demande
+   Ahmed) — la flèche par défaut partout, y compris au passage sur
+   touches/champ/poignée. */
 .MLK__backdrop.qbd-kb-floating.is-dragging {
 	transition: none !important;
-	cursor: grabbing;
+}
+
+.MLK__backdrop.qbd-kb-floating.is-dragging,
+.MLK__backdrop.qbd-kb-floating.is-dragging * {
+	cursor: default !important;
+}
+
+body:has(.MLK__backdrop.is-dragging) {
+	cursor: default !important;
 }
 
 .qbd-kb-handle {
