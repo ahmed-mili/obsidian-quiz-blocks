@@ -325,8 +325,8 @@
 	height: 40px;
 }
 
-/* Slider : zone tactile verticale plus haute (track natif de 6px). */
-.is-mobile .qbd-ai-range {
+/* Slider : zone tactile verticale plus haute (track fin de 4px). */
+.is-mobile .qbd-opts-range {
 	height: 36px;
 }
 

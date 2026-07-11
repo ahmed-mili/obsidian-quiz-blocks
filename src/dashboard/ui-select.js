@@ -955,17 +955,49 @@ function openOptionsMenu(anchorEl, opts) {
 	const menuEl = document.body.createDiv({ cls: "qbd-select-menu qbd-options-pop" });
 	menuEl.setAttribute("role", "menu");
 
-	// ── Questions : slider + valeur ──
+	// ── Questions : slider custom (piste remplie) + champ ÉDITABLE ──
+	// Le champ accepte un nombre personnalisé au-delà des crans du
+	// slider (clamp 1-100) ; le slider se cale alors à sa borne.
+	menuEl.createDiv({ cls: "qbd-options-pop-title", text: "Questions" });
 	const countRow = menuEl.createDiv({ cls: "qbd-options-pop-row" });
-	countRow.createSpan({ cls: "qbd-options-pop-label", text: "Questions" });
-	const range = countRow.createEl("input", { type: "range", cls: "qbd-ai-range" });
+	const range = countRow.createEl("input", { type: "range", cls: "qbd-opts-range" });
 	range.min = String(opts.minCount);
 	range.max = String(opts.maxCount);
-	range.value = String(opts.count);
-	const val = countRow.createSpan({ cls: "qbd-options-pop-value", text: String(opts.count) });
-	range.addEventListener("input", () => {
-		val.setText(range.value);
-		if (opts.onCount) opts.onCount(parseInt(range.value, 10));
+	const field = countRow.createEl("input", {
+		type: "number", cls: "qbd-opts-count",
+		attr: { min: "1", max: "100", inputmode: "numeric" }
+	});
+
+	const syncRange = (v) => {
+		range.value = String(Math.min(opts.maxCount, Math.max(opts.minCount, v)));
+		const p = (Number(range.value) - opts.minCount) / (opts.maxCount - opts.minCount);
+		range.style.setProperty("--qbd-p", String(p));
+	};
+	const commitCount = (v) => {
+		const n = Math.min(100, Math.max(1, Math.round(Number(v) || opts.minCount)));
+		field.value = String(n);
+		syncRange(n);
+		if (opts.onCount) opts.onCount(n);
+	};
+	field.value = String(opts.count);
+	syncRange(opts.count);
+
+	range.addEventListener("input", () => commitCount(range.value));
+	// Champ : commit à la validation (Enter/blur), sélection au clic —
+	// « cliquer pour choisir un nombre personnalisé ».
+	field.addEventListener("focus", () => field.select());
+	field.addEventListener("change", () => commitCount(field.value));
+	field.addEventListener("keydown", (e) => {
+		if (e.key === "Enter") {
+			e.preventDefault();
+			commitCount(field.value);
+			field.blur();
+		} else if (e.key === "Escape") {
+			// 1er Échap : sortir du champ (le 2e ferme le popover).
+			e.stopPropagation();
+			field.value = String(range.value);
+			field.blur();
+		}
 	});
 
 	// ── Type : items à coche (même anatomie que les options de select) ──
