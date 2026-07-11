@@ -75,7 +75,7 @@ function attach(ctx, textarea) {
 		pill = document.body.createDiv({ cls: "qbd-voice-pill" + (busy ? " is-busy" : "") });
 		pill.createDiv({ cls: "qbd-voice-pill-dot" });
 		const label = pill.createSpan({
-			text: busy ? "Transcription…" : "0:00 — relâche Espace pour transcrire",
+			text: busy ? "Transcription…" : "0:00 · relâche Espace pour transcrire",
 		});
 		const r = textarea.getBoundingClientRect();
 		pill.style.visibility = "hidden";
@@ -88,7 +88,7 @@ function attach(ctx, textarea) {
 				if (!textarea.isConnected) { cancelRecording(); return; }
 				const s = Math.floor((Date.now() - startTs) / 1000);
 				label.setText(Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0") +
-					" — relâche Espace pour transcrire");
+					" · relâche Espace pour transcrire");
 			}, 500);
 		}
 	}
@@ -167,7 +167,7 @@ function attach(ctx, textarea) {
 			// (modèle supprimé…) : prévenir plutôt qu'avaler la dictée.
 			hidePillOnly();
 			state = "idle";
-			new obsidian.Notice("Dictée : binaire ou modèle manquant — réglages de Quiz Blocks.");
+			new obsidian.Notice("Dictée : binaire ou modèle manquant, voir les réglages de Quiz Blocks.");
 			return;
 		}
 		state = "transcribing";
@@ -226,7 +226,7 @@ function attach(ctx, textarea) {
 		if (!st.supported) { state = "idle"; return; }
 		if (!st.ready) {
 			state = "idle";
-			new obsidian.Notice("Dictée : binaire ou modèle manquant — réglages de Quiz Blocks.");
+			new obsidian.Notice("Dictée : binaire ou modèle manquant, voir les réglages de Quiz Blocks.");
 			return;
 		}
 		// Retire l'espace inséré à l'armement : le hold n'est pas une frappe.
