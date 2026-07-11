@@ -168,35 +168,17 @@ function makeKeyboardFloating(attempt = 0) {
 		try { backdrop.setPointerCapture(e.pointerId); } catch (err) { /* best effort */ }
 		const r = backdrop.getBoundingClientRect();
 		backdrop.classList.add("is-dragging");
-		// CURSEUR FIGÉ pendant tout le drag (demande Ahmed : « il reste
-		// collé à l'endroit où j'avais cliqué ») : Pointer Lock — le
-		// curseur système ne bouge plus, le clavier se déplace via les
-		// mouvements RELATIFS (movementX/Y). À la sortie du lock, le
-		// curseur réapparaît exactement au point du clic. Clamp CONTINU
-		// aux bords (comportement validé), positions cumulées clampées
-		// pour un retour de bord immédiat (pas d'effet élastique).
-		let curLeft = r.left;
-		let curTop = r.top;
+		// Drag classique par décalage : le CURSEUR (visible) reste sur
+		// le point du clavier saisi pendant tout le déplacement — formule
+		// absolue clientX - dx, aucune dérive possible. Clamp CONTINU aux
+		// bords (comportement validé par Ahmed). Le « saut au-dessus du
+		// curseur » historique venait du transform résiduel MathLive,
+		// corrigé par transform: none — pas de ce calcul.
 		const dx = e.clientX - r.left;
 		const dy = e.clientY - r.top;
-		let locked = false;
-		try {
-			backdrop.requestPointerLock();
-			locked = true;
-		} catch (err) { /* fallback : drag classique par offset */ }
 
 		const onMove = (ev) => {
-			if (document.pointerLockElement === backdrop) {
-				curLeft += ev.movementX;
-				curTop += ev.movementY;
-			} else {
-				// Lock refusé/perdu : suivi classique par position absolue.
-				curLeft = ev.clientX - dx;
-				curTop = ev.clientY - dy;
-			}
-			const pos = clampKbPos(curLeft, curTop, r.width, r.height);
-			curLeft = pos.left;
-			curTop = pos.top;
+			const pos = clampKbPos(ev.clientX - dx, ev.clientY - dy, r.width, r.height);
 			backdrop.style.left = pos.left + "px";
 			backdrop.style.top = pos.top + "px";
 		};
@@ -204,9 +186,6 @@ function makeKeyboardFloating(attempt = 0) {
 			document.removeEventListener("pointermove", onMove);
 			document.removeEventListener("pointerup", onUp);
 			document.removeEventListener("pointercancel", onUp);
-			if (locked && document.pointerLockElement === backdrop) {
-				try { document.exitPointerLock(); } catch (err) { /* best effort */ }
-			}
 			backdrop.classList.remove("is-dragging");
 			const rr = backdrop.getBoundingClientRect();
 			__kbPos = {
