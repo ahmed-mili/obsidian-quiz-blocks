@@ -26,9 +26,20 @@ module.exports = function createSidebarHandlers(ctx) {
 			// Nettoyer le markdown pour l'aperçu
 			previewText = previewText.replace(/[#*_`\[\]!]/g, '').replace(/\n/g, ' ').trim();
 			if (previewText) {
-				if (previewText.length > 60) previewText = previewText.substring(0, 60) + "...";
+				if (previewText.length > 60) {
+					previewText = previewText.substring(0, 60);
+					// Ne pas couper au milieu d'un segment $...$ : un segment
+					// incomplet resterait en dollars bruts après mathify.
+					if (((previewText.match(/\$/g) || []).length) % 2 === 1) {
+						previewText = previewText.slice(0, previewText.lastIndexOf("$"));
+					}
+					previewText += "...";
+				}
 				text.createDiv({ cls: "qb-q-preview", text: previewText });
 			}
+			// LaTeX $...$ du titre et de l'aperçu : rendu MathJax (les
+			// items affichaient les dollars bruts — demande 2026-07-11).
+			require("../engine/mathjax").mathifyElement(text);
 
 			const acts = item.createDiv({ cls: "qb-q-actions" });
 			const up = acts.createEl("button", { cls: "qb-btn-icon qb-btn-sm" }); _setIcon(up, "chevron-up");

@@ -17,8 +17,11 @@ const { hasMath } = require("./mathjax");
    son énoncé / une réponse acceptée contient un segment $...$. */
 function isMathQuestion(q) {
 	if (!q || (q.type !== "text" && q._type !== "text")) return false;
-	if (q.mathInput === true) return true;
-	if (q.mathInput === false) return false;
+	// Le flag vit à la racine (moteur, JSON5 brut) ou dans _extraFields
+	// (objet normalisé de l'éditeur — clé inconnue préservée).
+	const flag = q.mathInput ?? (q._extraFields && q._extraFields.mathInput);
+	if (flag === true) return true;
+	if (flag === false) return false;
 	if (hasMath(q.prompt || "") || hasMath(q.promptHtml || q._promptHtml || "")) return true;
 	const answers = [...(q.acceptedAnswers || []), ...(q.acceptableAnswers || [])];
 	if (typeof q.answer === "string") answers.push(q.answer);

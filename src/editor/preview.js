@@ -100,12 +100,23 @@ module.exports = function createPreviewHandlers(ctx) {
 			// placeholder — pré-remplir avec acceptedAnswers[0] SPOILAIT la
 			// réponse dès l'arrivée sur l'aperçu (demande 2026-07-11),
 			// en LaTeX brut de surcroît.
-			const wrap = card.createDiv({ cls: "qcm-options quiz-text-wrap" });
-			const ta = wrap.createEl("textarea", {
-				cls: "quiz-textarea",
-				attr: { readonly: true, "aria-readonly": "true", placeholder: q.placeholder || "Votre réponse..." },
-			});
-			ta.value = "";
+			const mathInput = require("../engine/math-input");
+			if (mathInput.isMathQuestion(q)) {
+				// Question math : le même éditeur d'équations que le quiz,
+				// en lecture seule, gabarit affiché s'il existe.
+				const wrap = card.createDiv({ cls: "qcm-options quiz-text-wrap quiz-math-wrap" });
+				mathInput.createMathField(wrap, {
+					readOnly: true,
+					template: (q._extraFields && q._extraFields.answerTemplate) || q.answerTemplate || "",
+				});
+			} else {
+				const wrap = card.createDiv({ cls: "qcm-options quiz-text-wrap" });
+				const ta = wrap.createEl("textarea", {
+					cls: "quiz-textarea",
+					attr: { readonly: true, "aria-readonly": "true", placeholder: q.placeholder || "Votre réponse..." },
+				});
+				ta.value = "";
+			}
 		}
 
 		if (t === "cmd") {
