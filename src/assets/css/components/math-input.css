@@ -58,6 +58,28 @@ math-field.quiz-mathfield:focus-within {
    conteneur .ML__keyboard est portalé au body → les variables natives
    d'Obsidian (body.theme-dark/light) résolvent, le clavier suit
    automatiquement les DEUX thèmes. ── */
+/* Apparition/disparition PROPRES (demande 2026-07-11) : le panneau
+   (.MLK__backdrop) devient verre flou — plus de plaque grise opaque
+   visible pendant le slide — et ses transform/opacity transitionnent
+   (MathLive pose le translateY en style inline → nos transitions CSS
+   s'y appliquent, à l'ouverture comme à la fermeture). */
+.ML__keyboard .MLK__backdrop {
+	background: color-mix(in srgb, var(--background-secondary) 86%, transparent) !important;
+	backdrop-filter: blur(16px);
+	-webkit-backdrop-filter: blur(16px);
+	border-top: 1px solid var(--background-modifier-border);
+	transition: transform 0.26s cubic-bezier(0.32, 0.72, 0.22, 1), opacity 0.2s ease !important;
+	opacity: 0;
+}
+
+.ML__keyboard.is-visible .MLK__backdrop {
+	opacity: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.ML__keyboard .MLK__backdrop { transition: none !important; }
+}
+
 body > .ML__keyboard,
 .ML__keyboard {
 	--keyboard-background: var(--background-secondary);

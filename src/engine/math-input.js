@@ -64,6 +64,38 @@ function matchesMathAnswer(studentLatex, q) {
 	return accepted.some(a => normalizeMathAnswer(a, opts) === student);
 }
 
+/* Fermeture DOUCE du clavier virtuel : hide() de MathLive détruit le
+   DOM immédiatement (vérifié : backdrop absent 30 ms après l'appel) →
+   aucune transition possible. On anime NOUS-MÊMES la sortie (les
+   transitions CSS de math-input.css s'appliquent aux styles inline)
+   puis on hide réellement. Un re-focus pendant la sortie l'annule. */
+let __kbExitTimer = 0;
+
+function cancelKeyboardExit() {
+	if (!__kbExitTimer) return;
+	clearTimeout(__kbExitTimer);
+	__kbExitTimer = 0;
+	const b = document.querySelector(".ML__keyboard .MLK__backdrop");
+	if (b) { b.style.opacity = ""; b.style.transform = ""; }
+}
+
+function hideKeyboardSoftly() {
+	const b = document.querySelector(".ML__keyboard.is-visible .MLK__backdrop");
+	if (!b) {
+		try { window.mathVirtualKeyboard?.hide({ animate: false }); } catch (e) { /* déjà fermé */ }
+		return;
+	}
+	b.style.opacity = "0";
+	b.style.transform = "translateY(105%)";
+	if (__kbExitTimer) clearTimeout(__kbExitTimer);
+	__kbExitTimer = window.setTimeout(() => {
+		__kbExitTimer = 0;
+		b.style.opacity = "";
+		b.style.transform = "";
+		try { window.mathVirtualKeyboard?.hide({ animate: false }); } catch (e) { /* transitoire */ }
+	}, 260);
+}
+
 let __mathliveConfigured = false;
 
 function configureMathlive() {
@@ -137,10 +169,11 @@ function createMathField(host, opts = {}) {
 	// transitoires (reload plugin, champ détaché) — dégradation douce.
 	if (!opts.readOnly) {
 		mf.addEventListener("focusin", () => {
+			cancelKeyboardExit();
 			try { window.mathVirtualKeyboard?.show({ animate: true }); } catch (e) { /* transitoire */ }
 		});
 		mf.addEventListener("focusout", () => {
-			try { window.mathVirtualKeyboard?.hide({ animate: true }); } catch (e) { /* transitoire */ }
+			hideKeyboardSoftly();
 		});
 	}
 
