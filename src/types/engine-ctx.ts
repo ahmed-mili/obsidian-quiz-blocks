@@ -27,17 +27,12 @@
  *   Les getters/setters d'examen (closure, :108-115) sont vus comme de simples
  *   propriétés par les consommateurs — leur nature accessor est transparente.
  *
- * SOUS-MODULES : les 17 slots (sanitize, cards, track, viewport, state…) ont des
- * handler-types réels qui seront définis SEULEMENT en Task 10 (les modules
- * engine/*.js sont encore .js). On NE PEUT PAS les importer (casserait
- * `npm run check`) : chaque slot pointe donc vers un PLACEHOLDER `unknown`-based
- * (interface `XxxHandlers` avec index signature), à REMPLACER par le vrai type
- * lors de la conversion de son module en Task 10. Les méthodes aplaties issues
- * d'un sous-module sont typées par indexed-access sur son placeholder
- * (ex. `escapeHtmlText: SanitizerHandlers["escapeHtmlText"]` → `unknown`
- * aujourd'hui, résolu automatiquement quand le placeholder deviendra le vrai
- * type). Les méthodes locales du moteur (render, destroyQuiz…) sont typées
- * fidèlement dès maintenant depuis engine.js.
+ * SOUS-MODULES : les 17 slots (sanitize, cards, track, viewport, state…) pointent
+ * chacun vers le VRAI handler-type de leur module, importé depuis engine/*.ts
+ * (conversion terminée). Les méthodes aplaties issues d'un sous-module sont
+ * typées par indexed-access sur ce type réel
+ * (ex. `escapeHtmlText: SanitizerHandlers["escapeHtmlText"]`). Les méthodes
+ * locales du moteur (render, destroyQuiz…) sont typées fidèlement depuis engine.ts.
  */
 
 import type { App, Plugin } from "obsidian";
@@ -168,8 +163,8 @@ export interface EngineCtx {
 	invalidateSavedResults(): void;
 
 	/* ════════════════════════════════════════════════
-	   Sous-modules (1er Object.assign, engine.js:149-168)
-	   Slots vers les PLACEHOLDERS — à remplacer par les vrais types en Task 10.
+	   Sous-modules (1er Object.assign, engine.ts:149-168)
+	   Slots vers les vrais handler-types importés depuis engine/*.ts.
 	   ════════════════════════════════════════════════ */
 	sanitize: SanitizerHandlers;
 	resources: ResourceHandlers;
@@ -191,10 +186,9 @@ export interface EngineCtx {
 
 	/* ════════════════════════════════════════════════
 	   Méthodes APLATIES issues des sous-modules (1er Object.assign, :156-219).
-	   Typées par indexed-access sur le placeholder d'origine : `unknown`
-	   aujourd'hui, résolu à la vraie signature quand le placeholder deviendra
-	   le vrai handler-type (Task 10). Aucune n'est typée en dur ici : leur
-	   signature vit dans leur module source, pas dans engine.js.
+	   Typées par indexed-access sur le vrai handler-type de leur module.
+	   Aucune n'est typée en dur ici : leur signature vit dans leur module
+	   source (engine/*.ts), pas dans engine.ts.
 	   ════════════════════════════════════════════════ */
 
 	// depuis state (engine.js:156, 200-219) — StateHandlers réel (Task 10c) :
