@@ -67,6 +67,24 @@ export interface AiSettings extends VoiceSettings {
 	hotkeyAddNotes?: Hotkey | null;
 }
 
+/**
+ * Le plugin hôte tel que la VUE dashboard le consomme (QuizDashboardView,
+ * src/dashboard.ts) : `Plugin` d'Obsidian + les expandos réels posés par
+ * plugin.js —
+ *  - `_scanner` / `_statsStore` (plugin.js onload), lus par les getters
+ *    `scanner` / `statsStore` de la vue (dashboard.ts, `this.plugin._scanner`) ;
+ *  - `settings` (AiSettings) + `saveSettings()`, comme pour le ctx.
+ * La forme COMPLÈTE des settings (quizStats, enableCodeHighlighting…) sera
+ * étoffée par la conversion de `plugin.js` lui-même (encore `.js`) ; les
+ * champs non listés existent au runtime, simplement pas encore déclarés.
+ */
+export interface DashboardPlugin extends Plugin {
+	settings: AiSettings;
+	saveSettings(): Promise<void>;
+	_scanner: Scanner;
+	_statsStore: StatsStore;
+}
+
 /* ════════════════════════════════════════════════════════
    DashboardView — l'hôte `this` (QuizDashboardView), qui
    porte les 5 sous-modules + l'état propre à la vue
@@ -79,7 +97,7 @@ export interface AiSettings extends VoiceSettings {
  * interface, pas DashboardCtx, qui porte nav/home/quizzes/detail/ai.
  */
 export interface DashboardView extends ItemView {
-	plugin: Plugin;
+	plugin: DashboardPlugin;
 	/** dashboard.js:23, valeurs réellement utilisées (switch dashboard.js:149-169). */
 	currentView: DashboardViewName;
 	/** Quiz sélectionné pour la vue détail (dashboard.js:24). */
