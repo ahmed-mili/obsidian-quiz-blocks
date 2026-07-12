@@ -1,15 +1,42 @@
-'use strict';
+import type { EngineCtx } from "../types/engine-ctx";
+import type {
+	QuizQuestion,
+	QcmQuestion,
+	MultiSelectQuestion,
+	OrderingQuestion,
+	MatchingQuestion,
+	TextQuestion,
+} from "../types/quiz";
+import { mathifyElement } from "./mathjax";
 
-const { mathifyElement } = require("./mathjax");
+export interface CardHandlers {
+	tabClass(i: number): string;
+	navHtml(): string;
+	modeToggleHtml(): string;
+	startModeSelectorHtml(): string;
+	optionClass(qi: number, oi: number): string;
+	optionContentHtml(q: QcmQuestion | MultiSelectQuestion, oi: number): string;
+	explanationHtml(qi: number): string;
+	renderQuizPromptHtml(q: QuizQuestion): string;
+	orderingCardHtml(q: OrderingQuestion, qi: number): string;
+	matchingCardHtml(q: MatchingQuestion, qi: number): string;
+	submitSlideHtml(): string;
+	resultsSlideHtml(): string;
+	refreshMetaSlides(opts?: { force?: boolean }): void;
+	questionCardHtml(qi: number): string;
+}
 
-module.exports = function createCardRenderers(ctx) {
+export function createCardRenderers(ctx: EngineCtx): CardHandlers {
 	// Variables locales
 	let __quizSubmitSlideSignature = "";
 	let __quizResultsSlideSignature = "";
 
-	function tabClass(i) {
+	function tabClass(i: number): string {
 		const cur = ctx.quizState.current;
-		const isActive = ctx.isQuestionSlideIndex(cur) && ctx.slideMap[cur]?.questionIndex === i;
+		// slideMap[cur].questionIndex n'existe que sur la variante « question » —
+		// cast pour lire l'optionnel `?.questionIndex` sans changer le runtime.
+		const entry = ctx.slideMap[cur] as { questionIndex?: number } | undefined;
+		const isActive = ctx.isQuestionSlideIndex(cur) && entry?.questionIndex === i;
 		const active = isActive ? "active" : "";
 		if (ctx.textOnly?.isTextOnlyMode?.()) {
 			const rating = ctx.textOnly.getRatingMeta(ctx.quizState.textOnlyRatings?.[i]);
@@ -23,12 +50,12 @@ module.exports = function createCardRenderers(ctx) {
 		return `${active} ${ctx.isCorrect(i) ? "correct" : "wrong"}`.trim();
 	}
 
-	function navHtml() {
+	function navHtml(): string {
 		const resultsActive = (ctx.isSubmitSlideIndex(ctx.quizState.current) || ctx.isResultsSlideIndex(ctx.quizState.current)) ? "active" : "";
 		return `<div class="quiz-nav">${ctx.quiz.map((_, i) => `<a class="quiz-tab ${tabClass(i)}" href="#" data-nav="${i}">Q${i + 1}</a>`).join("")}<a class="quiz-tab is-result ${resultsActive}" href="#" data-nav-results="1">Résultats</a></div>`;
 	}
 
-	function modeToggleHtml() {
+	function modeToggleHtml(): string {
 		const mode = ctx.quizState.practiceMode === "text" ? "text" : "qcm";
 		const isTextOnly = mode === "text";
 		const nextMode = isTextOnly ? "qcm" : "text";
@@ -40,7 +67,7 @@ module.exports = function createCardRenderers(ctx) {
 		</div>`;
 	}
 
-	function startModeSelectorHtml() {
+	function startModeSelectorHtml(): string {
 		const isTraining = ctx.quizState.practiceMode === "text";
 		return `<div class="quiz-start-mode-selector" role="group" aria-label="Choisir le mode du quiz">
 			<button class="quiz-start-mode-option${!isTraining ? " is-active" : ""}" type="button" data-quiz-start-mode="exam" aria-pressed="${!isTraining ? "true" : "false"}">
@@ -54,8 +81,11 @@ module.exports = function createCardRenderers(ctx) {
 		</div>`;
 	}
 
-	function optionClass(qi, oi) {
-		const q = ctx.quiz[qi];
+	function optionClass(qi: number, oi: number): string {
+		// optionClass n'est appelée que pour des questions QCM/choix multiple
+		// (branche else de questionCardHtml) : cast honnête vers l'invariant réel,
+		// puis TS narrow QcmQuestion/MultiSelectQuestion via `q.multiSelect`.
+		const q = ctx.quiz[qi] as QcmQuestion | MultiSelectQuestion;
 		const sel = ctx.quizState.selections[qi];
 		if (q.multiSelect) {
 			const selected = sel instanceof Set && sel.has(oi);
@@ -75,7 +105,7 @@ module.exports = function createCardRenderers(ctx) {
 		return "";
 	}
 
-	function explanationHtml(qi) {
+	function explanationHtml(qi: number): string {
 		const q = ctx.quiz[qi];
 		if (!q) return "";
 		const explainHtml = q.explainHtml || q._explainHtml;
@@ -88,7 +118,7 @@ module.exports = function createCardRenderers(ctx) {
 		return "";
 	}
 
-	function renderQuizPromptHtml(q) {
+	function renderQuizPromptHtml(q: QuizQuestion): string {
 		const promptHtml = q.promptHtml || q._promptHtml;
 		if (promptHtml) {
 			return ctx.sanitize.replaceObsidianEmbedsInHtml(promptHtml);
@@ -99,12 +129,12 @@ module.exports = function createCardRenderers(ctx) {
 		return "";
 	}
 
-	function optionContentHtml(q, oi) {
+	function optionContentHtml(q: QcmQuestion | MultiSelectQuestion, oi: number): string {
 		let optionContentHtml = "";
 		if (q.optionHtml?.[oi]) {
 			optionContentHtml = q.optionHtml[oi];
 			if (typeof ctx.app?.vault?.adapter?.getResourcePath === "function") {
-				optionContentHtml = optionContentHtml.replace(/src="([^"]+)"/g, (match, src) => {
+				optionContentHtml = optionContentHtml.replace(/src="([^"]+)"/g, (match: string, src: string) => {
 					if (src.startsWith("http") || src.startsWith("data:") || src.startsWith("app://")) {
 						return match;
 					}
@@ -122,12 +152,13 @@ module.exports = function createCardRenderers(ctx) {
 		return optionContentHtml;
 	}
 
-	function orderingCardHtml(q, qi) {
+	function orderingCardHtml(q: OrderingQuestion, qi: number): string {
 		const items = ctx.getOrderingItems(q);
 		const sel = ctx.quizState.selections[qi];
 		const slotLabels = ctx.getOrderingSlotLabels(q);
 		const correctOrder = ctx.getOrderingCorrectOrder(q);
-		const shuffled = ctx.quizState.shuffleMap[qi] || [];
+		// QCM/ordering → number[] (buildShuffleMap) ; cast erasé, runtime `|| []` intact.
+		const shuffled = (ctx.quizState.shuffleMap[qi] as number[]) || [];
 		const pick = ctx.quizState.orderingPick[qi];
 
 		const slots = items.map((_, si) => {
@@ -164,12 +195,13 @@ module.exports = function createCardRenderers(ctx) {
 		</div>`;
 	}
 
-	function matchingCardHtml(q, qi) {
+	function matchingCardHtml(q: MatchingQuestion, qi: number): string {
 		const rows = ctx.getMatchRows(q);
 		const choices = ctx.getMatchChoices(q);
 		const correctMap = ctx.getMatchCorrectMap(q);
 		const sel = ctx.quizState.selections[qi];
-		const shuffleData = ctx.quizState.shuffleMap[qi] || {};
+		// Matching → { rows, choices } (buildShuffleMap) ; cast erasé, runtime `|| {}` intact.
+		const shuffleData = (ctx.quizState.shuffleMap[qi] || {}) as { rows?: number[]; choices?: number[] };
 		const shuffledRows = Array.isArray(shuffleData.rows) ? shuffleData.rows : [...Array(rows.length).keys()];
 		const shuffledChoices = Array.isArray(shuffleData.choices) ? shuffleData.choices : [...Array(choices.length).keys()];
 		const pick = ctx.quizState.matchPick[qi];
@@ -208,7 +240,7 @@ module.exports = function createCardRenderers(ctx) {
 		</div>`;
 	}
 
-	function submitSlideHtml() {
+	function submitSlideHtml(): string {
 		const missing = ctx.getMissingIndices();
 		const mc = missing.length;
 		if (ctx.textOnly?.isTextOnlyMode?.()) {
@@ -231,14 +263,14 @@ module.exports = function createCardRenderers(ctx) {
 		return `<div class="quiz-track-item" data-slide-kind="submit"><div class="quiz-submit-wrap"><div class="quiz-submit-card">${mc > 0 ? `<div class="quiz-warn">Il manque ${mc} réponse${mc > 1 ? "s" : ""}.</div><div class="quiz-submit-sub">Questions sans réponse :</div>` : `<div class="quiz-submit-sub">Revenir sur une question :</div>`}<div class="quiz-chip-row">${(mc > 0 ? missing : ctx.quiz.map((_, i) => i)).map(i => `<button class="quiz-chip ${mc > 0 ? "missing" : ""}" type="button" data-jump="${i}">Q${i + 1}</button>`).join("")}</div><div class="quiz-actions"><button class="quiz-action-btn quiz-back-btn" type="button">Retour</button><button class="quiz-action-btn success quiz-show-score-btn" type="button">Voir le score</button></div></div></div></div>`;
 	}
 
-	function saveResultsButtonHtml() {
+	function saveResultsButtonHtml(): string {
 		const savedPath = ctx.quizState.savedResultsPath;
 		const saved = !!savedPath;
 		const titleAttr = saved ? ` title="Sauvegardé dans ${ctx.escapeHtmlAttr(savedPath)}"` : "";
 		return `<button class="quiz-action-btn quiz-save-results-btn${saved ? " is-saved" : ""}" type="button" data-save-results="1"${saved ? " disabled" : ""}${titleAttr}>${saved ? "Résultats sauvegardés" : "Sauvegarder mes résultats"}</button>`;
 	}
 
-	function resultsSlideHtml() {
+	function resultsSlideHtml(): string {
 		if (ctx.textOnly?.isTextOnlyMode?.()) {
 			const results = ctx.textOnly.computeResults();
 			const isExamCorrection = ctx.isExamMode && ctx.examEnded;
@@ -264,21 +296,22 @@ module.exports = function createCardRenderers(ctx) {
 	}
 
 
-	function refreshMetaSlides({ force = false } = {}) {
+	function refreshMetaSlides({ force = false }: { force?: boolean } = {}): void {
 		const nextSubmitSignature = ctx.getSubmitSlideSignature();
 		const nextResultsSignature = ctx.getResultsSlideSignature();
 		const shouldRefreshSubmit = force || nextSubmitSignature !== __quizSubmitSlideSignature;
 		const shouldRefreshResults = force || nextResultsSignature !== __quizResultsSlideSignature;
 		if (!shouldRefreshSubmit && !shouldRefreshResults) return;
 
-		const refreshMetaSlide = ({ selector, index, html, binder }) => {
+		const refreshMetaSlide = ({ selector, index, html, binder }: { selector: string; index: number; html: () => string; binder: (node: Element) => void }) => {
 			const oldNode = ctx.container.querySelector(selector);
 			if (!oldNode) return;
 			ctx.viewport.unobserveTrackItemInAllSlidesResizeObserver(oldNode);
 			ctx.bumpSlideGeneration(index);
 			const tmp = document.createElement("div");
 			tmp.innerHTML = html().trim();
-			const newNode = tmp.firstElementChild;
+			// La slide meta est toujours un div racine (HTMLElement) : cast pour mathifyElement.
+			const newNode = tmp.firstElementChild as HTMLElement | null;
 			if (!newNode) return;
 			oldNode.replaceWith(newNode);
 			// LaTeX des slides submit/results (récap des réponses).
@@ -317,34 +350,39 @@ module.exports = function createCardRenderers(ctx) {
 		}
 	}
 
-	function questionCardHtml(qi) {
+	function questionCardHtml(qi: number): string {
 		const q = ctx.quiz[qi];
 		const isTextOnly = ctx.textOnly?.isTextOnlyMode?.();
 		const isTxt = ctx.isTextQuestion(q);
 		const isOrd = ctx.isOrderingQuestion(q);
 		const isMatch = ctx.isMatchingQuestion(q);
-		const isMulti = !!q.multiSelect;
+		// q.multiSelect n'existe que sur QCM/choix multiple : lecture uniforme via
+		// cast (undefined→false pour les autres variantes, jamais lu hors branche QCM).
+		const isMulti = !!(q as { multiSelect?: boolean }).multiSelect;
 
 		let body = "";
 
 		if (isTextOnly) {
 			body = ctx.textOnly.questionCardBodyHtml(q, qi);
 		}
+		// Casts guidés par les prédicats isTxt/isOrd/isMatch (évalués en amont,
+		// iso-fonctionnels) : la branche garantit la variante, le cast la nomme.
 		else if (isTxt) {
-			body = ctx.terminal.textQuestionCardHtml(q, qi);
+			body = ctx.terminal.textQuestionCardHtml(q as TextQuestion, qi);
 		}
 		else if (isOrd) {
-			body = orderingCardHtml(q, qi);
+			body = orderingCardHtml(q as OrderingQuestion, qi);
 		}
 		else if (isMatch) {
-			body = matchingCardHtml(q, qi);
+			body = matchingCardHtml(q as MatchingQuestion, qi);
 		}
 		else {
-			const smap = ctx.quizState.shuffleMap[qi] || [];
+			const qcm = q as QcmQuestion | MultiSelectQuestion;
+			const smap = (ctx.quizState.shuffleMap[qi] as number[]) || [];
 			const mi = isMulti ? `<div class="quiz-multi-indicator">Sélectionnez une ou plusieurs réponses</div>` : "";
 			const sel = ctx.quizState.selections[qi];
 			const optionsHtml = smap.map((oi) => {
-				const contentHtml = optionContentHtml(q, oi);
+				const contentHtml = optionContentHtml(qcm, oi);
 				// aria-pressed reflète l'état sélectionné pour les lecteurs d'écran (recalculé
 				// à chaque refreshQuestionSlide). role=button + aria-pressed plutôt que radio/
 				// checkbox pour ne pas capturer les flèches (réservées à la navigation).
@@ -400,4 +438,4 @@ module.exports = function createCardRenderers(ctx) {
 		refreshMetaSlides,
 		questionCardHtml
 	};
-};
+}

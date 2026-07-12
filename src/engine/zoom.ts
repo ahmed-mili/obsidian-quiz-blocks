@@ -1,22 +1,77 @@
-'use strict';
+import type { EngineCtx } from "../types/engine-ctx";
 
-module.exports = function createZoomHandlers(ctx) {
+/**
+ * Entrée brute passée à waitForManagedTransitions : soit un Element, soit un
+ * couple {target, properties}. Identique au type d'engine/focus.ts — zoom.ts
+ * possède sa PROPRE copie locale de waitForManagedTransitions (doublon
+ * pré-existant, implémentation par listeners `transitionend` plutôt que polling
+ * `getAnimations`) : converti tel quel, NON fusionné (iso-fonctionnalité).
+ */
+type ManagedTransitionInput = Element | { target?: Element | null; properties?: string[] } | null | undefined;
+
+interface NormalizedTransition {
+	target: Element;
+	properties: Set<string> | null;
+}
+
+interface TrackedTransition {
+	target: Element;
+	properties: Set<string> | null;
+	seen: Set<string>;
+	listener: ((e: Event) => void) | null;
+	done: boolean;
+}
+
+function isManagedTransitionElement(value: ManagedTransitionInput): value is Element {
+	return typeof Element !== "undefined" && value instanceof Element;
+}
+
+interface OutFocusOptions {
+	duration?: number;
+	easing?: string;
+	scale?: number;
+	blur?: number;
+	onComplete?: (() => void) | null;
+}
+
+interface InFocusOptions {
+	duration?: number;
+	easing?: string;
+	scaleStart?: number;
+	scaleEnd?: number;
+	blurStart?: number;
+	blurEnd?: number;
+	opacityStart?: number;
+	opacityEnd?: number;
+	onComplete?: (() => void) | null;
+}
+
+export interface ZoomHandlers {
+	waitForManagedTransitions(entries: ManagedTransitionInput[] | null | undefined, fallbackMs: number, epoch?: number): Promise<boolean>;
+	restartQuizWithZoomBlurTransition(): Promise<void>;
+	applyOutFocusTransition(element: HTMLElement | null, options?: OutFocusOptions): Promise<void>;
+	applyInFocusTransition(element: HTMLElement | null, options?: InFocusOptions): Promise<void>;
+}
+
+export function createZoomHandlers(ctx: EngineCtx): ZoomHandlers {
 	// Variables locales
 	let __quizZoomTransitionRaf = 0;
 
-	function waitForManagedTransitions(entries, fallbackMs, epoch = ctx.currentAsyncEpoch()) {
-		const normalized = (entries || []).map(entry => {
-			if (!entry) return null;
-			if (typeof Element !== "undefined" && entry instanceof Element) return { target: entry, properties: null };
-			const target = entry.target || null;
-			const properties = Array.isArray(entry.properties) && entry.properties.length > 0 ? new Set(entry.properties) : null;
-			return target ? { target, properties } : null;
-		}).filter(Boolean);
+	function waitForManagedTransitions(entries: ManagedTransitionInput[] | null | undefined, fallbackMs: number, epoch: number = ctx.currentAsyncEpoch()): Promise<boolean> {
+		const normalized = (entries || [])
+			.map((entry): NormalizedTransition | null => {
+				if (!entry) return null;
+				if (isManagedTransitionElement(entry)) return { target: entry, properties: null };
+				const target = entry.target || null;
+				const properties = Array.isArray(entry.properties) && entry.properties.length > 0 ? new Set<string>(entry.properties) : null;
+				return target ? { target, properties } : null;
+			})
+			.filter((entry): entry is NormalizedTransition => entry !== null);
 		if (normalized.length === 0) return Promise.resolve(ctx.isQuizInstanceAlive(epoch));
 
 		let timer = 0;
 		let remaining = normalized.length;
-		const tracked = normalized.map(item => ({ target: item.target, properties: item.properties, seen: new Set(), listener: null, done: false }));
+		const tracked: TrackedTransition[] = normalized.map(item => ({ target: item.target, properties: item.properties, seen: new Set<string>(), listener: null, done: false }));
 		const waiter = ctx.createPendingAsyncWaiter(() => {
 			for (const item of tracked) {
 				if (!item.target || !item.listener) continue;
@@ -25,7 +80,7 @@ module.exports = function createZoomHandlers(ctx) {
 			if (timer) clearTimeout(timer);
 		});
 
-		const finishOne = item => {
+		const finishOne = (item: TrackedTransition): void => {
 			if (item.done) return;
 			item.done = true;
 			if (item.target && item.listener) {
@@ -37,11 +92,14 @@ module.exports = function createZoomHandlers(ctx) {
 		};
 
 		for (const item of tracked) {
-			item.listener = e => {
-				if (e.target !== item.target) return;
+			// target générique (Element) → listener typé Event ; propertyName lu via
+			// cast TransitionEvent (l'événement transitionend l'expose au runtime).
+			item.listener = (e: Event) => {
+				const te = e as TransitionEvent;
+				if (te.target !== item.target) return;
 				if (!item.properties) return finishOne(item);
-				if (!item.properties.has(e.propertyName)) return;
-				item.seen.add(e.propertyName);
+				if (!item.properties.has(te.propertyName)) return;
+				item.seen.add(te.propertyName);
 				if (item.seen.size >= item.properties.size) finishOne(item);
 			};
 			try { item.target.addEventListener("transitionend", item.listener); } catch (_) { finishOne(item); }
@@ -52,7 +110,7 @@ module.exports = function createZoomHandlers(ctx) {
 		return waiter.promise;
 	}
 
-	async function applyOutFocusTransition(element, options = {}) {
+	async function applyOutFocusTransition(element: HTMLElement | null, options: OutFocusOptions = {}): Promise<void> {
 		const {
 			duration = 500,
 			easing = "ease-out",
@@ -61,7 +119,7 @@ module.exports = function createZoomHandlers(ctx) {
 			onComplete = null
 		} = options;
 
-		return new Promise(resolve => {
+		return new Promise<void>(resolve => {
 			if (!element) {
 				resolve();
 				return;
@@ -85,7 +143,7 @@ module.exports = function createZoomHandlers(ctx) {
 		});
 	}
 
-	async function applyInFocusTransition(element, options = {}) {
+	async function applyInFocusTransition(element: HTMLElement | null, options: InFocusOptions = {}): Promise<void> {
 		const {
 			duration = 600,
 			easing = "cubic-bezier(0.16, 1, 0.3, 1)",
@@ -98,7 +156,7 @@ module.exports = function createZoomHandlers(ctx) {
 			onComplete = null
 		} = options;
 
-		return new Promise(resolve => {
+		return new Promise<void>(resolve => {
 			if (!element) {
 				resolve();
 				return;
@@ -109,9 +167,11 @@ module.exports = function createZoomHandlers(ctx) {
 				animation: `quiz-focus-in-animation ${duration}ms ${easing} forwards`
 			});
 
+			// styleSheet peut être null (aucune feuille + .sheet non prête) : le
+			// try/catch d'origine avale l'exception, le cast/`!` préserve ce chemin.
 			const styleSheet = document.styleSheets[0] || document.head.appendChild(document.createElement("style")).sheet;
 			try {
-				styleSheet.insertRule(`
+				styleSheet!.insertRule(`
 					@keyframes quiz-focus-in-animation {
 						0% {
 							transform: scale(${scaleStart});
@@ -124,7 +184,7 @@ module.exports = function createZoomHandlers(ctx) {
 							filter: blur(${blurEnd}px);
 						}
 					}
-				`, styleSheet.cssRules.length);
+				`, styleSheet!.cssRules.length);
 			} catch (e) {
 				// Keyframes might already exist, ignore
 			}
@@ -140,7 +200,7 @@ module.exports = function createZoomHandlers(ctx) {
 		});
 	}
 
-	async function restartQuizWithZoomBlurTransition() {
+	async function restartQuizWithZoomBlurTransition(): Promise<void> {
 		// Forcer le reset de isSliding si on est sur la page de résultats
 		// car la transition précédente peut ne pas avoir terminée correctement
 		if (ctx.quizState.isSliding && ctx.isResultsSlideIndex(ctx.quizState.current)) {
@@ -181,9 +241,9 @@ module.exports = function createZoomHandlers(ctx) {
 			body?.classList.contains("theme-light") ||
 			root?.classList.contains("theme-light");
 
-		const viewport = ctx.container.querySelector(".quiz-track-viewport");
-		const resultsSlide = ctx.container.querySelector('.quiz-track-item[data-slide-kind="results"]');
-		const resultsCard = ctx.container.querySelector('.quiz-track-item[data-slide-kind="results"] .quiz-result');
+		const viewport = ctx.container.querySelector<HTMLElement>(".quiz-track-viewport");
+		const resultsSlide = ctx.container.querySelector<HTMLElement>('.quiz-track-item[data-slide-kind="results"]');
+		const resultsCard = ctx.container.querySelector<HTMLElement>('.quiz-track-item[data-slide-kind="results"] .quiz-result');
 
 		const prevContainerOverflow = ctx.container.style.overflow;
 		const prevContainerPointerEvents = ctx.container.style.pointerEvents;
@@ -243,7 +303,7 @@ module.exports = function createZoomHandlers(ctx) {
 			];
 
 			cleanupSelectors.forEach(sel => {
-				const el = ctx.container.querySelector(sel);
+				const el = ctx.container.querySelector<HTMLElement>(sel);
 				if (!el) return;
 				el.style.transition = "";
 				el.style.transform = "";
@@ -253,12 +313,12 @@ module.exports = function createZoomHandlers(ctx) {
 				el.style.transformOrigin = "";
 			});
 
-			const q1SlideCleanup = ctx.container.querySelector('.quiz-track-item[data-slide-kind="question"][data-qi="0"]');
+			const q1SlideCleanup = ctx.container.querySelector<HTMLElement>('.quiz-track-item[data-slide-kind="question"][data-qi="0"]');
 			if (q1SlideCleanup) {
 				delete q1SlideCleanup.dataset.quizTransitionLock;
 			}
 
-			const vp = ctx.container.querySelector(".quiz-track-viewport");
+			const vp = ctx.container.querySelector<HTMLElement>(".quiz-track-viewport");
 			if (vp) vp.style.overflow = prevViewportOverflow || "";
 
 			ctx.container.style.overflow = prevContainerOverflow || "";
@@ -333,9 +393,9 @@ module.exports = function createZoomHandlers(ctx) {
 		}
 		ctx.cancelEnsureTrackVisibleRaf();
 
-		const q1Slide = ctx.container.querySelector('.quiz-track-item[data-slide-kind="question"][data-qi="0"]');
-		const q1Card = ctx.container.querySelector('.quiz-track-item[data-slide-kind="question"][data-qi="0"] .quiz-card');
-		const q1Actions = ctx.container.querySelector('.quiz-track-item[data-slide-kind="question"][data-qi="0"] .quiz-actions');
+		const q1Slide = ctx.container.querySelector<HTMLElement>('.quiz-track-item[data-slide-kind="question"][data-qi="0"]');
+		const q1Card = ctx.container.querySelector<HTMLElement>('.quiz-track-item[data-slide-kind="question"][data-qi="0"] .quiz-card');
+		const q1Actions = ctx.container.querySelector<HTMLElement>('.quiz-track-item[data-slide-kind="question"][data-qi="0"] .quiz-actions');
 
 		if (!q1Slide || !ctx.isQuizInstanceAlive(epoch)) {
 			cleanup();
@@ -444,9 +504,9 @@ module.exports = function createZoomHandlers(ctx) {
 	}
 
 	return {
-    waitForManagedTransitions,
-    restartQuizWithZoomBlurTransition,
-    applyOutFocusTransition,
-    applyInFocusTransition
-};
-};
+		waitForManagedTransitions,
+		restartQuizWithZoomBlurTransition,
+		applyOutFocusTransition,
+		applyInFocusTransition
+	};
+}

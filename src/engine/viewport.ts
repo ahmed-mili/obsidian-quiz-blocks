@@ -1,16 +1,56 @@
-'use strict';
+import type { EngineCtx } from "../types/engine-ctx";
 
-module.exports = function createViewportHandlers(ctx) {
+/**
+ * Éléments DOM de la piste. `track.children` sont toujours les slides
+ * `.quiz-track-item` (des div = HTMLElement) : là où le code lit `.style`/
+ * `.dataset`/expandos, `Array.from(track.children)` est casté en `HTMLElement[]`
+ * (cast honnête sur l'invariant réel, jamais `any`).
+ */
+export interface TrackElements {
+	viewport: HTMLElement | null;
+	track: HTMLElement | null;
+}
+
+export interface ViewportHandlers {
+	getTrackElements(): TrackElements;
+	getTrackItem(index?: number): HTMLElement | null;
+	getTrackItems(): HTMLElement[];
+	getViewportStableWidth(opts?: { refresh?: boolean }): number;
+	applyTrackGeometry(opts?: { refreshWidth?: boolean }): number;
+	getElementStableHeight(el: HTMLElement | null): number;
+	getSlideStableHeight(index: number | undefined, opts?: { refresh?: boolean }): number;
+	primeAllHeightsSync(opts?: { syncCurrent?: boolean }): void;
+	primeAllSlideHeights(opts?: { retries?: number; syncCurrent?: boolean }): Promise<void>;
+	scheduleViewportHeightSync(opts?: { delay?: number; index?: number; animate?: boolean; refresh?: boolean }): void;
+	setViewportHeight(value: number, opts?: { animate?: boolean }): void;
+	syncViewportHeight(opts?: { index?: number; animate?: boolean; refresh?: boolean }): boolean;
+	observeTrackItemInAllSlidesResizeObserver(item: Element | null): void;
+	unobserveTrackItemInAllSlidesResizeObserver(item: Element | null): void;
+	bindAllSlidesResizeObserver(): void;
+	destroyAllSlidesResizeObserver(): void;
+	bindActiveSlideResizeObserver(): void;
+	destroyActiveSlideResizeObserver(): void;
+	bindCurrentSlideMediaHeightSync(): void;
+	resyncCommandTextareasOnSlide(index: number): void;
+	syncTrackViewportIsolation(): void;
+	destroyViewportResizeObserver(): void;
+	bindViewportResizeObserver(): void;
+	getMaxRenderedSlideHeight(opts?: { refresh?: boolean; padding?: number }): number;
+	__quizSlideHeightCache: Map<number, number>;
+	__quizWarmSlidePromises: Map<number, Promise<unknown>>;
+}
+
+export function createViewportHandlers(ctx: EngineCtx): ViewportHandlers {
 	// Variables locales
 	let __quizHeightRaf = 0;
 	let __quizHeightResyncTimer = 0;
 	let __quizMediaSyncToken = 0;
 	let __quizPrimeHeightsRaf = 0;
-	let __quizActiveSlideResizeObserver = null;
-	let __quizAllSlidesResizeObserver = null;
+	let __quizActiveSlideResizeObserver: ResizeObserver | null = null;
+	let __quizAllSlidesResizeObserver: ResizeObserver | null = null;
 	let __quizViewportSettleTimer = 0;
 	let __quizBackgroundWarmStarted = false;
-	let __quizViewportResizeObserver = null;
+	let __quizViewportResizeObserver: ResizeObserver | null = null;
 	let __quizViewportResizeRaf = 0;
 	let __quizViewportResizeSettleTimer = 0;
 	let __quizBackgroundWarmIdleHandle = 0;
@@ -21,27 +61,28 @@ module.exports = function createViewportHandlers(ctx) {
 	let __quizEnsureVisibleRaf = 0;
 	let __quizTrackFixBound = false;
 
-	const __quizSlideHeightCache = new Map();
-	const __quizWarmSlidePromises = new Map();
+	const __quizSlideHeightCache = new Map<number, number>();
+	const __quizWarmSlidePromises = new Map<number, Promise<unknown>>();
 
-	function getTrackElements() {
+	function getTrackElements(): TrackElements {
 		return {
-			viewport: ctx.container.querySelector(".quiz-track-viewport"),
-			track: ctx.container.querySelector(".quiz-track")
+			viewport: ctx.container.querySelector<HTMLElement>(".quiz-track-viewport"),
+			track: ctx.container.querySelector<HTMLElement>(".quiz-track")
 		};
 	}
 
-	function getTrackItem(index = ctx.quizState.current) {
+	function getTrackItem(index: number = ctx.quizState.current): HTMLElement | null {
 		const { track } = getTrackElements();
-		return track ? track.children[index] || null : null;
+		// track.children[index] est une slide .quiz-track-item (HTMLElement).
+		return track ? (track.children[index] as HTMLElement) || null : null;
 	}
 
-	function getTrackItems() {
+	function getTrackItems(): HTMLElement[] {
 		const { track } = getTrackElements();
-		return track ? Array.from(track.children || []) : [];
+		return track ? (Array.from(track.children || []) as HTMLElement[]) : [];
 	}
 
-	function getViewportStableWidth({ refresh = false } = {}) {
+	function getViewportStableWidth({ refresh = false }: { refresh?: boolean } = {}): number {
 		if (!refresh && __quizTrackViewportWidth > 0) return __quizTrackViewportWidth;
 		const { viewport } = getTrackElements();
 		const width = Math.max(1, Math.ceil(viewport?.clientWidth || viewport?.getBoundingClientRect?.().width || 0));
@@ -49,11 +90,11 @@ module.exports = function createViewportHandlers(ctx) {
 		return width;
 	}
 
-	function applyTrackGeometry({ refreshWidth = false } = {}) {
+	function applyTrackGeometry({ refreshWidth = false }: { refreshWidth?: boolean } = {}): number {
 		const { track } = getTrackElements();
 		const width = getViewportStableWidth({ refresh: refreshWidth });
 		if (!track || !width) return width;
-		const items = Array.from(track.children || []);
+		const items = Array.from(track.children || []) as HTMLElement[];
 		const childCount = items.length;
 		let needsWrite = refreshWidth || __quizTrackAppliedWidth !== width || __quizTrackAppliedSlideCount !== childCount || track.style.width !== `${width * childCount}px`;
 		if (!needsWrite) needsWrite = items.some(item => Number(item.__quizAppliedWidth || 0) !== width);
@@ -72,7 +113,7 @@ module.exports = function createViewportHandlers(ctx) {
 		return width;
 	}
 
-	function getElementStableHeight(el) {
+	function getElementStableHeight(el: HTMLElement | null): number {
 		if (!el) return 0;
 		const rootRect = el.getBoundingClientRect ? el.getBoundingClientRect() : null;
 		const rootTop = rootRect ? rootRect.top : 0;
@@ -84,7 +125,7 @@ module.exports = function createViewportHandlers(ctx) {
 			Math.ceil(el.clientHeight || 0),
 			0
 		);
-		const nodes = [el, ...Array.from(el.querySelectorAll("*"))];
+		const nodes: Element[] = [el, ...Array.from(el.querySelectorAll("*"))];
 		for (const node of nodes) {
 			if (!(node instanceof HTMLElement)) continue;
 			const cs = getComputedStyle(node);
@@ -98,22 +139,26 @@ module.exports = function createViewportHandlers(ctx) {
 		return Math.max(1, Math.ceil(Math.max(ownHeight, maxBottom)));
 	}
 
-	function getSlideStableHeight(index, { refresh = false } = {}) {
+	function getSlideStableHeight(index: number | undefined, { refresh = false }: { refresh?: boolean } = {}): number {
 		if (!refresh) {
-			const cached = __quizSlideHeightCache.get(index);
+			// index est fourni (number) par tous les appelants réels ; la
+			// destructuration optionnelle `{ index }` de scheduleViewportHeightSync/
+			// syncViewportHeight autorise `undefined` au type. Le cast préserve le
+			// chemin runtime d'origine (get/set(undefined) — jamais atteint en pratique).
+			const cached = __quizSlideHeightCache.get(index as number);
 			if (cached) return cached;
 		}
 		const item = getTrackItem(index);
 		if (!item) return 0;
 		const height = getElementStableHeight(item);
-		if (height > 0) __quizSlideHeightCache.set(index, height);
+		if (height > 0) __quizSlideHeightCache.set(index as number, height);
 		return height;
 	}
 
-	function primeAllHeightsSync({ syncCurrent = true } = {}) {
+	function primeAllHeightsSync({ syncCurrent = true }: { syncCurrent?: boolean } = {}): void {
 		const { track } = getTrackElements();
 		if (!track) return;
-		const children = Array.from(track.children || []);
+		const children = Array.from(track.children || []) as HTMLElement[];
 		const currentItem = getTrackItem(ctx.quizState.current);
 		for (const child of children) {
 			child.style.visibility = "visible";
@@ -137,7 +182,7 @@ module.exports = function createViewportHandlers(ctx) {
 		}
 	}
 
-	async function primeAllSlideHeights({ retries = 2, syncCurrent = true } = {}) {
+	async function primeAllSlideHeights({ retries = 2, syncCurrent = true }: { retries?: number; syncCurrent?: boolean } = {}): Promise<void> {
 		primeAllHeightsSync({ syncCurrent });
 		for (let i = 0; i < retries; i++) {
 			await ctx.nextFrame();
@@ -145,7 +190,7 @@ module.exports = function createViewportHandlers(ctx) {
 		}
 	}
 
-	function scheduleViewportHeightSync({ delay = 0, index, animate = false, refresh = false } = {}) {
+	function scheduleViewportHeightSync({ delay = 0, index, animate = false, refresh = false }: { delay?: number; index?: number; animate?: boolean; refresh?: boolean } = {}): void {
 		if (__quizHeightRaf) { cancelAnimationFrame(__quizHeightRaf); __quizHeightRaf = 0; }
 		if (__quizHeightResyncTimer) { clearTimeout(__quizHeightResyncTimer); __quizHeightResyncTimer = 0; }
 
@@ -171,7 +216,7 @@ module.exports = function createViewportHandlers(ctx) {
 		}
 	}
 
-	function setViewportHeight(value, { animate = false } = {}) {
+	function setViewportHeight(value: number, { animate = false }: { animate?: boolean } = {}): void {
 		const { viewport } = getTrackElements();
 		if (!viewport) return;
 		const h = Math.max(1, Math.ceil(value));
@@ -181,14 +226,14 @@ module.exports = function createViewportHandlers(ctx) {
 		viewport.dataset.quizHeightReady = "1";
 	}
 
-	function syncViewportHeight({ index, animate = false, refresh = false } = {}) {
+	function syncViewportHeight({ index, animate = false, refresh = false }: { index?: number; animate?: boolean; refresh?: boolean } = {}): boolean {
 		const targetHeight = getSlideStableHeight(index, { refresh });
 		if (!targetHeight) return false;
 		setViewportHeight(targetHeight, { animate });
 		return true;
 	}
 
-	function getMaxRenderedSlideHeight({ refresh = false, padding = 0 } = {}) {
+	function getMaxRenderedSlideHeight({ refresh = false, padding = 0 }: { refresh?: boolean; padding?: number } = {}): number {
 		const items = getTrackItems();
 		if (!items.length) return 0;
 		let maxHeight = 0;
@@ -199,17 +244,17 @@ module.exports = function createViewportHandlers(ctx) {
 		return maxHeight + padding;
 	}
 
-	function observeTrackItemInAllSlidesResizeObserver(item) {
+	function observeTrackItemInAllSlidesResizeObserver(item: Element | null): void {
 		if (!__quizAllSlidesResizeObserver || !item) return;
 		try { __quizAllSlidesResizeObserver.observe(item); } catch (_) {}
 	}
 
-	function unobserveTrackItemInAllSlidesResizeObserver(item) {
+	function unobserveTrackItemInAllSlidesResizeObserver(item: Element | null): void {
 		if (!__quizAllSlidesResizeObserver || !item) return;
 		try { __quizAllSlidesResizeObserver.unobserve(item); } catch (_) {}
 	}
 
-	function bindAllSlidesResizeObserver() {
+	function bindAllSlidesResizeObserver(): void {
 		destroyAllSlidesResizeObserver();
 		if (typeof ResizeObserver === "undefined") return;
 		const { track } = getTrackElements();
@@ -226,17 +271,17 @@ module.exports = function createViewportHandlers(ctx) {
 
 		const children = Array.from(track.children || []);
 		children.forEach(child => {
-			try { __quizAllSlidesResizeObserver.observe(child); } catch (_) {}
+			try { __quizAllSlidesResizeObserver!.observe(child); } catch (_) {}
 		});
 	}
 
-	function destroyAllSlidesResizeObserver() {
+	function destroyAllSlidesResizeObserver(): void {
 		if (!__quizAllSlidesResizeObserver) return;
 		try { __quizAllSlidesResizeObserver.disconnect(); } catch (_) {}
 		__quizAllSlidesResizeObserver = null;
 	}
 
-	function bindActiveSlideResizeObserver() {
+	function bindActiveSlideResizeObserver(): void {
 		destroyActiveSlideResizeObserver();
 		if (typeof ResizeObserver === "undefined") return;
 		const item = getTrackItem(ctx.quizState.current);
@@ -248,19 +293,19 @@ module.exports = function createViewportHandlers(ctx) {
 		try { __quizActiveSlideResizeObserver.observe(item); } catch (_) {}
 	}
 
-	function destroyActiveSlideResizeObserver() {
+	function destroyActiveSlideResizeObserver(): void {
 		if (!__quizActiveSlideResizeObserver) return;
 		try { __quizActiveSlideResizeObserver.disconnect(); } catch (_) {}
 		__quizActiveSlideResizeObserver = null;
 	}
 
-	function bindCurrentSlideMediaHeightSync() {
+	function bindCurrentSlideMediaHeightSync(): void {
 		const index = ctx.quizState.current;
 		const item = getTrackItem(index);
 		if (!item) return;
 		const token = ++__quizMediaSyncToken;
 		const generation = ctx.getSlideGeneration(index);
-		item.querySelectorAll("img").forEach(img => {
+		item.querySelectorAll<HTMLImageElement>("img").forEach(img => {
 			if (img.dataset.quizHeightBound === "1") return;
 			img.dataset.quizHeightBound = "1";
 			const resync = () => {
@@ -277,15 +322,15 @@ module.exports = function createViewportHandlers(ctx) {
 		});
 	}
 
-	function resyncCommandTextareasOnSlide(index) {
+	function resyncCommandTextareasOnSlide(index: number): void {
 		const item = getTrackItem(index);
 		if (!item) return;
-		item.querySelectorAll('.quiz-textarea-command').forEach(ta => {
+		item.querySelectorAll<HTMLElement>('.quiz-textarea-command').forEach(ta => {
 			try { ta.dispatchEvent(new Event('scroll')); } catch (_) {}
 		});
 	}
 
-	function syncTrackViewportIsolation() {
+	function syncTrackViewportIsolation(): void {
 		const { viewport, track } = getTrackElements();
 		if (!viewport || !track) return;
 
@@ -306,7 +351,7 @@ module.exports = function createViewportHandlers(ctx) {
 		track.style.backfaceVisibility = "hidden";
 		track.style.transformStyle = "preserve-3d";
 
-		const items = track.children ? Array.from(track.children) : [];
+		const items = (track.children ? Array.from(track.children) : []) as HTMLElement[];
 		const { from, to } = ctx.getSlidingWindow();
 
 		items.forEach((item, index) => {
@@ -360,7 +405,7 @@ module.exports = function createViewportHandlers(ctx) {
 		});
 	}
 
-	function destroyViewportResizeObserver() {
+	function destroyViewportResizeObserver(): void {
 		if (__quizViewportResizeObserver) {
 			try { __quizViewportResizeObserver.disconnect(); } catch (_) {}
 			__quizViewportResizeObserver = null;
@@ -375,14 +420,14 @@ module.exports = function createViewportHandlers(ctx) {
 		}
 	}
 
-	function bindViewportResizeObserver() {
+	function bindViewportResizeObserver(): void {
 		destroyViewportResizeObserver();
 		if (typeof ResizeObserver === "undefined") return;
 		const { viewport } = getTrackElements();
 		if (!viewport) return;
 		let lastWidth = Math.round(viewport.getBoundingClientRect().width || viewport.clientWidth || 0);
 
-		const realignViewportAndTrack = ({ settle = false } = {}) => {
+		const realignViewportAndTrack = ({ settle = false }: { settle?: boolean } = {}) => {
 			const { track, viewport: vp } = getTrackElements();
 			if (!track || !vp) return;
 			applyTrackGeometry({ refreshWidth: true });
@@ -460,4 +505,4 @@ module.exports = function createViewportHandlers(ctx) {
 		__quizSlideHeightCache,
 		__quizWarmSlidePromises
 	};
-};
+}

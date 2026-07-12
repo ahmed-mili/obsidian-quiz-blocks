@@ -6,7 +6,8 @@ declare global {
     __quizDestroy?: () => void;
     __quizTextQuestionCleanup?: () => void;
     // Track / animation (engine/track.ts)
-    __quizTransitionEndHandler?: (e: TransitionEvent) => void;
+    // Nullable : track.ts remet le handler à `null` après retrait (cancelRunningTrackAnimation / finishTrackSlideAnimation).
+    __quizTransitionEndHandler?: ((e: TransitionEvent) => void) | null;
     __quizTargetX?: number;
     __quizTargetIndex?: number;
     __quizTargetHeight?: number;

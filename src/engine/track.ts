@@ -1,26 +1,45 @@
-'use strict';
+import type { EngineCtx } from "../types/engine-ctx";
 
-module.exports = function createTrackHandlers(ctx) {
+/** Instantané position/hauteur retourné par cancelRunningTrackAnimation. */
+export interface TrackSnapshot {
+	x: number;
+	height: number;
+}
+
+export interface TrackHandlers {
+	getSlideTranslateX(index?: number): number;
+	setTrackTransformPx(x: number): void;
+	readCurrentTrackTranslateX(): number;
+	primeTrackAndViewportForSlideStart(startX: number, lockedHeight: number): void;
+	clearTrackTransitionFallback(): void;
+	cancelRunningTrackAnimation(): TrackSnapshot;
+	slideDuration(dist: number): number;
+	getTrackEaseForDistance(hops: number): string;
+	finishTrackSlideAnimation(token: number, targetIndex: number): void;
+	animateTrackToIndex(targetIndex: number, opts?: { fromX?: number | null; fromHeight?: number | null; refreshTargetHeight?: boolean }): void;
+}
+
+export function createTrackHandlers(ctx: EngineCtx): TrackHandlers {
 	// Variables locales
 	let __quizTrackTransitionFallbackTimer = 0;
 
-	const alignToDevicePixel = (value) => {
+	const alignToDevicePixel = (value: number | null): number => {
 		const dpr = window.devicePixelRatio || 1;
 		return Math.round((Number(value) || 0) * dpr) / dpr;
 	};
 
-	function getSlideTranslateX(index = ctx.quizState.current) {
+	function getSlideTranslateX(index: number = ctx.quizState.current): number {
 		const { viewport, track } = ctx.viewport.getTrackElements();
 		if (!viewport || !track) return 0;
 		return alignToDevicePixel(-(ctx.viewport.getViewportStableWidth() * index));
 	}
 
-	function setTrackTransformPx(x) {
+	function setTrackTransformPx(x: number): void {
 		const { track } = ctx.viewport.getTrackElements();
 		if (track) track.style.transform = `translate3d(${alignToDevicePixel(x)}px, 0, 0)`;
 	}
 
-	function readCurrentTrackTranslateX() {
+	function readCurrentTrackTranslateX(): number {
 		const { track } = ctx.viewport.getTrackElements();
 		if (!track) return getSlideTranslateX(ctx.quizState.current);
 		try {
@@ -33,7 +52,7 @@ module.exports = function createTrackHandlers(ctx) {
 		}
 	}
 
-	function primeTrackAndViewportForSlideStart(startX, lockedHeight) {
+	function primeTrackAndViewportForSlideStart(startX: number, lockedHeight: number): void {
 		const { track, viewport } = ctx.viewport.getTrackElements();
 		if (!track || !viewport) return;
 		ctx.viewport.applyTrackGeometry({ refreshWidth: true });
@@ -51,14 +70,14 @@ module.exports = function createTrackHandlers(ctx) {
 		void viewport.offsetHeight;
 	}
 
-	function clearTrackTransitionFallback() {
+	function clearTrackTransitionFallback(): void {
 		if (__quizTrackTransitionFallbackTimer) {
 			clearTimeout(__quizTrackTransitionFallbackTimer);
 			__quizTrackTransitionFallbackTimer = 0;
 		}
 	}
 
-	function cancelRunningTrackAnimation() {
+	function cancelRunningTrackAnimation(): TrackSnapshot {
 		const { track, viewport } = ctx.viewport.getTrackElements();
 		clearTrackTransitionFallback();
 		const currentX = readCurrentTrackTranslateX();
@@ -93,20 +112,20 @@ module.exports = function createTrackHandlers(ctx) {
 		return { x: currentX, height: currentHeight };
 	}
 
-	function slideDuration(dist) {
+	function slideDuration(dist: number): number {
 		// DEBUG: temporarily disable prefers-reduced-motion check
 		// if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return 0;
 		const d = Math.max(1, Number(dist) || 1);
 		return Math.min(1200, 860 + (d - 3) * 90);
 	}
 
-	function getTrackEaseForDistance(hops) {
+	function getTrackEaseForDistance(hops: number): string {
 		if (hops <= 1) return "cubic-bezier(0.22, 0.88, 0.24, 1)";
 		if (hops <= 3) return "cubic-bezier(0.24, 0.84, 0.22, 1)";
 		return "cubic-bezier(0.26, 0.80, 0.20, 1)";
 	}
 
-	function finishTrackSlideAnimation(token, targetIndex) {
+	function finishTrackSlideAnimation(token: number, targetIndex: number): void {
 		if (token !== ctx.quizState.slideToken) return;
 		const { track, viewport } = ctx.viewport.getTrackElements();
 		const shouldLockResultsNow = ctx.isResultsSlideIndex(targetIndex) && ctx.quizState.pendingResultsLock && !ctx.textOnly?.isTextOnlyMode?.();
@@ -119,7 +138,11 @@ module.exports = function createTrackHandlers(ctx) {
 		try { track?.getAnimations?.().forEach(anim => anim.cancel?.()); } catch (_) {}
 		try { viewport?.getAnimations?.().forEach(anim => anim.cancel?.()); } catch (_) {}
 
-		const finalX = Number.isFinite(track?.__quizTargetX) ? track.__quizTargetX : getSlideTranslateX(targetIndex);
+		// __quizTargetX est un number fini dès qu'il a été posé par animateTrackToIndex
+		// (et track non-null dans ce cas) : le cast reflète cet invariant vérifié par
+		// Number.isFinite, iso-fonctionnel avec le JS d'origine (`track.__quizTargetX`).
+		const targetXExpando = track?.__quizTargetX;
+		const finalX = Number.isFinite(targetXExpando) ? (targetXExpando as number) : getSlideTranslateX(targetIndex);
 		const refreshedTargetHeight = Math.max(
 			1,
 			Number(viewport?.__quizTargetHeight) || 0,
@@ -174,7 +197,7 @@ module.exports = function createTrackHandlers(ctx) {
 		}));
 	}
 
-	function animateTrackToIndex(targetIndex, { fromX = null, fromHeight = null, refreshTargetHeight = true } = {}) {
+	function animateTrackToIndex(targetIndex: number, { fromX = null, fromHeight = null, refreshTargetHeight = true }: { fromX?: number | null; fromHeight?: number | null; refreshTargetHeight?: boolean } = {}): void {
 		const { track, viewport } = ctx.viewport.getTrackElements();
 		if (!track || !viewport) {
 			ctx.quizState.isSliding = false;
@@ -240,7 +263,7 @@ module.exports = function createTrackHandlers(ctx) {
 			setTrackTransformPx(targetX);
 		});
 
-		const onEnd = e => {
+		const onEnd = (e: TransitionEvent) => {
 			if (token !== ctx.quizState.slideToken || e.target !== track || e.propertyName !== "transform") return;
 			finishTrackSlideAnimation(token, targetIndex);
 		};
@@ -261,4 +284,4 @@ module.exports = function createTrackHandlers(ctx) {
 		finishTrackSlideAnimation,
 		animateTrackToIndex
 	};
-};
+}

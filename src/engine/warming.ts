@@ -1,7 +1,17 @@
-'use strict';
+import type { EngineCtx } from "../types/engine-ctx";
 
-module.exports = function createWarmingHandlers(ctx) {
-	async function decodeImageSafe(img) {
+export interface WarmingHandlers {
+	decodeImageSafe(img: HTMLImageElement | null): Promise<void>;
+	warmSlideForAccurateHeight(index: number, opts?: { timeoutMs?: number; stableFramesRequired?: number; maxFrames?: number }): Promise<unknown>;
+	warmSlidesAroundIndex(center: number, radius?: number): void;
+	startFullBackgroundWarm(): Promise<void>;
+	bindTrackItemImages(slide: Element | null, slideIndex: number): void;
+	bindAllTrackImages(): void;
+	bindCurrentSlideMediaHeightSync(): void;
+}
+
+export function createWarmingHandlers(ctx: EngineCtx): WarmingHandlers {
+	async function decodeImageSafe(img: HTMLImageElement | null): Promise<void> {
 		if (!img) return;
 		try { img.loading = 'eager'; img.decoding = 'async'; } catch (_) {}
 		if (img.complete) {
@@ -10,14 +20,14 @@ module.exports = function createWarmingHandlers(ctx) {
 			}
 			return;
 		}
-		await new Promise(resolve => {
+		await new Promise<void>(resolve => {
 			const done = () => resolve();
 			img.addEventListener('load', done, { once: true });
 			img.addEventListener('error', done, { once: true });
 		});
 	}
 
-	async function warmSlideForAccurateHeight(index, { timeoutMs = 1200, stableFramesRequired = 3, maxFrames = 32 } = {}) {
+	async function warmSlideForAccurateHeight(index: number, { timeoutMs = 1200, stableFramesRequired = 3, maxFrames = 32 }: { timeoutMs?: number; stableFramesRequired?: number; maxFrames?: number } = {}): Promise<unknown> {
 		if (index < 0 || index >= ctx.TOTAL_SLIDES) return;
 		const existing = ctx.__quizWarmSlidePromises.get(index);
 		if (existing) return existing;
@@ -28,7 +38,7 @@ module.exports = function createWarmingHandlers(ctx) {
 			if (!ctx.isQuizInstanceAlive(epoch) || !ctx.isSlideGenerationCurrent(index, generation)) return;
 			const item = ctx.viewport.getTrackItem(index);
 			if (!item) return;
-			const imgs = Array.from(item.querySelectorAll('img'));
+			const imgs = Array.from(item.querySelectorAll<HTMLImageElement>('img'));
 			for (const img of imgs) {
 				try {
 					img.loading = 'eager';
@@ -63,7 +73,7 @@ module.exports = function createWarmingHandlers(ctx) {
 		}
 	}
 
-	function warmSlidesAroundIndex(center, radius = 2) {
+	function warmSlidesAroundIndex(center: number, radius: number = 2): void {
 		for (let offset = 0; offset <= radius; offset++) {
 			const left = center - offset;
 			const right = center + offset;
@@ -72,7 +82,7 @@ module.exports = function createWarmingHandlers(ctx) {
 		}
 	}
 
-	async function startFullBackgroundWarm() {
+	async function startFullBackgroundWarm(): Promise<void> {
 		if (ctx.__quizBackgroundWarmStarted) return;
 		ctx.__quizBackgroundWarmStarted = true;
 		const epoch = ctx.currentAsyncEpoch();
@@ -82,8 +92,8 @@ module.exports = function createWarmingHandlers(ctx) {
 			const total = ctx.TOTAL_SLIDES;
 			const center = ctx.clamp(ctx.quizState.current, 0, total - 1);
 			const nearRadius = Math.min(4, Math.max(2, total - 1));
-			const seen = new Set();
-			const near = [];
+			const seen = new Set<number>();
+			const near: number[] = [];
 			for (let offset = 0; offset <= nearRadius; offset++) {
 				const right = center + offset;
 				const left = center - offset;
@@ -107,10 +117,10 @@ module.exports = function createWarmingHandlers(ctx) {
 		run();
 	}
 
-	function bindTrackItemImages(slide, slideIndex) {
+	function bindTrackItemImages(slide: Element | null, slideIndex: number): void {
 		if (!slide) return;
 		const generation = ctx.getSlideGeneration(slideIndex);
-		slide.querySelectorAll('img').forEach(img => {
+		slide.querySelectorAll<HTMLImageElement>('img').forEach(img => {
 			if (img.dataset.quizPrimeBound === '1') return;
 			img.dataset.quizPrimeBound = '1';
 			try {
@@ -135,19 +145,19 @@ module.exports = function createWarmingHandlers(ctx) {
 		});
 	}
 
-	function bindAllTrackImages() {
+	function bindAllTrackImages(): void {
 		const { track } = ctx.viewport.getTrackElements();
 		if (!track) return;
 		Array.from(track.children || []).forEach((slide, slideIndex) => bindTrackItemImages(slide, slideIndex));
 	}
 
-	function bindCurrentSlideMediaHeightSync() {
+	function bindCurrentSlideMediaHeightSync(): void {
 		const index = ctx.quizState.current;
 		const item = ctx.viewport.getTrackItem(index);
 		if (!item) return;
 		const token = ++ctx.__quizMediaSyncToken;
 		const generation = ctx.getSlideGeneration(index);
-		item.querySelectorAll('img').forEach(img => {
+		item.querySelectorAll<HTMLImageElement>('img').forEach(img => {
 			if (img.dataset.quizHeightBound === '1') return;
 			img.dataset.quizHeightBound = '1';
 			const resync = () => {
@@ -173,4 +183,4 @@ module.exports = function createWarmingHandlers(ctx) {
 		bindAllTrackImages,
 		bindCurrentSlideMediaHeightSync
 	};
-};
+}
