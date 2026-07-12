@@ -1,13 +1,22 @@
-'use strict';
+import type { EngineCtx } from "../types/engine-ctx";
+import { mathifyElement } from "./mathjax";
 
-module.exports = function createHintHandlers(ctx) {
+export interface HintHandlers {
+	getHintThemeMode(): "light" | "dark";
+	applyHintModalTheme(): void;
+	ensureHintModal(): HTMLElement;
+	openHintModal(text: string | undefined): void;
+	closeHintModal(): void;
+}
+
+export function createHintHandlers(ctx: EngineCtx): HintHandlers {
 	// Variables locales
 	let __quizHintCloseTimer = 0;
 	let __quizHintOpenRaf1 = 0;
 	let __quizHintOpenRaf2 = 0;
 	let __quizHintFocusTimer = 0;
 
-	function getHintThemeMode() {
+	function getHintThemeMode(): "light" | "dark" {
 		const body = document.body;
 		const root = document.documentElement;
 		if (body?.classList.contains("theme-light") || root?.classList.contains("theme-light")) return "light";
@@ -17,14 +26,14 @@ module.exports = function createHintHandlers(ctx) {
 		return bg && (bg.includes("#fff") || bg.includes("255")) ? "light" : "dark";
 	}
 
-	function applyHintModalTheme() {
+	function applyHintModalTheme(): void {
 		const overlay = document.getElementById(ctx.HINT_OVERLAY_ID);
 		if (!overlay) return;
-		const modal = overlay.querySelector(".quiz-hint-modal");
-		const header = overlay.querySelector(".quiz-hint-modal-header");
-		const title = overlay.querySelector(".quiz-hint-modal-title");
-		const bodyEl = overlay.querySelector(".quiz-hint-modal-body");
-		const closeBtn = overlay.querySelector(".quiz-hint-modal-close");
+		const modal = overlay.querySelector<HTMLElement>(".quiz-hint-modal");
+		const header = overlay.querySelector<HTMLElement>(".quiz-hint-modal-header");
+		const title = overlay.querySelector<HTMLElement>(".quiz-hint-modal-title");
+		const bodyEl = overlay.querySelector<HTMLElement>(".quiz-hint-modal-body");
+		const closeBtn = overlay.querySelector<HTMLElement>(".quiz-hint-modal-close");
 		const mode = getHintThemeMode();
 		overlay.dataset.theme = mode;
 		const base = getComputedStyle(document.body);
@@ -54,7 +63,7 @@ module.exports = function createHintHandlers(ctx) {
 		}
 	}
 
-	function ensureHintModal() {
+	function ensureHintModal(): HTMLElement {
 		let overlay = document.getElementById(ctx.HINT_OVERLAY_ID);
 		if (overlay) {
 			applyHintModalTheme();
@@ -72,19 +81,19 @@ module.exports = function createHintHandlers(ctx) {
 				<div class="quiz-hint-modal-body"></div>
 			</div>`;
 		overlay.addEventListener("click", e => { if (e.target === overlay) closeHintModal(); });
-		const modal = overlay.querySelector(".quiz-hint-modal");
+		const modal = overlay.querySelector<HTMLElement>(".quiz-hint-modal");
 		if (modal) modal.addEventListener("click", e => e.stopPropagation());
-		const closeBtn = overlay.querySelector(".quiz-hint-modal-close");
+		const closeBtn = overlay.querySelector<HTMLElement>(".quiz-hint-modal-close");
 		if (closeBtn) closeBtn.addEventListener("click", e => { e.preventDefault(); closeHintModal(); });
 		document.body.appendChild(overlay);
 		applyHintModalTheme();
 
-		const escHandler = e => {
+		const escHandler = (e: KeyboardEvent): void => {
 			const o = document.getElementById(ctx.HINT_OVERLAY_ID);
 			if (!o || !o.classList.contains("is-open")) return;
 			if (e.key === "Escape") return closeHintModal();
 			if (e.key !== "Tab") return;
-			const focusable = o.querySelectorAll('button, [href], [tabindex]:not([tabindex="-1"])');
+			const focusable = o.querySelectorAll<HTMLElement>('button, [href], [tabindex]:not([tabindex="-1"])');
 			if (focusable.length === 0) return;
 			const first = focusable[0], last = focusable[focusable.length - 1];
 			if (e.shiftKey) {
@@ -108,14 +117,14 @@ module.exports = function createHintHandlers(ctx) {
 		return overlay;
 	}
 
-	function openHintModal(text) {
+	function openHintModal(text: string | undefined): void {
 		const overlay = ensureHintModal();
-		const body = overlay.querySelector(".quiz-hint-modal-body");
-		const modal = overlay.querySelector(".quiz-hint-modal");
+		const body = overlay.querySelector<HTMLElement>(".quiz-hint-modal-body");
+		const modal = overlay.querySelector<HTMLElement>(".quiz-hint-modal");
 		if (body) {
 			body.innerHTML = ctx.sanitize.renderHintWithCodeAndEmbeds(text);
 			// LaTeX $...$ des indices : même rendu MathJax que les slides.
-			require("./mathjax").mathifyElement(body);
+			void mathifyElement(body);
 		}
 		applyHintModalTheme();
 		if (__quizHintCloseTimer) { clearTimeout(__quizHintCloseTimer); __quizHintCloseTimer = 0; }
@@ -141,7 +150,7 @@ module.exports = function createHintHandlers(ctx) {
 					modal.style.opacity = "1";
 					modal.style.transform = "translateY(0) scale(1)";
 				}
-				const focusTarget = overlay.querySelector(".quiz-hint-modal-close");
+				const focusTarget = overlay.querySelector<HTMLElement>(".quiz-hint-modal-close");
 				if (focusTarget) {
 					if (__quizHintFocusTimer) clearTimeout(__quizHintFocusTimer);
 					const epoch = ctx.currentAsyncEpoch();
@@ -155,10 +164,10 @@ module.exports = function createHintHandlers(ctx) {
 		});
 	}
 
-	function closeHintModal() {
+	function closeHintModal(): void {
 		const overlay = document.getElementById(ctx.HINT_OVERLAY_ID);
 		if (!overlay || !overlay.classList.contains("is-open")) return;
-		const modal = overlay.querySelector(".quiz-hint-modal");
+		const modal = overlay.querySelector<HTMLElement>(".quiz-hint-modal");
 		if (__quizHintOpenRaf1) cancelAnimationFrame(__quizHintOpenRaf1);
 		if (__quizHintOpenRaf2) cancelAnimationFrame(__quizHintOpenRaf2);
 		overlay.style.transition = "opacity 240ms cubic-bezier(0.4, 0, 0.2, 1)";
@@ -169,7 +178,7 @@ module.exports = function createHintHandlers(ctx) {
 			modal.style.transform = "translateY(8px) scale(0.94)";
 		}
 		if (__quizHintCloseTimer) clearTimeout(__quizHintCloseTimer);
-		__quizHintCloseTimer = setTimeout(() => {
+		__quizHintCloseTimer = window.setTimeout(() => {
 			overlay.classList.remove("is-open");
 			overlay.style.transition = "";
 			overlay.style.opacity = "";
@@ -191,4 +200,4 @@ module.exports = function createHintHandlers(ctx) {
 		openHintModal,
 		closeHintModal
 	};
-};
+}

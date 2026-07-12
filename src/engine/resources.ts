@@ -1,29 +1,47 @@
-'use strict';
+import type { App, DataAdapter, TFile, View, WorkspaceLeaf } from "obsidian";
+import type { EngineCtx } from "../types/engine-ctx";
 
-module.exports = function createResourceHandlers(ctx) {
+/** Shell Electron minimal (surface réellement consommée : shell.openPath). */
+interface ElectronShellLike {
+	openPath(path: string): Promise<string>;
+}
+
+export type ResourceOpenMode = "default-app" | "system-chooser" | "failed";
+
+export interface ResourceHandlers {
+	quizNotice(msg: unknown, timeout?: number): void;
+	findVaultFilesByExactName(fileName: string): TFile[];
+	revealFileInObsidianExplorer(file: TFile | null | undefined): Promise<boolean>;
+	openVaultFileFallback(file: TFile): Promise<boolean>;
+	openWithDefaultAppFromVault(file: TFile | null | undefined): Promise<{ ok: boolean; mode: ResourceOpenMode }>;
+	handleQuizResourceButtonClick(fileName: string | undefined): Promise<void>;
+	bindQuizResourceButtons(rootEl?: Element | null): void;
+}
+
+export function createResourceHandlers(ctx: EngineCtx): ResourceHandlers {
 	const QUIZ_RESOURCE_NOTICE_MS = { defaultApp: 3400, androidSystem: 7200, fallbackOpen: 2400, warning: 3200, error: 3200 };
 
-	function quizNotice(msg, timeout = 4000) {
+	function quizNotice(msg: unknown, timeout = 4000): void {
 		try { new ctx.Notice(String(msg), timeout); } catch (_) { console.log("[Quiz]", msg); }
 	}
 
-	function findVaultFilesByExactName(fileName) {
+	function findVaultFilesByExactName(fileName: string): TFile[] {
 		const target = String(fileName ?? "").trim().toLowerCase();
 		if (!target || typeof ctx.app === "undefined" || !ctx.app?.vault?.getFiles) return [];
 		return ctx.app.vault.getFiles().filter(f => String(f?.name ?? "").trim().toLowerCase() === target);
 	}
 
-	async function revealFileInObsidianExplorer(file) {
+	async function revealFileInObsidianExplorer(file: TFile | null | undefined): Promise<boolean> {
 		if (!file) return false;
 		try {
-			let leaf = (ctx.app.workspace?.getLeavesOfType?.("file-explorer") || [])[0];
+			let leaf: WorkspaceLeaf | null = (ctx.app.workspace?.getLeavesOfType?.("file-explorer") || [])[0];
 			if (!leaf && typeof ctx.app.workspace?.getLeftLeaf === "function") {
 				leaf = ctx.app.workspace.getLeftLeaf(false);
 				if (leaf && typeof leaf.setViewState === "function") await leaf.setViewState({ type: "file-explorer", active: false });
 			}
 			if (!leaf) return false;
-			await new Promise(r => setTimeout(r, 60));
-			const view = leaf?.view;
+			await new Promise<void>(r => setTimeout(r, 60));
+			const view = leaf?.view as (View & { revealInFolder?: (file: TFile) => Promise<void> }) | undefined;
 			if (view && typeof view.revealInFolder === "function") {
 				await view.revealInFolder(file);
 				try { ctx.app.workspace?.revealLeaf?.(leaf); } catch (_) {}
@@ -35,7 +53,7 @@ module.exports = function createResourceHandlers(ctx) {
 		return false;
 	}
 
-	async function openVaultFileFallback(file) {
+	async function openVaultFileFallback(file: TFile): Promise<boolean> {
 		try {
 			const leaf = ctx.app.workspace?.getLeaf?.(true);
 			if (leaf && typeof leaf.openFile === "function") {
@@ -57,21 +75,27 @@ module.exports = function createResourceHandlers(ctx) {
 		return false;
 	}
 
-	async function openWithDefaultAppFromVault(file) {
+	async function openWithDefaultAppFromVault(file: TFile | null | undefined): Promise<{ ok: boolean; mode: ResourceOpenMode }> {
 		if (!file) return { ok: false, mode: "failed" };
-		const isMobile = !!ctx.app?.isMobile;
+		// app.isMobile / app.openWithDefaultApp : API non documentée dans obsidian.d.ts
+		// mais bien présente au runtime (même convention de cast que dashboard/ai.ts:144).
+		const isMobile = !!(ctx.app as App & { isMobile?: boolean }).isMobile;
 		try {
-			if (typeof ctx.app?.openWithDefaultApp === "function") {
-				await ctx.app.openWithDefaultApp(file.path);
+			const appWithOpen = ctx.app as App & { openWithDefaultApp?: (path: string) => Promise<void> };
+			if (typeof appWithOpen.openWithDefaultApp === "function") {
+				await appWithOpen.openWithDefaultApp(file.path);
 				return { ok: true, mode: isMobile ? "system-chooser" : "default-app" };
 			}
 		} catch (e) {
 			console.warn("[Quiz] app.openWithDefaultApp a échoué:", e);
 		}
 		try {
-			const adapter = ctx.app?.vault?.adapter;
+			// DataAdapter.getFullPath n'est déclaré que sur les classes concrètes
+			// (FileSystemAdapter/CapacitorAdapter), pas sur l'interface générique.
+			const adapter = ctx.app?.vault?.adapter as (DataAdapter & { getFullPath?: (path: string) => string }) | undefined;
 			const absPath = adapter?.getFullPath?.(file.path);
-			const shell = window.require?.("electron")?.shell;
+			const electronRequire = (window as Window & { require?: (id: string) => { shell?: ElectronShellLike } }).require;
+			const shell = electronRequire?.("electron")?.shell;
 			if (absPath && shell?.openPath) {
 				const result = await shell.openPath(absPath);
 				if (result === "") return { ok: true, mode: "default-app" };
@@ -82,7 +106,7 @@ module.exports = function createResourceHandlers(ctx) {
 		return { ok: false, mode: "failed" };
 	}
 
-	async function handleQuizResourceButtonClick(fileName) {
+	async function handleQuizResourceButtonClick(fileName: string | undefined): Promise<void> {
 		try {
 			const rawName = String(fileName ?? "").trim();
 			if (!rawName) return void quizNotice("Nom de fichier manquant.", QUIZ_RESOURCE_NOTICE_MS.warning);
@@ -91,7 +115,7 @@ module.exports = function createResourceHandlers(ctx) {
 			if (matches.length > 1) quizNotice(`Plusieurs fichiers portent ce nom (${rawName}). Premier résultat utilisé.`, QUIZ_RESOURCE_NOTICE_MS.warning);
 			const file = matches[0];
 			const revealed = await revealFileInObsidianExplorer(file);
-			await new Promise(r => setTimeout(r, 180));
+			await new Promise<void>(r => setTimeout(r, 180));
 			const openResult = await openWithDefaultAppFromVault(file);
 			if (openResult.ok && openResult.mode === "default-app") return void quizNotice(`Ouverture avec l'application par défaut : ${file.name}`, QUIZ_RESOURCE_NOTICE_MS.defaultApp);
 			if (openResult.ok && openResult.mode === "system-chooser") return void quizNotice(`Ouverture via le système Android : ${file.name}`, QUIZ_RESOURCE_NOTICE_MS.androidSystem);
@@ -109,11 +133,11 @@ module.exports = function createResourceHandlers(ctx) {
 		}
 	}
 
-	function bindQuizResourceButtons(rootEl = ctx.container) {
+	function bindQuizResourceButtons(rootEl: Element | null = ctx.container): void {
 		if (!rootEl) return;
 
-		rootEl.querySelectorAll(".quiz-resource-btn[data-resource-file]").forEach(btn => {
-			const trigger = async e => {
+		rootEl.querySelectorAll<HTMLElement>(".quiz-resource-btn[data-resource-file]").forEach(btn => {
+			const trigger = async (e: Event): Promise<void> => {
 				e.preventDefault();
 				e.stopPropagation();
 				await handleQuizResourceButtonClick(btn.dataset.resourceFile);
@@ -138,4 +162,4 @@ module.exports = function createResourceHandlers(ctx) {
 		handleQuizResourceButtonClick,
 		bindQuizResourceButtons
 	};
-};
+}

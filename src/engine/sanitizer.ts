@@ -1,6 +1,40 @@
-'use strict';
+import type { TAbstractFile, TFile } from "obsidian";
+import type { EngineCtx } from "../types/engine-ctx";
+import type { QuestionBase } from "../types/quiz";
 
-module.exports = function createSanitizer(ctx) {
+/** Spec `![[lien|100x50|alt]]` décomposée (buildEmbedImgHtml, resolveObsidianEmbedFile). */
+interface ParsedEmbedSpec {
+	linkPath: string;
+	width: number | null;
+	height: number | null;
+	alt: string;
+}
+
+interface EmbedClassOptions {
+	wrapClass?: string;
+	imgClass?: string;
+}
+
+export interface SanitizerHandlers {
+	escapeHtmlAttr(value: unknown): string;
+	escapeHtmlText(value: unknown): string;
+	unescapeHtmlText(value: unknown): string;
+	isSafeQuizUrl(value: unknown, opts?: { image?: boolean }): boolean;
+	unwrapQuizHtmlElement(node: ChildNode | null | undefined): void;
+	sanitizeQuizHtml(html: unknown): string;
+	renderInlineQuizHtml(raw: unknown): string;
+	resourceButtonHtml(q: QuestionBase | null | undefined): string;
+	resolveObsidianEmbedFile(linkPath: unknown): TAbstractFile | null;
+	parseObsidianEmbedSpec(spec: unknown): ParsedEmbedSpec;
+	buildEmbedImgHtml(embedSpec: unknown, opts?: EmbedClassOptions): string;
+	restoreAllowedInlineTags(html: unknown): string;
+	renderTextWithEmbeds(raw: unknown, opts?: EmbedClassOptions): string;
+	renderHintWithCodeAndEmbeds(raw: unknown): string;
+	renderRawHtmlWithEmbeds(raw: unknown, opts?: EmbedClassOptions): string;
+	replaceObsidianEmbedsInHtml(html: unknown, opts?: EmbedClassOptions): string;
+}
+
+export function createSanitizer(ctx: EngineCtx): SanitizerHandlers {
 	const QUIZ_HTML_ALLOWED_TAGS = new Set([
 		"a", "b", "blockquote", "br", "center", "code", "details", "div", "em", "font",
 		"h1", "h2", "h3", "h4", "h5", "h6", "hr", "i", "img", "kbd", "li", "mark",
@@ -16,7 +50,7 @@ module.exports = function createSanitizer(ctx) {
 		"class", "title", "role", "aria-label", "aria-hidden", "tabindex"
 	]);
 
-	const QUIZ_HTML_TAG_ATTRS = {
+	const QUIZ_HTML_TAG_ATTRS: Record<string, Set<string>> = {
 		a: new Set(["href", "target", "rel"]),
 		img: new Set(["src", "alt", "width", "height"]),
 		td: new Set(["colspan", "rowspan"]),
@@ -24,7 +58,7 @@ module.exports = function createSanitizer(ctx) {
 		font: new Set(["color"])
 	};
 
-	function escapeHtmlAttr(value) {
+	function escapeHtmlAttr(value: unknown): string {
 		return String(value ?? "")
 			.replace(/\&/g, "\&amp;")
 			.replace(/"/g, "\&quot;")
@@ -33,7 +67,7 @@ module.exports = function createSanitizer(ctx) {
 			.replace(/\>/g, "\&gt;");
 	}
 
-	function escapeHtmlText(value) {
+	function escapeHtmlText(value: unknown): string {
 		return String(value ?? "")
 			.replace(/\&/g, "\&amp;")
 			.replace(/\</g, "\&lt;")
@@ -42,7 +76,7 @@ module.exports = function createSanitizer(ctx) {
 			.replace(/'/g, "\&#39;");
 	}
 
-	function unescapeHtmlText(value) {
+	function unescapeHtmlText(value: unknown): string {
 		return String(value ?? "")
 			.replace(/\&lt;/g, "<")
 			.replace(/\&gt;/g, ">")
@@ -51,7 +85,7 @@ module.exports = function createSanitizer(ctx) {
 			.replace(/\&amp;/g, "&");
 	}
 
-	function isSafeQuizUrl(value, { image = false } = {}) {
+	function isSafeQuizUrl(value: unknown, { image = false }: { image?: boolean } = {}): boolean {
 		const raw = String(value ?? "").trim();
 		if (!raw) return false;
 
@@ -75,21 +109,22 @@ module.exports = function createSanitizer(ctx) {
 		return false;
 	}
 
-	function unwrapQuizHtmlElement(node) {
-		const parent = node?.parentNode;
-		if (!parent) return;
+	function unwrapQuizHtmlElement(node: ChildNode | null | undefined): void {
+		const parent = node?.parentNode ?? null;
+		if (!parent || !node) return;
 
-		while (node.firstChild) {
-			parent.insertBefore(node.firstChild, node);
+		let first: ChildNode | null;
+		while ((first = node.firstChild)) {
+			parent.insertBefore(first, node);
 		}
 		parent.removeChild(node);
 	}
 
-	function sanitizeQuizHtml(html) {
+	function sanitizeQuizHtml(html: unknown): string {
 		const tpl = document.createElement("template");
 		tpl.innerHTML = String(html ?? "");
 
-		const walk = node => {
+		const walk = (node: ChildNode | null | undefined): void => {
 			if (!node) return;
 
 			if (node.nodeType === Node.COMMENT_NODE) {
@@ -99,31 +134,35 @@ module.exports = function createSanitizer(ctx) {
 
 			if (node.nodeType !== Node.ELEMENT_NODE) return;
 
-			const tag = node.tagName.toLowerCase();
+			// Narrowing sûr : nodeType === ELEMENT_NODE garantit un Element (TS ne
+			// corrèle pas nodeType et le type ChildNode automatiquement).
+			const el = node as Element;
+
+			const tag = el.tagName.toLowerCase();
 
 			if (QUIZ_HTML_DROP_TAGS.has(tag)) {
-				node.remove();
+				el.remove();
 				return;
 			}
 
 			if (!QUIZ_HTML_ALLOWED_TAGS.has(tag)) {
-				unwrapQuizHtmlElement(node);
+				unwrapQuizHtmlElement(el);
 				return;
 			}
 
-			const allowedAttrs = QUIZ_HTML_TAG_ATTRS[tag] || new Set();
+			const allowedAttrs = QUIZ_HTML_TAG_ATTRS[tag] || new Set<string>();
 
-			Array.from(node.attributes).forEach(attr => {
+			Array.from(el.attributes).forEach(attr => {
 				const name = attr.name.toLowerCase();
 				const value = attr.value;
 
 				if (name.startsWith("on") || name === "style") {
-					node.removeAttribute(attr.name);
+					el.removeAttribute(attr.name);
 					return;
 				}
 
 				if (!QUIZ_HTML_GLOBAL_ATTRS.has(name) && !allowedAttrs.has(name)) {
-					node.removeAttribute(attr.name);
+					el.removeAttribute(attr.name);
 					return;
 				}
 
@@ -131,7 +170,7 @@ module.exports = function createSanitizer(ctx) {
 					(name === "href" || name === "src") &&
 					!isSafeQuizUrl(value, { image: name === "src" && tag === "img" })
 				) {
-					node.removeAttribute(attr.name);
+					el.removeAttribute(attr.name);
 					return;
 				}
 
@@ -139,40 +178,40 @@ module.exports = function createSanitizer(ctx) {
 					(name === "width" || name === "height" || name === "colspan" || name === "rowspan") &&
 					!/^\d{1,4}$/.test(String(value).trim())
 				) {
-					node.removeAttribute(attr.name);
+					el.removeAttribute(attr.name);
 					return;
 				}
 
 				if (name === "target" && !/^_(self|blank)$/.test(String(value).trim())) {
-					node.removeAttribute(attr.name);
+					el.removeAttribute(attr.name);
 					return;
 				}
 			});
 
-			if (tag === "a" && node.getAttribute("target") === "_blank") {
-				node.setAttribute("rel", "noopener noreferrer");
+			if (tag === "a" && el.getAttribute("target") === "_blank") {
+				el.setAttribute("rel", "noopener noreferrer");
 			}
 
-			Array.from(node.childNodes).forEach(walk);
+			Array.from(el.childNodes).forEach(walk);
 		};
 
 		Array.from(tpl.content.childNodes).forEach(walk);
 		return tpl.innerHTML;
 	}
 
-	function renderInlineQuizHtml(raw) {
+	function renderInlineQuizHtml(raw: unknown): string {
 		return restoreAllowedInlineTags(
 			escapeHtmlText(String(raw ?? "")).replace(/\n/g, "<br>")
 		);
 	}
 
-	function resourceButtonHtml(q) {
+	function resourceButtonHtml(q: QuestionBase | null | undefined): string {
 		const rb = q?.resourceButton;
 		if (!rb || !rb.label || !rb.fileName) return "";
 		return `<button class="quiz-resource-btn" type="button" data-resource-file="${escapeHtmlAttr(rb.fileName)}"><span class="quiz-resource-btn-icon" aria-hidden="true">${ctx.lucideIcons?.paperclip || "⬇" }</span><span class="quiz-resource-btn-label">${escapeHtmlText(rb.label)}</span></button>`;
 	}
 
-	function resolveObsidianEmbedFile(linkPath) {
+	function resolveObsidianEmbedFile(linkPath: unknown): TAbstractFile | null {
 		const raw = String(linkPath ?? "").trim();
 		if (!raw) return null;
 
@@ -197,11 +236,11 @@ module.exports = function createSanitizer(ctx) {
 		return null;
 	}
 
-	function parseObsidianEmbedSpec(spec) {
+	function parseObsidianEmbedSpec(spec: unknown): ParsedEmbedSpec {
 		const s = String(spec ?? "").trim();
 		const parts = s.split("|");
 		const linkPath = (parts[0] || "").trim();
-		let width = null, height = null, alt = "";
+		let width: number | null = null, height: number | null = null, alt = "";
 		if (parts.length >= 2) {
 			const p = (parts[1] || "").trim();
 			if (/^\d+$/.test(p)) width = Number(p);
@@ -214,11 +253,14 @@ module.exports = function createSanitizer(ctx) {
 		return { linkPath, width, height, alt };
 	}
 
-	function buildEmbedImgHtml(embedSpec, { wrapClass = "quiz-question-embed-wrap", imgClass = "quiz-question-embed" } = {}) {
+	function buildEmbedImgHtml(embedSpec: unknown, { wrapClass = "quiz-question-embed-wrap", imgClass = "quiz-question-embed" }: EmbedClassOptions = {}): string {
 		const parsed = parseObsidianEmbedSpec(embedSpec);
 		const file = resolveObsidianEmbedFile(parsed.linkPath);
 		if (file && typeof ctx.app?.vault?.getResourcePath === "function") {
-			const src = ctx.app.vault.getResourcePath(file);
+			// file est un TAbstractFile (peut être un TFolder si getAbstractFileByPath
+			// a résolu un dossier) : le JS original ne vérifiait jamais instanceof TFile
+			// avant d'appeler getResourcePath — comportement runtime préservé tel quel.
+			const src = ctx.app.vault.getResourcePath(file as TFile);
 			const widthAttr = parsed.width ? ` width="${parsed.width}"` : "";
 			const heightAttr = parsed.height ? ` height="${parsed.height}"` : "";
 			const altAttr = escapeHtmlAttr(parsed.alt || file.name || "Image");
@@ -227,20 +269,20 @@ module.exports = function createSanitizer(ctx) {
 		return `<code>${escapeHtmlText(`![[${embedSpec}]]`)}</code>`;
 	}
 
-	function restoreAllowedInlineTags(html) {
+	function restoreAllowedInlineTags(html: unknown): string {
 		return String(html ?? "")
 			.replace(/\&lt;br\s*\/?\&gt;/gi, "<br>")
 			.replace(/\&lt;(\/?)code\&gt;/gi, "<$1code>")
 			.replace(/\&lt;(\/?)(strong|b|em|i|u|mark|kbd|samp|small|sub|sup)\&gt;/gi, "<$1$2>");
 	}
 
-	function renderTextWithEmbeds(raw, { wrapClass = "quiz-question-embed-wrap", imgClass = "quiz-question-embed" } = {}) {
+	function renderTextWithEmbeds(raw: unknown, { wrapClass = "quiz-question-embed-wrap", imgClass = "quiz-question-embed" }: EmbedClassOptions = {}): string {
 		const text = String(raw ?? "");
 		const embedRe = /!\[\[([^\]]+)\]\]/g;
 
 		let html = "";
 		let lastIndex = 0;
-		let match;
+		let match: RegExpExecArray | null;
 
 		while ((match = embedRe.exec(text)) !== null) {
 			const before = text.slice(lastIndex, match.index);
@@ -266,23 +308,23 @@ module.exports = function createSanitizer(ctx) {
 		return html;
 	}
 
-	function renderHintWithCodeAndEmbeds(raw) {
+	function renderHintWithCodeAndEmbeds(raw: unknown): string {
 		return renderTextWithEmbeds(raw, {
 			wrapClass: "quiz-hint-embed-wrap",
 			imgClass: "quiz-hint-embed"
 		});
 	}
 
-	function renderRawHtmlWithEmbeds(raw, { wrapClass = "quiz-question-embed-wrap", imgClass = "quiz-question-embed" } = {}) {
+	function renderRawHtmlWithEmbeds(raw: unknown, { wrapClass = "quiz-question-embed-wrap", imgClass = "quiz-question-embed" }: EmbedClassOptions = {}): string {
 		return renderTextWithEmbeds(raw, { wrapClass, imgClass });
 	}
 
-	function replaceObsidianEmbedsInHtml(html, { wrapClass = "quiz-explain-embed-wrap", imgClass = "quiz-explain-embed" } = {}) {
+	function replaceObsidianEmbedsInHtml(html: unknown, { wrapClass = "quiz-explain-embed-wrap", imgClass = "quiz-explain-embed" }: EmbedClassOptions = {}): string {
 		// NE PAS faire unescapeHtmlText ici car cela casserait l'affichage
 		// des entités HTML comme &gt; qui doivent rester comme &gt; pour être
 		// affichées comme > par le navigateur, pas interprétées comme des balises
 		const content = String(html ?? "");
-		return content.replace(/!\[\[([^\]]+)\]\]/g, (_, spec) => buildEmbedImgHtml(spec, { wrapClass, imgClass }));
+		return content.replace(/!\[\[([^\]]+)\]\]/g, (_: string, spec: string) => buildEmbedImgHtml(spec, { wrapClass, imgClass }));
 	}
 
 	return {
@@ -303,4 +345,4 @@ module.exports = function createSanitizer(ctx) {
 		renderRawHtmlWithEmbeds,
 		replaceObsidianEmbedsInHtml
 	};
-};
+}

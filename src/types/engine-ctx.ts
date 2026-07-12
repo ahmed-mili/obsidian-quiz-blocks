@@ -53,6 +53,11 @@ import type {
 	MatchingQuestion,
 	TextQuestion,
 } from "./quiz";
+import type { SanitizerHandlers } from "../engine/sanitizer";
+import type { QuestionHandlers } from "../engine/questions";
+import type { ResourceHandlers } from "../engine/resources";
+import type { FocusHandlers } from "../engine/focus";
+import type { HintHandlers } from "../engine/hint";
 
 /**
  * Mode du quiz (engine.js ctx.quizMode / originalQuizMode). Miroir du type
@@ -69,10 +74,6 @@ export type QuizMode = "learn" | "exam" | "quiz";
    L'index signature fait résoudre tout indexed-access à `unknown` en attendant.
    ════════════════════════════════════════════════════════ */
 
-/** Placeholder — vrai type en Task 10 (engine/sanitizer.ts). */
-export interface SanitizerHandlers { [method: string]: unknown }
-/** Placeholder — vrai type en Task 10 (engine/resources.ts). */
-export interface ResourceHandlers { [method: string]: unknown }
 /** Placeholder — vrai type en Task 10 (engine/exam.ts). */
 export interface ExamHandlers { [method: string]: unknown }
 /** Placeholder — vrai type en Task 10 (engine/text-only.ts). */
@@ -89,18 +90,12 @@ export interface ZoomHandlers { [method: string]: unknown }
 export interface InteractionHandlers { [method: string]: unknown }
 /** Placeholder — vrai type en Task 10 (engine/terminal.ts). */
 export interface TerminalHandlers { [method: string]: unknown }
-/** Placeholder — vrai type en Task 10 (engine/focus.ts). */
-export interface FocusHandlers { [method: string]: unknown }
 /** Placeholder — vrai type en Task 10 (engine/lifecycle.ts). */
 export interface LifecycleHandlers { [method: string]: unknown }
 /** Placeholder — vrai type en Task 10 (engine/warming.ts). */
 export interface WarmingHandlers { [method: string]: unknown }
 /** Placeholder — vrai type en Task 10 (engine/state.ts). */
 export interface StateHandlers { [method: string]: unknown }
-/** Placeholder — vrai type en Task 10 (engine/hint.ts). */
-export interface HintHandlers { [method: string]: unknown }
-/** Placeholder — vrai type en Task 10 (engine/questions.ts). */
-export interface QuestionHandlers { [method: string]: unknown }
 /** Placeholder — vrai type en Task 10 (engine/results-save.ts). */
 export interface ResultsSaverHandlers { [method: string]: unknown }
 
@@ -117,6 +112,12 @@ export interface EngineCtx {
 	/** Constructeur Notice d'Obsidian, transmis par le contexte d'appel (engine.js:31,98). */
 	Notice: typeof import("obsidian").Notice;
 	quiz: QuizQuestion[];
+	/**
+	 * Jamais assigné dans le littéral `ctx` ni ailleurs dans engine.js (mort/
+	 * vestigial) ; accédé optionnellement par sanitizer.js:172 (`ctx.lucideIcons
+	 * ?.paperclip`) avec fallback "⬇" — toujours `undefined` au runtime actuel.
+	 */
+	lucideIcons?: { paperclip?: string };
 
 	/* ── Mode & examen (littéral initial, engine.js:100-107 ; muté par switchToExamMode :808-813) ── */
 	quizMode: QuizMode;
@@ -239,7 +240,16 @@ export interface EngineCtx {
 	escapeHtmlAttr: SanitizerHandlers["escapeHtmlAttr"];
 
 	// depuis lifecycle (engine.js:172-180)
-	createPendingAsyncWaiter: LifecycleHandlers["createPendingAsyncWaiter"];
+	/**
+	 * Signature HONNÊTE (lifecycle.js pas encore converti, Task 10b) : lue
+	 * directement dans engine/lifecycle.js:31-48. Le waiter ajouté à
+	 * `ctx.__quizPendingAsyncWaiters` n'expose que `resolve`/`promise` ici —
+	 * seule surface consommée par un cluster hors lifecycle (engine/focus.ts).
+	 * `value` est toujours un booléen dans tout l'appelant actuel du moteur
+	 * (isQuizInstanceAlive(...)). À confirmer/élargir quand lifecycle.ts sera
+	 * converti (10b) — l'indexed-access de LifecycleHandlers reprendra alors.
+	 */
+	createPendingAsyncWaiter(cleanup?: (() => void) | null): { resolve(value: boolean): void; promise: Promise<boolean> };
 	resolveAllPendingAsync: LifecycleHandlers["resolveAllPendingAsync"];
 	sleep: LifecycleHandlers["sleep"];
 	nextFrame: LifecycleHandlers["nextFrame"];
