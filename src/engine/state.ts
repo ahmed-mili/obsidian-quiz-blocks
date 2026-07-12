@@ -1,11 +1,39 @@
-'use strict';
+import type { EngineCtx } from "../types/engine-ctx";
+import type { PracticeMode, QuizResult, StatsRecord } from "../types/quiz";
 
-module.exports = function createStateHandlers(ctx) {
+/** Sous-ensemble du store de stats (dashboard/stats-store) réellement lu ici. */
+type StatsStoreLike = { updateRecord(path: string, update: StatsRecord): unknown };
+
+export interface StateHandlers {
+	hasAnyAnswer(i: number): boolean;
+	isComplete(i: number): boolean;
+	getMissingIndices(): number[];
+	isCorrect(i: number): boolean;
+	computeScorePercent(): QuizResult;
+	getSubmitSlideSignature(): string;
+	getResultsSlideSignature(): string;
+	setPracticeMode(mode: PracticeMode): void;
+	clearNavTabPressState(tab: HTMLElement | null): void;
+	setNavTabPressState(tab: HTMLElement | null, on: boolean): void;
+	clearAllNavTabPressStates(): void;
+	buildNavTabClass(baseClass: string, tab: HTMLElement | null | undefined): string;
+	playNavTabPressAndNavigate(tab: HTMLElement | null, navigateFn: () => void, opts?: { fromKeyboard?: boolean }): Promise<void>;
+	setSlidingClass(on: boolean): void;
+	goToSlide(index: number, opts?: { forceRender?: boolean }): Promise<void>;
+	redirectSlide(next: number, opts?: { forceRender?: boolean }): Promise<void>;
+	updateNavHighlight(): void;
+	goToQuestion(index: number): void;
+	goToSubmit(): void;
+	goToResults(): void;
+	resetQuiz(opts?: { preserveSliding?: boolean; resetToOriginalMode?: boolean }): void;
+}
+
+export function createStateHandlers(ctx: EngineCtx): StateHandlers {
 	// Constantes
 	const NAV_TAB_PRESS_MS = 130;
 	const NAV_TAB_FALLBACK_CLEAR_MS = 320;
 
-	function hasAnyAnswer(i) {
+	function hasAnyAnswer(i: number): boolean {
 		if (ctx.textOnly?.isTextOnlyMode?.()) {
 			return ctx.textOnly.hasAnyAnswer(i) || ctx.textOnly.isChecked(i) || ctx.textOnly.isRated(i);
 		}
@@ -24,7 +52,7 @@ module.exports = function createStateHandlers(ctx) {
 		return sel !== null;
 	}
 
-	function isComplete(i) {
+	function isComplete(i: number): boolean {
 		if (ctx.textOnly?.isTextOnlyMode?.()) {
 			return ctx.textOnly.isRated(i);
 		}
@@ -43,13 +71,13 @@ module.exports = function createStateHandlers(ctx) {
 		return sel !== null;
 	}
 
-	function getMissingIndices() {
-		const missing = [];
+	function getMissingIndices(): number[] {
+		const missing: number[] = [];
 		for (let i = 0; i < ctx.quiz.length; i++) if (!isComplete(i)) missing.push(i);
 		return missing;
 	}
 
-	function isCorrect(i) {
+	function isCorrect(i: number): boolean {
 		if (ctx.textOnly?.isTextOnlyMode?.()) {
 			return ctx.quizState.textOnlyRatings?.[i] === "understood";
 		}
@@ -80,13 +108,13 @@ module.exports = function createStateHandlers(ctx) {
 		return sel !== null && sel === q.correctIndex;
 	}
 
-	function computeScorePercent() {
+	function computeScorePercent(): QuizResult {
 		let correct = 0;
 		for (let i = 0; i < ctx.quiz.length; i++) if (isCorrect(i)) correct++;
 		return { pct: Math.round((correct / ctx.quiz.length) * 100), correct, total: ctx.quiz.length };
 	}
 
-	const getSubmitSlideSignature = () => JSON.stringify({
+	const getSubmitSlideSignature = (): string => JSON.stringify({
 		mode: ctx.quizState.practiceMode,
 		examAnswerPhase: !!ctx.textOnly?.isExamAnswerPhase?.(),
 		missingAnswers: ctx.textOnly?.isExamAnswerPhase?.()
@@ -95,7 +123,7 @@ module.exports = function createStateHandlers(ctx) {
 		missing: getMissingIndices(),
 		lastQuestionIndex: ctx.quizState.lastQuestionIndex
 	});
-	const getResultsSlideSignature = () => {
+	const getResultsSlideSignature = (): string => {
 		if (ctx.textOnly?.isTextOnlyMode?.()) {
 			return JSON.stringify({
 				mode: ctx.quizState.practiceMode,
@@ -107,7 +135,7 @@ module.exports = function createStateHandlers(ctx) {
 		return JSON.stringify({ mode: ctx.quizState.practiceMode, locked: ctx.quizState.locked, pct, correct, total, savedResultsPath: ctx.quizState.savedResultsPath || null });
 	};
 
-	function clearNavTabPressState(tab) {
+	function clearNavTabPressState(tab: HTMLElement | null): void {
 		if (!tab) return;
 		if (tab.__quizPressClearTimer) {
 			clearTimeout(tab.__quizPressClearTimer);
@@ -117,7 +145,7 @@ module.exports = function createStateHandlers(ctx) {
 		tab.classList.remove("is-pressing");
 	}
 
-	function setNavTabPressState(tab, on) {
+	function setNavTabPressState(tab: HTMLElement | null, on: boolean): void {
 		if (!tab) return;
 		if (on) {
 			if (tab.__quizPressClearTimer) {
@@ -132,12 +160,12 @@ module.exports = function createStateHandlers(ctx) {
 		clearNavTabPressState(tab);
 	}
 
-	const clearAllNavTabPressStates = () => {
-		ctx.container.querySelectorAll(".quiz-tab").forEach(tab => clearNavTabPressState(tab));
+	const clearAllNavTabPressStates = (): void => {
+		ctx.container.querySelectorAll<HTMLElement>(".quiz-tab").forEach(tab => clearNavTabPressState(tab));
 	};
-	const buildNavTabClass = (baseClass, tab) => `${baseClass}${tab?.dataset?.quizPressing === "1" ? " is-pressing" : ""}`.trim();
+	const buildNavTabClass = (baseClass: string, tab: HTMLElement | null | undefined): string => `${baseClass}${tab?.dataset?.quizPressing === "1" ? " is-pressing" : ""}`.trim();
 
-	async function playNavTabPressAndNavigate(tab, navigateFn, { fromKeyboard = false } = {}) {
+	async function playNavTabPressAndNavigate(tab: HTMLElement | null, navigateFn: () => void, { fromKeyboard = false }: { fromKeyboard?: boolean } = {}): Promise<void> {
 		if (!tab || typeof navigateFn !== "function") return;
 
 		if (fromKeyboard || tab.dataset.quizPressing !== "1") {
@@ -154,7 +182,7 @@ module.exports = function createStateHandlers(ctx) {
 		});
 	}
 
-	async function goToSlide(index, { forceRender = false } = {}) {
+	async function goToSlide(index: number, { forceRender = false }: { forceRender?: boolean } = {}): Promise<void> {
 		ctx.closeHintModal();
 		const next = ctx.clampSlideIndex(index);
 		if (next === ctx.quizState.current && !ctx.quizState.isSliding) return;
@@ -163,7 +191,8 @@ module.exports = function createStateHandlers(ctx) {
 		const token = ctx.quizState.slideToken;
 		ctx.quizState.prevCurrent = ctx.quizState.current;
 		ctx.quizState.current = next;
-		if (ctx.isQuestionSlideIndex(next)) ctx.quizState.lastQuestionIndex = ctx.slideMap[next].questionIndex;
+		// isQuestionSlideIndex garantit la variante « question » de slideMap[next].
+		if (ctx.isQuestionSlideIndex(next)) ctx.quizState.lastQuestionIndex = (ctx.slideMap[next] as { questionIndex: number }).questionIndex;
 		updateNavHighlight();
 		ctx.quizState.isSliding = true;
 		ctx.setSlidingClass(true);
@@ -184,7 +213,7 @@ module.exports = function createStateHandlers(ctx) {
 		});
 	}
 
-	async function redirectSlide(next, { forceRender = false } = {}) {
+	async function redirectSlide(next: number, { forceRender = false }: { forceRender?: boolean } = {}): Promise<void> {
 		const targetIndex = ctx.clampSlideIndex(next);
 		if (targetIndex === ctx.quizState.current) return;
 		const snapshot = ctx.track.cancelRunningTrackAnimation();
@@ -192,7 +221,7 @@ module.exports = function createStateHandlers(ctx) {
 		const token = ctx.quizState.slideToken;
 		ctx.quizState.prevCurrent = ctx.quizState.current;
 		ctx.quizState.current = targetIndex;
-		if (ctx.isQuestionSlideIndex(targetIndex)) ctx.quizState.lastQuestionIndex = ctx.slideMap[targetIndex].questionIndex;
+		if (ctx.isQuestionSlideIndex(targetIndex)) ctx.quizState.lastQuestionIndex = (ctx.slideMap[targetIndex] as { questionIndex: number }).questionIndex;
 		updateNavHighlight();
 		ctx.quizState.isSliding = true;
 		ctx.setSlidingClass(true);
@@ -202,24 +231,24 @@ module.exports = function createStateHandlers(ctx) {
 		ctx.track.animateTrackToIndex(ctx.quizState.current, { fromX: snapshot.x, fromHeight: snapshot.height, refreshTargetHeight: true });
 	}
 
-	function setSlidingClass(on) {
+	function setSlidingClass(on: boolean): void {
 		ctx.container?.classList?.toggle("quiz-is-sliding", !!on);
 	}
 
-	function updateNavHighlight() {
-		ctx.container.querySelectorAll("[data-nav]").forEach(tab => {
+	function updateNavHighlight(): void {
+		ctx.container.querySelectorAll<HTMLElement>("[data-nav]").forEach(tab => {
 			const i = Number(tab.dataset.nav);
 			tab.className = buildNavTabClass(`quiz-tab ${ctx.cards.tabClass(i)}`.trim(), tab);
 		});
-		const resultsTab = ctx.container.querySelector("[data-nav-results]");
+		const resultsTab = ctx.container.querySelector<HTMLElement>("[data-nav-results]");
 		if (resultsTab) {
 			const active = (ctx.isSubmitSlideIndex(ctx.quizState.current) || ctx.isResultsSlideIndex(ctx.quizState.current)) ? "active" : "";
 			resultsTab.className = buildNavTabClass(`quiz-tab is-result ${active}`.trim(), resultsTab);
 		}
 	}
 
-	function setPracticeMode(mode) {
-		const nextMode = mode === "text" ? "text" : "qcm";
+	function setPracticeMode(mode: PracticeMode): void {
+		const nextMode: PracticeMode = mode === "text" ? "text" : "qcm";
 		if (ctx.quizState.practiceMode === nextMode) return;
 
 		ctx.closeHintModal();
@@ -241,20 +270,20 @@ module.exports = function createStateHandlers(ctx) {
 		ctx.render();
 	}
 
-	const goToQuestion = index => {
+	const goToQuestion = (index: number): void => {
 		ctx.quizState.pendingResultsLock = false;
 		const slideIdx = ctx.getSlideIndexForQuestion(index);
 		if (slideIdx >= 0) goToSlide(slideIdx, { forceRender: false });
 	};
 
-	function goToSubmit() {
-		if (ctx.isQuestionSlideIndex(ctx.quizState.current)) ctx.quizState.lastQuestionIndex = ctx.slideMap[ctx.quizState.current].questionIndex;
+	function goToSubmit(): void {
+		if (ctx.isQuestionSlideIndex(ctx.quizState.current)) ctx.quizState.lastQuestionIndex = (ctx.slideMap[ctx.quizState.current] as { questionIndex: number }).questionIndex;
 		ctx.quizState.pendingResultsLock = false;
 		goToSlide(ctx.SLIDE_SUBMIT_INDEX, { forceRender: false });
 	}
 
-	function goToResults() {
-		if (ctx.isQuestionSlideIndex(ctx.quizState.current)) ctx.quizState.lastQuestionIndex = ctx.slideMap[ctx.quizState.current].questionIndex;
+	function goToResults(): void {
+		if (ctx.isQuestionSlideIndex(ctx.quizState.current)) ctx.quizState.lastQuestionIndex = (ctx.slideMap[ctx.quizState.current] as { questionIndex: number }).questionIndex;
 		ctx.quizState.pendingResultsLock = !ctx.textOnly?.isTextOnlyMode?.();
 
 		if (ctx.isExamMode && ctx.examStarted && !ctx.examEnded) {
@@ -264,7 +293,7 @@ module.exports = function createStateHandlers(ctx) {
 		}
 
 		// Enregistrer les stats QCM dans le dashboard
-		const statsStore = ctx.plugin?._statsStore;
+		const statsStore = (ctx.plugin as { _statsStore?: StatsStoreLike })._statsStore;
 		if (!ctx.textOnly?.isTextOnlyMode?.() && statsStore && ctx.sourcePath) {
 			const { pct, correct, total } = computeScorePercent();
 			let questionsDone = 0;
@@ -282,7 +311,7 @@ module.exports = function createStateHandlers(ctx) {
 		goToSlide(ctx.SLIDE_RESULTS_INDEX, { forceRender: false });
 	}
 
-	function resetQuiz({ preserveSliding = false, resetToOriginalMode = false } = {}) {
+	function resetQuiz({ preserveSliding = false, resetToOriginalMode = false }: { preserveSliding?: boolean; resetToOriginalMode?: boolean } = {}): void {
 		ctx.closeHintModal();
 		ctx.track.clearTrackTransitionFallback();
 		ctx.viewport.destroyActiveSlideResizeObserver();
@@ -359,4 +388,4 @@ module.exports = function createStateHandlers(ctx) {
 		goToResults,
 		resetQuiz
 	};
-};
+}

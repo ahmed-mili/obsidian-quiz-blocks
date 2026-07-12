@@ -1,13 +1,69 @@
-'use strict';
+import type { DataAdapter } from "obsidian";
+import type { EngineCtx, QuizMode } from "../types/engine-ctx";
+import type {
+	QuizQuestion,
+	QcmQuestion,
+	MultiSelectQuestion,
+	TextQuestion,
+	OrderingQuestion,
+	MatchingQuestion,
+} from "../types/quiz";
 
-module.exports = function createResultsSaver(ctx) {
+export interface OptionEntry {
+	index: number;
+	text: string;
+}
+
+export interface QuestionResult {
+	index: number;
+	id: string | null;
+	title: string;
+	kind: string;
+	promptText: string;
+	answer: unknown;
+	learnText: string;
+	explanationText: string;
+}
+
+export interface ResultsPayload {
+	schemaVersion: number;
+	plugin: string;
+	savedAt: string;
+	sourcePath: string | null;
+	quizMode: QuizMode;
+	practiceMode: string;
+	quizTitle: string;
+	exam: {
+		enabled: boolean;
+		started: boolean;
+		ended: boolean;
+		durationMinutes: number | null;
+		elapsedSeconds: number | null;
+		remainingSeconds: number | null;
+	};
+	summary: Record<string, unknown>;
+	questions: QuestionResult[];
+}
+
+export interface SavedResults {
+	path: string;
+	absolutePath: string;
+}
+
+export interface ResultsSaverHandlers {
+	RESULTS_DIR: string;
+	buildPayload(): ResultsPayload;
+	saveCurrentResults(): Promise<SavedResults>;
+}
+
+export function createResultsSaver(ctx: EngineCtx): ResultsSaverHandlers {
 	const RESULTS_DIR = ".obsidian/quiz-blocks-results";
 
-	function normalizeSpace(value) {
+	function normalizeSpace(value: unknown): string {
 		return String(value ?? "").replace(/\s+/g, " ").trim();
 	}
 
-	function htmlToText(html) {
+	function htmlToText(html: unknown): string {
 		if (!html) return "";
 		if (typeof document !== "undefined" && document.createElement) {
 			const el = document.createElement("div");
@@ -17,15 +73,15 @@ module.exports = function createResultsSaver(ctx) {
 		return normalizeSpace(String(html).replace(/<[^>]*>/g, " "));
 	}
 
-	function markdownLikeToText(value) {
+	function markdownLikeToText(value: unknown): string {
 		return normalizeSpace(String(value ?? "")
 			.replace(/!\[\[([^\]]+)\]\]/g, "$1")
-			.replace(/\[\[([^\]|]+)\|?([^\]]*)\]\]/g, (_m, page, label) => label || page)
+			.replace(/\[\[([^\]|]+)\|?([^\]]*)\]\]/g, (_m: string, page: string, label: string) => label || page)
 			.replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
 			.replace(/[`*_>#-]+/g, " "));
 	}
 
-	function firstText(...values) {
+	function firstText(...values: unknown[]): string {
 		for (const value of values) {
 			if (value === null || value === undefined) continue;
 			const text = typeof value === "string" && /<[^>]+>/.test(value)
@@ -36,7 +92,7 @@ module.exports = function createResultsSaver(ctx) {
 		return "";
 	}
 
-	function slugify(value) {
+	function slugify(value: unknown): string {
 		const slug = String(value ?? "quiz")
 			.normalize("NFD")
 			.replace(/[\u0300-\u036f]/g, "")
@@ -47,41 +103,41 @@ module.exports = function createResultsSaver(ctx) {
 		return slug || "quiz";
 	}
 
-	function pad(n) {
+	function pad(n: number): string {
 		return String(n).padStart(2, "0");
 	}
 
-	function formatLocalTimestamp(date = new Date()) {
+	function formatLocalTimestamp(date: Date = new Date()): string {
 		return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}_${pad(date.getHours())}-${pad(date.getMinutes())}-${pad(date.getSeconds())}`;
 	}
 
-	function sourceBaseName() {
+	function sourceBaseName(): string {
 		const sourcePath = String(ctx.sourcePath || "quiz");
 		const fileName = sourcePath.split(/[\\/]/).pop() || sourcePath;
 		return fileName.replace(/\.[^.]+$/, "") || "quiz";
 	}
 
-	function getQuestionKind(q) {
+	function getQuestionKind(q: QuizQuestion): string {
 		if (ctx.isTextQuestion(q)) return "text";
 		if (ctx.isOrderingQuestion(q)) return "ordering";
 		if (ctx.isMatchingQuestion(q)) return "matching";
-		if (q?.multiSelect) return "multiple-choice";
+		if ((q as { multiSelect?: boolean }).multiSelect) return "multiple-choice";
 		return "single-choice";
 	}
 
-	function getQuestionPromptText(q) {
+	function getQuestionPromptText(q: QuizQuestion): string {
 		return firstText(q?.prompt, q?.promptHtml, q?._promptHtml);
 	}
 
-	function getLearnText(q) {
+	function getLearnText(q: QuizQuestion): string {
 		return firstText(q?.learn, q?.learnHtml, q?._learnHtml);
 	}
 
-	function getExplanationText(q) {
+	function getExplanationText(q: QuizQuestion): string {
 		return firstText(q?.explain, q?.explainHtml, q?._explainHtml);
 	}
 
-	function optionEntry(q, index) {
+	function optionEntry(q: QcmQuestion | MultiSelectQuestion, index: number): OptionEntry {
 		const options = Array.isArray(q?.options) ? q.options : [];
 		const optionHtml = Array.isArray(q?.optionHtml) ? q.optionHtml[index] : null;
 		const text = firstText(options[index], optionHtml);
@@ -91,21 +147,22 @@ module.exports = function createResultsSaver(ctx) {
 		};
 	}
 
-	function optionEntries(q, indices) {
+	function optionEntries(q: QcmQuestion | MultiSelectQuestion, indices: number[]): OptionEntry[] {
 		return indices
 			.filter(index => Number.isInteger(index) && index >= 0)
 			.map(index => optionEntry(q, index));
 	}
 
-	function getCorrectOptionIndices(q) {
+	function getCorrectOptionIndices(q: QcmQuestion | MultiSelectQuestion): number[] {
 		if (ctx.textOnly?.getCorrectOptionIndices) return ctx.textOnly.getCorrectOptionIndices(q);
 		if (q?.multiSelect && Array.isArray(q.correctIndices)) return q.correctIndices.map(Number).filter(Number.isInteger);
-		const index = Number(q?.correctIndex);
+		const index = Number((q as QcmQuestion).correctIndex);
 		return Number.isInteger(index) ? [index] : [];
 	}
 
-	function buildTextQuestionResult(q, qi) {
-		const userAnswer = typeof ctx.quizState.selections?.[qi] === "string" ? ctx.quizState.selections[qi] : "";
+	function buildTextQuestionResult(q: TextQuestion, qi: number) {
+		const sel = ctx.quizState.selections?.[qi];
+		const userAnswer = typeof sel === "string" ? sel : "";
 		const acceptedAnswers = ctx.terminal?.getTextAcceptedAnswers?.(q) || [];
 		return {
 			userAnswer,
@@ -114,14 +171,16 @@ module.exports = function createResultsSaver(ctx) {
 		};
 	}
 
-	function buildOrderingResult(q, qi) {
+	function buildOrderingResult(q: OrderingQuestion, qi: number) {
 		const items = ctx.getOrderingItems(q);
-		const selected = Array.isArray(ctx.quizState.selections?.[qi]) ? ctx.quizState.selections[qi] : [];
+		const selRaw = ctx.quizState.selections?.[qi];
+		const selected = Array.isArray(selRaw) ? selRaw : [];
 		const correctOrder = ctx.getOrderingCorrectOrder(q);
 		return {
 			userOrder: selected.map(index => ({
 				index,
-				text: Number.isInteger(index) && index >= 0 ? String(items[index] ?? "") : null
+				// index est un entier valide dans cette branche (garde Number.isInteger).
+				text: index !== null && Number.isInteger(index) && index >= 0 ? String(items[index] ?? "") : null
 			})),
 			correctOrder: correctOrder.map(index => ({
 				index,
@@ -131,10 +190,11 @@ module.exports = function createResultsSaver(ctx) {
 		};
 	}
 
-	function buildMatchingResult(q, qi) {
+	function buildMatchingResult(q: MatchingQuestion, qi: number) {
 		const rows = ctx.getMatchRows(q);
 		const choices = ctx.getMatchChoices(q);
-		const selected = Array.isArray(ctx.quizState.selections?.[qi]) ? ctx.quizState.selections[qi] : [];
+		const selRaw = ctx.quizState.selections?.[qi];
+		const selected = Array.isArray(selRaw) ? selRaw : [];
 		const correctMap = ctx.getMatchCorrectMap(q);
 		return {
 			userMatches: rows.map((row, i) => {
@@ -142,22 +202,22 @@ module.exports = function createResultsSaver(ctx) {
 				return {
 					row,
 					choiceIndex,
-					choice: Number.isInteger(choiceIndex) && choiceIndex >= 0 ? String(choices[choiceIndex] ?? "") : null
+					choice: choiceIndex !== null && choiceIndex !== undefined && Number.isInteger(choiceIndex) && choiceIndex >= 0 ? String(choices[choiceIndex] ?? "") : null
 				};
 			}),
 			correctMatches: rows.map((row, i) => {
-				const choiceIndex = Array.isArray(correctMap) ? correctMap[i] : null;
+				const choiceIndex: number | null = Array.isArray(correctMap) ? correctMap[i] : null;
 				return {
 					row,
 					choiceIndex,
-					choice: Number.isInteger(choiceIndex) && choiceIndex >= 0 ? String(choices[choiceIndex] ?? "") : null
+					choice: choiceIndex !== null && Number.isInteger(choiceIndex) && choiceIndex >= 0 ? String(choices[choiceIndex] ?? "") : null
 				};
 			}),
 			isCorrect: !!ctx.isCorrect?.(qi)
 		};
 	}
 
-	function buildChoiceResult(q, qi) {
+	function buildChoiceResult(q: QcmQuestion | MultiSelectQuestion, qi: number) {
 		const selected = ctx.quizState.selections?.[qi];
 		const correctIndices = getCorrectOptionIndices(q);
 		if (q?.multiSelect) {
@@ -169,7 +229,7 @@ module.exports = function createResultsSaver(ctx) {
 			};
 		}
 
-		const selectedIndex = Number.isInteger(selected) ? selected : null;
+		const selectedIndex = typeof selected === "number" && Number.isInteger(selected) ? selected : null;
 		return {
 			selectedAnswer: selectedIndex === null ? null : optionEntry(q, selectedIndex),
 			correctAnswer: correctIndices.length ? optionEntry(q, correctIndices[0]) : null,
@@ -177,14 +237,14 @@ module.exports = function createResultsSaver(ctx) {
 		};
 	}
 
-	function buildQcmAnswer(q, qi) {
+	function buildQcmAnswer(q: QuizQuestion, qi: number) {
 		if (ctx.isTextQuestion(q)) return buildTextQuestionResult(q, qi);
 		if (ctx.isOrderingQuestion(q)) return buildOrderingResult(q, qi);
 		if (ctx.isMatchingQuestion(q)) return buildMatchingResult(q, qi);
 		return buildChoiceResult(q, qi);
 	}
 
-	function buildTextOnlyAnswer(q, qi) {
+	function buildTextOnlyAnswer(q: QuizQuestion, qi: number) {
 		const rating = ctx.textOnly?.normalizeRating?.(ctx.quizState.textOnlyRatings?.[qi]) || null;
 		const ratingMeta = ctx.textOnly?.getRatingMeta?.(rating);
 		return {
@@ -198,7 +258,7 @@ module.exports = function createResultsSaver(ctx) {
 		};
 	}
 
-	function buildExpectedAnswers(q) {
+	function buildExpectedAnswers(q: QuizQuestion): unknown {
 		if (ctx.isTextQuestion(q)) {
 			const acceptedAnswers = ctx.terminal?.getTextAcceptedAnswers?.(q) || [];
 			return acceptedAnswers.map((text, index) => ({ index, text: String(text) }));
@@ -218,11 +278,11 @@ module.exports = function createResultsSaver(ctx) {
 			const choices = ctx.getMatchChoices(q);
 			const correctMap = ctx.getMatchCorrectMap(q);
 			return rows.map((row, index) => {
-				const choiceIndex = Array.isArray(correctMap) ? correctMap[index] : null;
+				const choiceIndex: number | null = Array.isArray(correctMap) ? correctMap[index] : null;
 				return {
 					row,
 					choiceIndex,
-					text: Number.isInteger(choiceIndex) && choiceIndex >= 0 ? String(choices[choiceIndex] ?? "") : null
+					text: choiceIndex !== null && Number.isInteger(choiceIndex) && choiceIndex >= 0 ? String(choices[choiceIndex] ?? "") : null
 				};
 			});
 		}
@@ -230,7 +290,7 @@ module.exports = function createResultsSaver(ctx) {
 		return optionEntries(q, getCorrectOptionIndices(q));
 	}
 
-	function buildQuestionResult(q, qi, mode) {
+	function buildQuestionResult(q: QuizQuestion, qi: number, mode: string): QuestionResult {
 		return {
 			index: qi + 1,
 			id: q?.id || null,
@@ -243,7 +303,7 @@ module.exports = function createResultsSaver(ctx) {
 		};
 	}
 
-	function buildSummary(mode) {
+	function buildSummary(mode: string): Record<string, unknown> {
 		if (mode === "training") {
 			return {
 				mode,
@@ -263,7 +323,7 @@ module.exports = function createResultsSaver(ctx) {
 		};
 	}
 
-	function buildPayload() {
+	function buildPayload(): ResultsPayload {
 		const mode = ctx.textOnly?.isTextOnlyMode?.() ? "training" : "qcm";
 		const now = new Date();
 		const elapsedMs = ctx.examStartTime ? Math.max(0, Date.now() - ctx.examStartTime) : null;
@@ -289,7 +349,7 @@ module.exports = function createResultsSaver(ctx) {
 		};
 	}
 
-	async function ensureFolder(adapter, folderPath) {
+	async function ensureFolder(adapter: DataAdapter, folderPath: string): Promise<void> {
 		const parts = folderPath.split("/").filter(Boolean);
 		let current = "";
 		for (const part of parts) {
@@ -300,7 +360,7 @@ module.exports = function createResultsSaver(ctx) {
 		}
 	}
 
-	async function uniquePath(adapter, basePath, ext) {
+	async function uniquePath(adapter: DataAdapter, basePath: string, ext: string): Promise<string> {
 		let path = `${basePath}.${ext}`;
 		let counter = 2;
 		while (await adapter.exists(path)) {
@@ -310,7 +370,7 @@ module.exports = function createResultsSaver(ctx) {
 		return path;
 	}
 
-	async function saveCurrentResults() {
+	async function saveCurrentResults(): Promise<SavedResults> {
 		const adapter = ctx.app?.vault?.adapter;
 		if (!adapter || typeof adapter.write !== "function") {
 			throw new Error("Impossible d'accéder au stockage du vault.");
@@ -327,11 +387,13 @@ module.exports = function createResultsSaver(ctx) {
 		await adapter.write(path, json);
 		try {
 			await adapter.write(`${RESULTS_DIR}/latest.json`, `${JSON.stringify({ ...payload, savedResultPath: path }, null, 2)}\n`);
-		} catch (_) {}
+		} catch (_) { /* le fichier latest.json est un miroir best-effort */ }
 
+		// `basePath` n'existe que sur FileSystemAdapter (desktop), absent du type DataAdapter.
+		const basePath = (adapter as { basePath?: string }).basePath;
 		return {
 			path,
-			absolutePath: ctx.app?.vault?.adapter?.basePath ? `${ctx.app.vault.adapter.basePath}\\${path.replace(/\//g, "\\")}` : path
+			absolutePath: basePath ? `${basePath}\\${path.replace(/\//g, "\\")}` : path
 		};
 	}
 
@@ -340,4 +402,4 @@ module.exports = function createResultsSaver(ctx) {
 		buildPayload,
 		saveCurrentResults
 	};
-};
+}

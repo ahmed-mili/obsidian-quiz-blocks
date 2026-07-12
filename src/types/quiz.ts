@@ -97,6 +97,14 @@ export interface TextQuestion extends QuestionBase {
 	/** Variante terminal (engine/terminal.js getTerminalTextVariant, normalizeTerminalVariantName). */
 	terminalVariant?: string;
 	textVariant?: string;
+	/**
+	 * Formes IMBRIQUÉES alternatives lues en fallback par engine/terminal.ts
+	 * (getTerminalTextVariant `q.text?.variant`/`q.terminal?.variant`,
+	 * getTerminalPromptPrefix `q.terminal?.prefix`, getTextMaxLength
+	 * `q.text?.maxLength`/`q.terminal?.maxLength`). Finding Task 3.
+	 */
+	text?: { variant?: string; maxLength?: number };
+	terminal?: { variant?: string; prefix?: string; maxLength?: number };
 	/** Marqueur legacy : force la variante "cmd" (engine/terminal.js getTerminalTextVariant). */
 	command?: boolean;
 	commandPrefix?: string;

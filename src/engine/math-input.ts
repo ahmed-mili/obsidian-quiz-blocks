@@ -1,5 +1,3 @@
-'use strict';
-
 /* ══════════════════════════════════════════════════════════
    MATH INPUT — éditeur d'équations WYSIWYG (MathLive)
    Champ <math-field> pour les réponses des questions texte
@@ -11,11 +9,53 @@
    Module partagé moteur + éditeur (exports directs).
 ══════════════════════════════════════════════════════════ */
 
-const { hasMath } = require("./mathjax");
+import { Platform, setIcon } from "obsidian";
+import { hasMath } from "./mathjax";
+// Import TYPE only (erased) : garde `mathlive` en chargement LAZY (require dans
+// configureMathlive), tout en typant `MathfieldElement`/le layout et en activant
+// l'augmentation globale `Window.mathVirtualKeyboard` fournie par mathlive.
+import type { MathfieldElement, VirtualKeyboardLayout } from "mathlive";
+
+/** Sous-ensemble structurel des champs de question lus par les 3 fonctions pures. */
+export interface MathQuestionInput {
+	type?: string;
+	_type?: string;
+	mathInput?: boolean;
+	_extraFields?: { mathInput?: boolean; answerTemplate?: string } | null;
+	prompt?: string;
+	promptHtml?: string;
+	_promptHtml?: string;
+	acceptedAnswers?: unknown[];
+	acceptableAnswers?: unknown[];
+	answer?: unknown;
+	caseSensitive?: boolean;
+}
+
+export interface CreateMathFieldOptions {
+	value?: string;
+	template?: string;
+	readOnly?: boolean;
+	placeholder?: string;
+	onInput?: (latex: string) => void;
+	onEnter?: () => void;
+}
+
+export interface MathFieldHandle {
+	el: MathfieldElement;
+	getValue(): string;
+	setValue(l: unknown): void;
+	focus(): void;
+	destroy(): void;
+}
+
+/** electron n'est pas installé comme package (fourni par l'hôte Electron d'Obsidian) : type minimal. */
+interface ElectronLike {
+	webFrame: { getZoomFactor(): number };
+}
 
 /* Une question texte est « math » si l'IA l'a marquée mathInput, ou si
    son énoncé / une réponse acceptée contient un segment $...$. */
-function isMathQuestion(q) {
+function isMathQuestion(q: MathQuestionInput | null | undefined): boolean {
 	if (!q || (q.type !== "text" && q._type !== "text")) return false;
 	// Le flag vit à la racine (moteur, JSON5 brut) ou dans _extraFields
 	// (objet normalisé de l'éditeur — clé inconnue préservée).
@@ -23,7 +63,7 @@ function isMathQuestion(q) {
 	if (flag === true) return true;
 	if (flag === false) return false;
 	if (hasMath(q.prompt || "") || hasMath(q.promptHtml || q._promptHtml || "")) return true;
-	const answers = [...(q.acceptedAnswers || []), ...(q.acceptableAnswers || [])];
+	const answers: unknown[] = [...(q.acceptedAnswers || []), ...(q.acceptableAnswers || [])];
 	if (typeof q.answer === "string") answers.push(q.answer);
 	return answers.some(a => typeof a === "string" && (hasMath(a) || /\\[a-zA-Z]{2,}/.test(a)));
 }
@@ -32,7 +72,7 @@ function isMathQuestion(q) {
    d'équivalence symbolique — x\cdot4 ≠ 4x ; chaque forme acceptable est
    listée dans acceptedAnswers). Rend comparables les écritures
    équivalentes d'un MÊME LaTeX. */
-function normalizeMathAnswer(latex, { caseSensitive = false } = {}) {
+function normalizeMathAnswer(latex: unknown, { caseSensitive = false }: { caseSensitive?: boolean } = {}): string {
 	let s = String(latex ?? "").trim();
 	// Dollars des acceptedAnswers d'auteur ($...$) : la valeur comparée
 	// est le contenu.
@@ -55,8 +95,8 @@ function normalizeMathAnswer(latex, { caseSensitive = false } = {}) {
 
 /* La réponse de l'élève (LaTeX MathLive) correspond-elle à une des
    réponses acceptées de la question ? */
-function matchesMathAnswer(studentLatex, q) {
-	const accepted = [...(q.acceptedAnswers || []), ...(q.acceptableAnswers || [])];
+function matchesMathAnswer(studentLatex: unknown, q: MathQuestionInput): boolean {
+	const accepted: unknown[] = [...(q.acceptedAnswers || []), ...(q.acceptableAnswers || [])];
 	if (typeof q.answer === "string") accepted.push(q.answer);
 	const opts = { caseSensitive: !!q.caseSensitive };
 	const student = normalizeMathAnswer(studentLatex, opts);
@@ -71,11 +111,11 @@ function matchesMathAnswer(studentLatex, q) {
    puis on hide réellement. Un re-focus pendant la sortie l'annule. */
 let __kbExitTimer = 0;
 
-function cancelKeyboardExit() {
+function cancelKeyboardExit(): void {
 	if (!__kbExitTimer) return;
 	clearTimeout(__kbExitTimer);
 	__kbExitTimer = 0;
-	const b = document.querySelector(".ML__keyboard .MLK__backdrop");
+	const b = document.querySelector<HTMLElement>(".ML__keyboard .MLK__backdrop");
 	if (b) b.style.opacity = "";
 }
 
@@ -86,9 +126,11 @@ function cancelKeyboardExit() {
    À appeler quand AUCUN clavier n'est visible. */
 /* Retire la poussée de l'app par le clavier — MÊME clavier visible
    (mode overlay) : le padding inline du body ET le mémo du singleton. */
-function suppressKeyboardPush() {
+function suppressKeyboardPush(): void {
 	if (document.body.style.paddingBottom) document.body.style.paddingBottom = "";
-	const kb = window.mathVirtualKeyboard;
+	// `originalContainerBottomPadding` est un champ INTERNE MathLive absent des
+	// types publics (VirtualKeyboardInterface) : cast local pour le purger.
+	const kb = window.mathVirtualKeyboard as typeof window.mathVirtualKeyboard & { originalContainerBottomPadding?: unknown };
 	if (kb && kb.originalContainerBottomPadding) {
 		try { kb.originalContainerBottomPadding = null; } catch (e) { /* best effort */ }
 	}
@@ -98,10 +140,10 @@ function suppressKeyboardPush() {
    demande Ahmed 2026-07-11). Le DOM du clavier est DÉTRUIT à chaque
    hide → tout est (ré)appliqué après chaque show : classe flottante,
    position mémorisée (session), poignée de drag + bouton fermer. ── */
-let __kbPos = null; // { left, top } mémorisée pour la session
+let __kbPos: { left: number; top: number; w: number; h: number } | null = null; // position mémorisée pour la session
 let __kbDragging = false; // drag en cours : ne pas fermer le clavier
-let __lastMathfield = null; // dernier champ focalisé (refocus post-drag)
-let __kbCursorEl = null; // réplique du curseur système pendant le drag
+let __lastMathfield: HTMLElement | null = null; // dernier champ focalisé (refocus post-drag)
+let __kbCursorEl: HTMLDivElement | null = null; // réplique du curseur système pendant le drag
 
 /* Le curseur système est rendu par l'OS (hardware, latence ~0) ; tout
    élément DOM le suit avec 1-2 frames de compositing de retard — à
@@ -113,12 +155,12 @@ let __kbCursorEl = null; // réplique du curseur système pendant le drag
    MÊME frame compositée : écart relatif nul par construction. Pointe
    du glyphe à (1,1) dans le SVG (marge anti-rognage du contour) :
    compenser d'1px au positionnement. */
-function getDragCursor() {
+function getDragCursor(): HTMLDivElement {
 	if (__kbCursorEl) return __kbCursorEl;
 	// Couleurs du curseur natif de CHAQUE OS : macOS = flèche noire à
 	// liseré blanc ; Windows/Linux = blanche à contour noir. Même
 	// silhouette, le swap reste discret pour tout utilisateur.
-	const mac = require("obsidian").Platform.isMacOS;
+	const mac = Platform.isMacOS;
 	const c = document.createElement("div");
 	c.className = "qbd-kb-cursor";
 	c.innerHTML = '<svg width="16" height="22" viewBox="0 0 16 22">'
@@ -129,15 +171,15 @@ function getDragCursor() {
 	return c;
 }
 
-function clampKbPos(left, top, w, h) {
+function clampKbPos(left: number, top: number, w: number, h: number): { left: number; top: number } {
 	return {
 		left: Math.min(Math.max(8, left), window.innerWidth - w - 8),
 		top: Math.min(Math.max(8, top), window.innerHeight - h - 8),
 	};
 }
 
-function makeKeyboardFloating(attempt = 0) {
-	const backdrop = document.querySelector(".ML__keyboard.is-visible .MLK__backdrop");
+function makeKeyboardFloating(attempt = 0): void {
+	const backdrop = document.querySelector<HTMLElement>(".ML__keyboard.is-visible .MLK__backdrop");
 	if (!backdrop) {
 		// Le show peut poser is-visible une frame plus tard : retenter
 		// brièvement (10 frames max) avant d'abandonner.
@@ -172,12 +214,12 @@ function makeKeyboardFloating(attempt = 0) {
 	handle.className = "qbd-kb-handle";
 	const grip = document.createElement("span");
 	grip.className = "qbd-kb-handle-grip";
-	require("obsidian").setIcon(grip, "grip-horizontal");
+	setIcon(grip, "grip-horizontal");
 	const close = document.createElement("button");
 	close.type = "button";
 	close.className = "qbd-kb-handle-close";
 	close.setAttribute("aria-label", "Fermer le clavier");
-	require("obsidian").setIcon(close, "x");
+	setIcon(close, "x");
 	close.addEventListener("click", () => {
 		// La croix ferme le clavier ET désélectionne le champ (demande Ahmed) :
 		// blur du dernier champ focalisé → le caret et l'anneau de focus
@@ -187,8 +229,9 @@ function makeKeyboardFloating(attempt = 0) {
 		// rappelle hide en filet de sécurité (cas d'un champ sans focus DOM
 		// réel) — le clearTimeout de __kbExitTimer dans hideKeyboardSoftly
 		// déduplique le fondu : pas de double déclenchement.
-		const mf = (__lastMathfield && __lastMathfield.isConnected) ? __lastMathfield
-			: (document.activeElement && document.activeElement.tagName === "MATH-FIELD" ? document.activeElement : null);
+		const active = document.activeElement as HTMLElement | null;
+		const mf: HTMLElement | null = (__lastMathfield && __lastMathfield.isConnected) ? __lastMathfield
+			: (active && active.tagName === "MATH-FIELD" ? active : null);
 		__lastMathfield = null;
 		if (mf && typeof mf.blur === "function") mf.blur();
 		hideKeyboardSoftly();
@@ -204,8 +247,8 @@ function makeKeyboardFloating(attempt = 0) {
 	// entre touches) déplace. Le blur du champ pendant le drag est
 	// neutralisé par __kbDragging, focus rendu au relâchement.
 	const INTERACTIVE = ".MLK__keycap, .MLK__shift, [data-command], button, [role=button], .MLK__toolbar *, .MLK__variant-panel, .layer-switch, .qbd-kb-handle-close";
-	backdrop.addEventListener("pointerdown", (e) => {
-		if (e.target.closest(INTERACTIVE)) return;
+	backdrop.addEventListener("pointerdown", (e: PointerEvent) => {
+		if ((e.target as Element | null)?.closest(INTERACTIVE)) return;
 		e.preventDefault();
 		e.stopPropagation();
 		__kbDragging = true;
@@ -233,7 +276,7 @@ function makeKeyboardFloating(attempt = 0) {
 		let ghostScale = "", hot = 1;
 		if (ghost) {
 			let zf = 1;
-			try { zf = require("electron").webFrame.getZoomFactor() || 1; } catch (err) { /* desktop only */ }
+			try { zf = (require("electron") as ElectronLike).webFrame.getZoomFactor() || 1; } catch (err) { /* desktop only */ }
 			if (zf !== 1) { ghostScale = " scale(" + (1 / zf) + ")"; hot = 1 / zf; }
 			ghost.style.transform = "translate(" + (e.clientX - hot) + "px, " + (e.clientY - hot) + "px)" + ghostScale;
 			document.body.appendChild(ghost);
@@ -246,7 +289,7 @@ function makeKeyboardFloating(attempt = 0) {
 		// le sous-arbre du clavier à chaque frame. Clavier ET réplique
 		// mis à jour dans le même handler → composités dans la même
 		// frame. left/top consolidés au relâchement seulement.
-		const onMove = (ev) => {
+		const onMove = (ev: PointerEvent) => {
 			const pos = clampKbPos(ev.clientX - dx, ev.clientY - dy, r.width, r.height);
 			backdrop.style.setProperty("transform",
 				"translate(" + (pos.left - startLeft) + "px, " + (pos.top - startTop) + "px)", "important");
@@ -278,21 +321,21 @@ function makeKeyboardFloating(attempt = 0) {
 	}, { capture: true });
 }
 
-function clearKeyboardBodyPadding() {
+function clearKeyboardBodyPadding(): void {
 	if (document.querySelector(".ML__keyboard.is-visible")) return;
 	if (document.body.style.paddingBottom) document.body.style.paddingBottom = "";
 	// Le singleton MathLive MÉMORISE le « padding original » et le
 	// restaure à chaque hide (et l'ADDITIONNE au show suivant) : un
 	// résidu pollué s'auto-entretient — 313 → 625 → … (mesuré). Purger
 	// aussi le mémo.
-	const kb = window.mathVirtualKeyboard;
+	const kb = window.mathVirtualKeyboard as typeof window.mathVirtualKeyboard & { originalContainerBottomPadding?: unknown };
 	if (kb && kb.originalContainerBottomPadding) {
 		try { kb.originalContainerBottomPadding = null; } catch (e) { /* lecture seule ? tant pis */ }
 	}
 }
 
-function hideKeyboardSoftly() {
-	const b = document.querySelector(".ML__keyboard.is-visible .MLK__backdrop");
+function hideKeyboardSoftly(): void {
+	const b = document.querySelector<HTMLElement>(".ML__keyboard.is-visible .MLK__backdrop");
 	if (!b) {
 		try { window.mathVirtualKeyboard?.hide({ animate: false }); } catch (e) { /* déjà fermé */ }
 		clearKeyboardBodyPadding();
@@ -317,13 +360,13 @@ function hideKeyboardSoftly() {
    = label rendu ET fragment inséré ; `command` = action, qui prime sur `latex`
    réduit alors au rôle de label). */
 const __PH = "\\placeholder{}";
-function __mkMatrix(env, rows, cols) {
+function __mkMatrix(env: string, rows: number, cols: number): string {
 	// Une rangée = cols placeholders séparés par & ; les rangées séparées par
 	// \\ (double backslash LaTeX → quadruple en chaîne JS).
-	const line = new Array(cols).fill(__PH).join("&");
-	return "\\begin{" + env + "}" + new Array(rows).fill(line).join("\\\\") + "\\end{" + env + "}";
+	const line = new Array<string>(cols).fill(__PH).join("&");
+	return "\\begin{" + env + "}" + new Array<string>(rows).fill(line).join("\\\\") + "\\end{" + env + "}";
 }
-const MATRIX_LAYOUT = {
+const MATRIX_LAYOUT: VirtualKeyboardLayout = {
 	// Le label de l'onglet est injecté en markup brut par MathLive (pas de rendu
 	// LaTeX) → glyphe Unicode évoquant une matrice, cohérent avec 123/∫/αβγ.
 	label: "[∷]",
@@ -350,16 +393,16 @@ const MATRIX_LAYOUT = {
 
 let __mathliveConfigured = false;
 
-function configureMathlive() {
+function configureMathlive(): void {
 	if (__mathliveConfigured) return;
-	const lib = require("mathlive");
+	const lib = require("mathlive") as typeof import("mathlive");
 	// PIÈGE reload plugin : customElements.define('math-field') ne peut
 	// arriver qu'UNE fois par page — après un disable/enable, l'élément
 	// enregistré reste la classe de l'ANCIEN bundle. document.createElement
 	// utilise l'enregistrée : c'est ELLE qu'il faut configurer, sinon
 	// fontsDirectory retombe sur './fonts' (requêtes mortes, erreurs au
 	// focus/blur). Un redémarrage complet d'Obsidian reste l'état propre.
-	const MFE = customElements.get("math-field") || lib.MathfieldElement;
+	const MFE = (customElements.get("math-field") || lib.MathfieldElement) as typeof import("mathlive").MathfieldElement;
 	// Fonts fournies par styles.css (data-URI au build) ; null = MathLive
 	// ne tente AUCUN chargement (doc officielle). Sons désactivés.
 	MFE.fontsDirectory = null;
@@ -385,10 +428,10 @@ function configureMathlive() {
  * (demande Ahmed : pas besoin de cliquer le bouton clavier) et se
  * referme au blur. Thème : variables CSS dans math-input.css.
  */
-function createMathField(host, opts = {}) {
+function createMathField(host: HTMLElement, opts: CreateMathFieldOptions = {}): MathFieldHandle {
 	configureMathlive();
 
-	const mf = document.createElement("math-field");
+	const mf = document.createElement("math-field") as MathfieldElement;
 	mf.classList.add("quiz-mathfield");
 	// Ouverture pilotée par nous (focusin) — pas seulement tactile.
 	mf.mathVirtualKeyboardPolicy = "manual";
@@ -422,14 +465,16 @@ function createMathField(host, opts = {}) {
 	mf.addEventListener("mount", clearMenu);
 	clearMenu();
 
-	if (opts.onInput) {
-		mf.addEventListener("input", () => opts.onInput(mf.getValue("latex")));
+	const onInput = opts.onInput;
+	if (onInput) {
+		mf.addEventListener("input", () => onInput(mf.getValue("latex")));
 	}
-	if (opts.onEnter) {
+	const onEnter = opts.onEnter;
+	if (onEnter) {
 		mf.addEventListener("keydown", (e) => {
 			if (e.key === "Enter" && !e.shiftKey && !e.isComposing) {
 				e.preventDefault();
-				opts.onEnter();
+				onEnter();
 			}
 		});
 	}
@@ -450,7 +495,7 @@ function createMathField(host, opts = {}) {
 			requestAnimationFrame(() => {
 				suppressKeyboardPush();
 				makeKeyboardFloating();
-				const kbTop = document.querySelector(".ML__keyboard.is-visible .MLK__backdrop")?.getBoundingClientRect().top;
+				const kbTop = document.querySelector<HTMLElement>(".ML__keyboard.is-visible .MLK__backdrop")?.getBoundingClientRect().top;
 				const r = mf.getBoundingClientRect();
 				if (kbTop && r.bottom > kbTop) mf.scrollIntoView({ block: "center", behavior: "smooth" });
 			});
@@ -466,7 +511,7 @@ function createMathField(host, opts = {}) {
 	return {
 		el: mf,
 		getValue: () => mf.getValue("latex"),
-		setValue: (l) => mf.setValue(String(l ?? "").replace(/^\$\$?|\$\$?$/g, "")),
+		setValue: (l: unknown) => mf.setValue(String(l ?? "").replace(/^\$\$?|\$\$?$/g, "")),
 		focus: () => mf.focus(),
 		destroy: () => {
 			mf.remove();
@@ -474,7 +519,7 @@ function createMathField(host, opts = {}) {
 	};
 }
 
-module.exports = {
+export {
 	isMathQuestion, normalizeMathAnswer, matchesMathAnswer,
 	createMathField,
 };

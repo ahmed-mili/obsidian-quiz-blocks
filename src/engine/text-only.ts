@@ -1,47 +1,93 @@
-'use strict';
+import type { EngineCtx } from "../types/engine-ctx";
+import type {
+	QuizQuestion,
+	TextQuestion,
+	QcmQuestion,
+	MultiSelectQuestion,
+	TextOnlyRating,
+} from "../types/quiz";
 
-module.exports = function createTextOnlyHandlers(ctx) {
-	const RATINGS = {
+export interface TextOnlyResults {
+	understood: number;
+	partial: number;
+	review: number;
+	pending: number;
+	total: number;
+	rated: number;
+}
+
+export interface RatingMeta {
+	label: string;
+	className: string;
+}
+
+export interface TextOnlyHandlers {
+	RATINGS: Record<TextOnlyRating, RatingMeta>;
+	isTextOnlyMode(): boolean;
+	isExamAnswerPhase(): boolean;
+	isExamReviewPhase(): boolean;
+	normalizeRating(value: TextOnlyRating | null | undefined): TextOnlyRating | null;
+	getRatingMeta(value: TextOnlyRating | null | undefined): RatingMeta | null;
+	hasAnyAnswer(qi: number): boolean;
+	isChecked(qi: number): boolean;
+	isRated(qi: number): boolean;
+	computeResults(): TextOnlyResults;
+	getCorrectOptionIndices(q: QuizQuestion): number[];
+	expectedAnswerHtml(q: QuizQuestion): string;
+	learningHtml(q: QuizQuestion): string;
+	comparisonOptionsHtml(q: QuizQuestion, qi: number): string;
+	ratingButtonsHtml(qi: number): string;
+	questionCardBodyHtml(q: QuizQuestion, qi: number): string;
+	questionActionsHtml(qi: number): string;
+	bindTextOnlyQuestion(trackItem: HTMLElement, qi: number): void;
+}
+
+export function createTextOnlyHandlers(ctx: EngineCtx): TextOnlyHandlers {
+	const RATINGS: Record<TextOnlyRating, RatingMeta> = {
 		understood: { label: "Compris", className: "understood" },
 		partial: { label: "Partiel", className: "partial" },
 		review: { label: "À revoir", className: "review" }
 	};
 
-	function isTextOnlyMode() {
+	function isTextOnlyMode(): boolean {
 		return ctx.quizState?.practiceMode === "text";
 	}
 
-	function isExamAnswerPhase() {
+	function isExamAnswerPhase(): boolean {
 		return isTextOnlyMode() && !!ctx.isExamMode && !!ctx.examStarted && !ctx.examEnded;
 	}
 
-	function isExamReviewPhase() {
+	function isExamReviewPhase(): boolean {
 		return isTextOnlyMode() && !!ctx.isExamMode && !!ctx.examEnded;
 	}
 
-	function normalizeRating(value) {
-		return Object.prototype.hasOwnProperty.call(RATINGS, value) ? value : null;
+	function normalizeRating(value: TextOnlyRating | null | undefined): TextOnlyRating | null {
+		// Iso-fonctionnel avec `hasOwnProperty.call(RATINGS, value) ? value : null` :
+		// pour value null/undefined, hasOwnProperty renvoie false → null. Le garde
+		// `value != null` reproduit ce résultat exact tout en narrowing value en
+		// clé valide (PropertyKey) pour hasOwnProperty.
+		return value != null && Object.prototype.hasOwnProperty.call(RATINGS, value) ? value : null;
 	}
 
-	function getRatingMeta(value) {
+	function getRatingMeta(value: TextOnlyRating | null | undefined): RatingMeta | null {
 		const normalized = normalizeRating(value);
 		return normalized ? RATINGS[normalized] : null;
 	}
 
-	function hasAnyAnswer(qi) {
+	function hasAnyAnswer(qi: number): boolean {
 		const answer = ctx.quizState.textOnlyAnswers?.[qi];
 		return typeof answer === "string" && answer.trim().length > 0;
 	}
 
-	function isChecked(qi) {
+	function isChecked(qi: number): boolean {
 		return !!ctx.quizState.textOnlyChecked?.[qi] || isExamReviewPhase();
 	}
 
-	function isRated(qi) {
+	function isRated(qi: number): boolean {
 		return !!normalizeRating(ctx.quizState.textOnlyRatings?.[qi]);
 	}
 
-	function computeResults() {
+	function computeResults(): TextOnlyResults {
 		const counts = { understood: 0, partial: 0, review: 0, pending: 0 };
 		for (let i = 0; i < ctx.quiz.length; i++) {
 			const rating = normalizeRating(ctx.quizState.textOnlyRatings?.[i]);
@@ -51,31 +97,37 @@ module.exports = function createTextOnlyHandlers(ctx) {
 		return { ...counts, total: ctx.quiz.length, rated: ctx.quiz.length - counts.pending };
 	}
 
-	function getCorrectOptionIndices(q) {
+	function getCorrectOptionIndices(q: QuizQuestion): number[] {
 		if (!q) return [];
-		if (q.multiSelect && Array.isArray(q.correctIndices)) {
-			return q.correctIndices
+		// Lecture uniforme des champs QCM (options/correctIndices/correctIndex) —
+		// pour les variantes non-QCM ces champs sont absents ⇒ retour [].
+		const qc = q as QcmQuestion | MultiSelectQuestion;
+		if (qc.multiSelect && Array.isArray(qc.correctIndices)) {
+			return qc.correctIndices
 				.map(Number)
-				.filter(i => Number.isInteger(i) && i >= 0 && i < (q.options || []).length);
+				.filter(i => Number.isInteger(i) && i >= 0 && i < (qc.options || []).length);
 		}
-		const correctIndex = Number(q.correctIndex);
-		if (Number.isInteger(correctIndex) && correctIndex >= 0 && correctIndex < (q.options || []).length) {
+		const correctIndex = Number((qc as QcmQuestion).correctIndex);
+		if (Number.isInteger(correctIndex) && correctIndex >= 0 && correctIndex < (qc.options || []).length) {
 			return [correctIndex];
 		}
 		return [];
 	}
 
-	function expectedAnswerHtml(q) {
+	function expectedAnswerHtml(q: QuizQuestion): string {
 		const indices = getCorrectOptionIndices(q);
 		if (indices.length > 0) {
 			const items = indices.map(oi => {
-				const content = ctx.cards.optionContentHtml(q, oi);
+				// Invariant : indices non vides ⇒ question QCM.
+				const content = ctx.cards.optionContentHtml(q as QcmQuestion | MultiSelectQuestion, oi);
 				return `<div class="quiz-textonly-expected-item">${content}</div>`;
 			}).join("");
 			return `<div class="quiz-textonly-expected-list">${items}</div>`;
 		}
 
-		const accepted = ctx.terminal?.getTextAcceptedAnswers?.(q) || [];
+		// getTextAcceptedAnswers est tolérant (champs texte optionnels) : pour une
+		// variante non-texte il renvoie [] — cast documenté.
+		const accepted = ctx.terminal?.getTextAcceptedAnswers?.(q as TextQuestion) || [];
 		if (accepted.length > 0) {
 			return `<div class="quiz-textonly-expected-item">${ctx.escapeHtmlText(accepted[0])}</div>`;
 		}
@@ -103,8 +155,8 @@ module.exports = function createTextOnlyHandlers(ctx) {
 		return `<div class="quiz-textonly-expected-item">Réponse attendue non renseignée.</div>`;
 	}
 
-	function learningHtml(q) {
-		const chunks = [];
+	function learningHtml(q: QuizQuestion): string {
+		const chunks: string[] = [];
 		const learnHtml = q.learnHtml || q._learnHtml;
 		if (learnHtml || q.learn) {
 			const content = learnHtml
@@ -124,16 +176,16 @@ module.exports = function createTextOnlyHandlers(ctx) {
 		return chunks.join("");
 	}
 
-	function comparisonOptionsHtml(q, qi) {
-		if (!Array.isArray(q.options) || q.options.length === 0) return "";
+	function comparisonOptionsHtml(q: QuizQuestion, qi: number): string {
+		const qOptions = (q as { options?: string[] }).options;
+		if (!Array.isArray(qOptions) || qOptions.length === 0) return "";
 		const correct = new Set(getCorrectOptionIndices(q));
-		const order = Array.isArray(ctx.quizState.shuffleMap?.[qi])
-			? ctx.quizState.shuffleMap[qi]
-			: [...Array(q.options.length).keys()];
+		const shuf = ctx.quizState.shuffleMap?.[qi];
+		const order: number[] = Array.isArray(shuf) ? shuf : [...Array(qOptions.length).keys()];
 
 		const options = order.map(oi => {
 			const cls = correct.has(oi) ? "correct" : "";
-			return `<div class="quiz-option quiz-textonly-option ${cls}" data-textonly-orig="${oi}">${ctx.cards.optionContentHtml(q, oi)}</div>`;
+			return `<div class="quiz-option quiz-textonly-option ${cls}" data-textonly-orig="${oi}">${ctx.cards.optionContentHtml(q as QcmQuestion | MultiSelectQuestion, oi)}</div>`;
 		}).join("");
 
 		const hasImg = /<img[\s>]/i.test(options);
@@ -143,12 +195,12 @@ module.exports = function createTextOnlyHandlers(ctx) {
 		</div>`;
 	}
 
-	function ratingButtonsHtml(qi) {
+	function ratingButtonsHtml(qi: number): string {
 		const current = normalizeRating(ctx.quizState.textOnlyRatings?.[qi]);
 		return `<div class="quiz-textonly-self">
 			<div class="quiz-textonly-label">Auto-évaluation</div>
 			<div class="quiz-textonly-rating-row">
-				${Object.entries(RATINGS).map(([value, meta]) => {
+				${(Object.entries(RATINGS) as Array<[TextOnlyRating, RatingMeta]>).map(([value, meta]) => {
 					const selected = current === value ? " selected" : "";
 					return `<button class="quiz-action-btn quiz-textonly-rating-btn ${meta.className}${selected}" type="button" data-textonly-rating="${value}" aria-pressed="${current === value ? "true" : "false"}">${meta.label}</button>`;
 				}).join("")}
@@ -156,7 +208,7 @@ module.exports = function createTextOnlyHandlers(ctx) {
 		</div>`;
 	}
 
-	function questionCardBodyHtml(q, qi) {
+	function questionCardBodyHtml(q: QuizQuestion, qi: number): string {
 		const checked = isChecked(qi);
 		const examAnswerPhase = isExamAnswerPhase();
 		const revealed = checked && !examAnswerPhase;
@@ -191,7 +243,7 @@ module.exports = function createTextOnlyHandlers(ctx) {
 		</div>`;
 	}
 
-	function questionActionsHtml(qi) {
+	function questionActionsHtml(qi: number): string {
 		const isFirst = qi <= 0;
 		const isLast = qi >= ctx.quiz.length - 1;
 		const lastLabel = isExamAnswerPhase() ? "Terminer l'examen" : "Résultats";
@@ -203,7 +255,7 @@ module.exports = function createTextOnlyHandlers(ctx) {
 		</div>`;
 	}
 
-	function syncTextAreaHeight(textarea) {
+	function syncTextAreaHeight(textarea: HTMLTextAreaElement): void {
 		if (ctx.terminal?.syncTextAreaHeight) {
 			ctx.terminal.syncTextAreaHeight(textarea);
 			return;
@@ -212,8 +264,8 @@ module.exports = function createTextOnlyHandlers(ctx) {
 		textarea.style.height = `${Math.max(220, textarea.scrollHeight)}px`;
 	}
 
-	function bindTextOnlyQuestion(trackItem, qi) {
-		const textarea = trackItem.querySelector(".quiz-textonly-textarea[data-textonly-answer]");
+	function bindTextOnlyQuestion(trackItem: HTMLElement, qi: number): void {
+		const textarea = trackItem.querySelector<HTMLTextAreaElement>(".quiz-textonly-textarea[data-textonly-answer]");
 		if (textarea) {
 			const syncLayout = () => {
 				syncTextAreaHeight(textarea);
@@ -248,19 +300,19 @@ module.exports = function createTextOnlyHandlers(ctx) {
 			textarea.addEventListener("keydown", e => {
 				if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
 					e.preventDefault();
-					const checkBtn = trackItem.querySelector(".quiz-textonly-check-btn");
+					const checkBtn = trackItem.querySelector<HTMLButtonElement>(".quiz-textonly-check-btn");
 					if (checkBtn) checkBtn.click();
 				}
 			});
 			syncLayout();
 		}
 
-		const checkBtn = trackItem.querySelector(".quiz-textonly-check-btn");
+		const checkBtn = trackItem.querySelector<HTMLButtonElement>(".quiz-textonly-check-btn");
 		if (checkBtn) {
 			checkBtn.addEventListener("click", e => {
 				e.preventDefault();
 				if (ctx.quizState.isSliding) return;
-				const liveTextarea = trackItem.querySelector(".quiz-textonly-textarea[data-textonly-answer]");
+				const liveTextarea = trackItem.querySelector<HTMLTextAreaElement>(".quiz-textonly-textarea[data-textonly-answer]");
 				ctx.invalidateSavedResults?.();
 				ctx.quizState.textOnlyAnswers[qi] = String(liveTextarea?.value ?? ctx.quizState.textOnlyAnswers[qi] ?? "");
 				ctx.quizState.textOnlyChecked[qi] = true;
@@ -268,11 +320,11 @@ module.exports = function createTextOnlyHandlers(ctx) {
 			});
 		}
 
-		trackItem.querySelectorAll(".quiz-textonly-rating-btn[data-textonly-rating]").forEach(btn => {
+		trackItem.querySelectorAll<HTMLElement>(".quiz-textonly-rating-btn[data-textonly-rating]").forEach(btn => {
 			btn.addEventListener("click", e => {
 				e.preventDefault();
 				if (ctx.quizState.isSliding) return;
-				const rating = normalizeRating(btn.dataset.textonlyRating);
+				const rating = normalizeRating(btn.dataset.textonlyRating as TextOnlyRating | undefined);
 				if (!rating) return;
 				ctx.quizState.textOnlyRatings[qi] = rating;
 				ctx.commitQuestionInteraction(qi, { syncHeight: true });
@@ -300,4 +352,4 @@ module.exports = function createTextOnlyHandlers(ctx) {
 		questionActionsHtml,
 		bindTextOnlyQuestion
 	};
-};
+}

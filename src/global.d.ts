@@ -4,7 +4,8 @@ declare global {
   interface HTMLElement {
     // Cycle de vie
     __quizDestroy?: () => void;
-    __quizTextQuestionCleanup?: () => void;
+    // Nullable : terminal.ts remet le cleanup à `null` après exécution (bindMathQuestion / bindTextQuestion).
+    __quizTextQuestionCleanup?: (() => void) | null;
     // Track / animation (engine/track.ts)
     // Nullable : track.ts remet le handler à `null` après retrait (cancelRunningTrackAnimation / finishTrackSlideAnimation).
     __quizTransitionEndHandler?: ((e: TransitionEvent) => void) | null;

@@ -1,14 +1,41 @@
-'use strict';
+import type { EngineCtx } from "../types/engine-ctx";
+import type { QuizQuestion, TextQuestion } from "../types/quiz";
+import { isMathQuestion, matchesMathAnswer, createMathField } from "./math-input";
 
-module.exports = function createTerminalHandlers(ctx) {
-	// Variables locales au module
-	let __quizTextQuestionCleanup = null;
+export interface TerminalVisualTokens {
+	leading: string;
+	command: string;
+	rest: string;
+}
+
+export interface TerminalHandlers {
+	normalizeTerminalVariantName(value: unknown): string | null;
+	getTerminalTextVariant(q: QuizQuestion): string | null;
+	isTerminalTextQuestion(q: QuizQuestion): boolean;
+	isCommandTextQuestion(q: QuizQuestion): boolean;
+	getTerminalPromptPrefix(q: TextQuestion): string;
+	renderTerminalPromptPrefixHtml(q: TextQuestion): string;
+	getTextMaxLength(q: TextQuestion): number | null;
+	sliceToMaxChars(value: unknown, maxLength: number | null): string;
+	sanitizeTextAnswerValue(q: TextQuestion, value: unknown): string;
+	getTextAcceptedAnswers(q: TextQuestion): string[];
+	normalizeTextAnswer(value: unknown, opts?: { caseSensitive?: boolean }): string;
+	isTextAnswerCorrect(q: TextQuestion, value: unknown): boolean;
+	syncTextAreaHeight(textarea: HTMLTextAreaElement | null): void;
+	splitTerminalVisualTokens(value: unknown, variant: string | null): TerminalVisualTokens;
+	textQuestionCardHtml(q: TextQuestion, qi: number): string;
+	bindTextQuestion(trackItem: HTMLElement, qi: number): void;
+}
+
+export function createTerminalHandlers(ctx: EngineCtx): TerminalHandlers {
+	// Variable locale au module (conservée à l'identique du JS ; jamais relue).
+	let __quizTextQuestionCleanup: (() => void) | null = null;
 
 	// ═══════════════════════════════════════════════════════
 	// FONCTIONS PURES (sans dépendances externes)
 	// ═══════════════════════════════════════════════════════
 
-	function normalizeTerminalVariantName(value) {
+	function normalizeTerminalVariantName(value: unknown): string | null {
 		const raw = String(value ?? "").trim().toLowerCase();
 		if (!raw) return null;
 
@@ -45,7 +72,7 @@ module.exports = function createTerminalHandlers(ctx) {
 		return raw.replace(/\s+/g, "-");
 	}
 
-	function getTerminalTextVariant(q) {
+	function getTerminalTextVariant(q: QuizQuestion): string | null {
 		if (!ctx.isTextQuestion(q)) return null;
 
 		const candidates = [
@@ -65,11 +92,11 @@ module.exports = function createTerminalHandlers(ctx) {
 		return null;
 	}
 
-	const isTerminalTextQuestion = q => !!getTerminalTextVariant(q);
+	const isTerminalTextQuestion = (q: QuizQuestion): boolean => !!getTerminalTextVariant(q);
 
-	const isCommandTextQuestion = q => isTerminalTextQuestion(q);
+	const isCommandTextQuestion = (q: QuizQuestion): boolean => isTerminalTextQuestion(q);
 
-	function getTerminalPromptPrefix(q) {
+	function getTerminalPromptPrefix(q: TextQuestion): string {
 		const explicitPrefix = [
 			q?.commandPrefix,
 			q?.terminalPrefix,
@@ -100,7 +127,7 @@ module.exports = function createTerminalHandlers(ctx) {
 		return "C:\\>";
 	}
 
-	function renderTerminalPromptPrefixHtml(q) {
+	function renderTerminalPromptPrefixHtml(q: TextQuestion): string {
 		const promptPrefix = String(getTerminalPromptPrefix(q) ?? "");
 		const variant = getTerminalTextVariant(q);
 
@@ -122,7 +149,7 @@ module.exports = function createTerminalHandlers(ctx) {
 		return `<span class="quiz-command-prefix">${ctx.escapeHtmlText(promptPrefix)}</span>`;
 	}
 
-	function getTextMaxLength(q) {
+	function getTextMaxLength(q: TextQuestion): number | null {
 		const candidates = [
 			q?.maxLength,
 			q?.textMaxLength,
@@ -140,12 +167,12 @@ module.exports = function createTerminalHandlers(ctx) {
 		return null;
 	}
 
-	function sliceToMaxChars(value, maxLength) {
-		if (!Number.isFinite(maxLength) || maxLength <= 0) return String(value ?? "");
-		return Array.from(String(value ?? "")).slice(0, maxLength).join("");
+	function sliceToMaxChars(value: unknown, maxLength: number | null): string {
+		if (!Number.isFinite(maxLength) || (maxLength ?? 0) <= 0) return String(value ?? "");
+		return Array.from(String(value ?? "")).slice(0, maxLength ?? 0).join("");
 	}
 
-	function sanitizeTextAnswerValue(q, value) {
+	function sanitizeTextAnswerValue(q: TextQuestion, value: unknown): string {
 		let out = String(value ?? "");
 
 		if (isTerminalTextQuestion(q)) {
@@ -153,15 +180,15 @@ module.exports = function createTerminalHandlers(ctx) {
 		}
 
 		const maxLength = getTextMaxLength(q);
-		if (Number.isFinite(maxLength) && maxLength > 0) {
+		if (Number.isFinite(maxLength) && (maxLength ?? 0) > 0) {
 			out = sliceToMaxChars(out, maxLength);
 		}
 
 		return out;
 	}
 
-	function getTextAcceptedAnswers(q) {
-		const values = [];
+	function getTextAcceptedAnswers(q: TextQuestion): string[] {
+		const values: unknown[] = [];
 
 		if (Array.isArray(q?.acceptedAnswers)) values.push(...q.acceptedAnswers);
 		if (Array.isArray(q?.acceptableAnswers)) values.push(...q.acceptableAnswers);
@@ -174,7 +201,7 @@ module.exports = function createTerminalHandlers(ctx) {
 			.map(v => String(v));
 	}
 
-	function normalizeTextAnswer(value, { caseSensitive = false } = {}) {
+	function normalizeTextAnswer(value: unknown, { caseSensitive = false }: { caseSensitive?: boolean } = {}): string {
 		let out = String(value ?? "")
 			.normalize("NFD")
 			.replace(/[\u0300-\u036f]/g, "")
@@ -185,12 +212,11 @@ module.exports = function createTerminalHandlers(ctx) {
 		return out;
 	}
 
-	function isTextAnswerCorrect(q, value) {
+	function isTextAnswerCorrect(q: TextQuestion, value: unknown): boolean {
 		// Question math (éditeur d'équations) : comparaison de LaTeX
-		// normalisé en FORME (math-input.js) — la normalisation texte
+		// normalisé en FORME (math-input) — la normalisation texte
 		// ci-dessous (strip accents, espaces→' ') casserait le LaTeX.
-		const mathInput = require("./math-input");
-		if (mathInput.isMathQuestion(q)) return mathInput.matchesMathAnswer(value, q);
+		if (isMathQuestion(q)) return matchesMathAnswer(value, q);
 
 		const accepted = getTextAcceptedAnswers(q);
 		if (!accepted.length) return false;
@@ -201,13 +227,13 @@ module.exports = function createTerminalHandlers(ctx) {
 		);
 	}
 
-	function syncTextAreaHeight(textarea) {
+	function syncTextAreaHeight(textarea: HTMLTextAreaElement | null): void {
 		if (!textarea) return;
 		textarea.style.height = "auto";
 		textarea.style.height = `${Math.max(220, textarea.scrollHeight)}px`;
 	}
 
-	function splitTerminalVisualTokens(value, variant) {
+	function splitTerminalVisualTokens(value: unknown, variant: string | null): TerminalVisualTokens {
 		const raw = String(value ?? "");
 
 		if (variant !== "powershell") {
@@ -231,8 +257,9 @@ module.exports = function createTerminalHandlers(ctx) {
 	// FONCTIONS AVEC DÉPENDANCES (utilisent ctx)
 	// ═══════════════════════════════════════════════════════
 
-	function textQuestionCardHtml(q, qi) {
-		const value = typeof ctx.quizState.selections[qi] === "string" ? ctx.quizState.selections[qi] : "";
+	function textQuestionCardHtml(q: TextQuestion, qi: number): string {
+		const sel = ctx.quizState.selections[qi];
+		const value = typeof sel === "string" ? sel : "";
 		const terminalVariant = getTerminalTextVariant(q);
 		const isTerminal = !!terminalVariant;
 		const isPowerShell = terminalVariant === "powershell";
@@ -293,7 +320,7 @@ module.exports = function createTerminalHandlers(ctx) {
 
 		// Question math : HOST vide — le <math-field> (custom element à
 		// configurer) est créé au bind, jamais via innerHTML.
-		if (require("./math-input").isMathQuestion(q)) {
+		if (isMathQuestion(q)) {
 			return `
 				<div class="qcm-options quiz-text-wrap quiz-math-wrap ${statusClass}" data-math-input="1"></div>`;
 		}
@@ -318,11 +345,11 @@ module.exports = function createTerminalHandlers(ctx) {
 	/* Question math : monte le <math-field> + panneau dans le host émis
 	   par textQuestionCardHtml. Même cycle de vie que la textarea :
 	   selections[qi] à chaque saisie, statut live, cleanup au refresh. */
-	function bindMathQuestion(trackItem, qi, host) {
-		const mathInput = require("./math-input");
-		const q = ctx.quiz[qi];
+	function bindMathQuestion(trackItem: HTMLElement, qi: number, host: HTMLElement): void {
+		// Invariant : bindMathQuestion n'est atteint que pour une question math (TextQuestion).
+		const q = ctx.quiz[qi] as TextQuestion;
 
-		const applyStatus = (latex) => {
+		const applyStatus = (latex: string) => {
 			host.classList.remove("filled", "correct", "wrong");
 			if (ctx.quizState.locked) {
 				host.classList.add(isTextAnswerCorrect(q, latex) ? "correct" : "wrong");
@@ -331,8 +358,9 @@ module.exports = function createTerminalHandlers(ctx) {
 			}
 		};
 
-		const field = mathInput.createMathField(host, {
-			value: typeof ctx.quizState.selections[qi] === "string" ? ctx.quizState.selections[qi] : "",
+		const selValue = ctx.quizState.selections[qi];
+		const field = createMathField(host, {
+			value: typeof selValue === "string" ? selValue : "",
 			// Gabarit guidé optionnel de l'IA (« x = ▯ ») — seulement si
 			// l'élève n'a encore rien saisi.
 			template: q?.answerTemplate || "",
@@ -361,46 +389,47 @@ module.exports = function createTerminalHandlers(ctx) {
 		};
 	}
 
-	function bindTextQuestion(trackItem, qi) {
+	function bindTextQuestion(trackItem: HTMLElement, qi: number): void {
 		if (!trackItem) return;
 
 		if (typeof trackItem.__quizTextQuestionCleanup === "function") {
-			try { trackItem.__quizTextQuestionCleanup(); } catch (_) {}
+			try { trackItem.__quizTextQuestionCleanup(); } catch (_) { /* cleanup best-effort */ }
 			trackItem.__quizTextQuestionCleanup = null;
 		}
 
-		const mathHost = trackItem.querySelector("[data-math-input]");
+		const mathHost = trackItem.querySelector<HTMLElement>("[data-math-input]");
 		if (mathHost) {
 			bindMathQuestion(trackItem, qi, mathHost);
 			return;
 		}
 
-		const textarea = trackItem.querySelector(".quiz-textarea[data-text-answer]");
+		const textarea = trackItem.querySelector<HTMLTextAreaElement>(".quiz-textarea[data-text-answer]");
 		if (!textarea) return;
 
-		const q = ctx.quiz[qi];
+		// Invariant : bindTextQuestion n'est atteint que pour une question texte.
+		const q = ctx.quiz[qi] as TextQuestion;
 		const terminalVariant = getTerminalTextVariant(q);
 		const isCommand = isCommandTextQuestion(q);
 		const isPowerShell = terminalVariant === "powershell";
 
-		const shell = trackItem.querySelector(".quiz-command-shell");
-		const inputWrap = trackItem.querySelector(".quiz-command-input-wrap");
-		const measure = trackItem.querySelector(".quiz-command-measure");
-		const inlineChar = trackItem.querySelector(".quiz-command-inline-char");
-		const selectionOverlay = trackItem.querySelector(".quiz-command-selection");
+		const shell = trackItem.querySelector<HTMLElement>(".quiz-command-shell");
+		const inputWrap = trackItem.querySelector<HTMLElement>(".quiz-command-input-wrap");
+		const measure = trackItem.querySelector<HTMLElement>(".quiz-command-measure");
+		const inlineChar = trackItem.querySelector<HTMLElement>(".quiz-command-inline-char");
+		const selectionOverlay = trackItem.querySelector<HTMLElement>(".quiz-command-selection");
 
-		const renderLayer = trackItem.querySelector(".quiz-command-render");
-		const renderLeading = trackItem.querySelector(".quiz-command-render-leading");
-		const renderCommand = trackItem.querySelector(".quiz-command-render-command");
-		const renderRest = trackItem.querySelector(".quiz-command-render-rest");
+		const renderLayer = trackItem.querySelector<HTMLElement>(".quiz-command-render");
+		const renderLeading = trackItem.querySelector<HTMLElement>(".quiz-command-render-leading");
+		const renderCommand = trackItem.querySelector<HTMLElement>(".quiz-command-render-command");
+		const renderRest = trackItem.querySelector<HTMLElement>(".quiz-command-render-rest");
 
-		const measureWidth = text => {
+		const measureWidth = (text: string): number => {
 			if (!isCommand || !measure) return 0;
 			measure.textContent = text || "";
 			return measure.getBoundingClientRect().width || 0;
 		};
 
-		const normalizeTextareaValue = ({ preserveSelection = true } = {}) => {
+		const normalizeTextareaValue = ({ preserveSelection = true }: { preserveSelection?: boolean } = {}): string => {
 			const rawValue = textarea.value ?? "";
 			const rawStart = typeof textarea.selectionStart === "number" ? textarea.selectionStart : rawValue.length;
 			const rawEnd = typeof textarea.selectionEnd === "number" ? textarea.selectionEnd : rawStart;
@@ -417,14 +446,14 @@ module.exports = function createTerminalHandlers(ctx) {
 
 					try {
 						textarea.setSelectionRange(nextStart, nextEnd);
-					} catch (_) {}
+					} catch (_) { /* setSelectionRange peut jeter sur textarea détaché */ }
 				}
 			}
 
 			return textarea.value ?? "";
 		};
 
-		const getLiveTextStatus = () => {
+		const getLiveTextStatus = (): string => {
 			const currentValue = String(textarea.value ?? "");
 
 			if (ctx.quizState.locked) {
@@ -434,16 +463,16 @@ module.exports = function createTerminalHandlers(ctx) {
 			return currentValue.trim().length > 0 ? "filled" : "";
 		};
 
-		const applyLiveTextStatusClasses = () => {
+		const applyLiveTextStatusClasses = (): void => {
 			const status = getLiveTextStatus();
 
-			[textarea, shell].filter(Boolean).forEach(el => {
+			[textarea, shell].filter((el): el is HTMLElement => !!el).forEach(el => {
 				el.classList.remove("filled", "correct", "wrong");
 				if (status) el.classList.add(status);
 			});
 		};
 
-		const updateTerminalRenderLayer = () => {
+		const updateTerminalRenderLayer = (): void => {
 			if (!isPowerShell || !shell || !renderLayer) return;
 
 			const value = String(textarea.value ?? "");
@@ -464,7 +493,7 @@ module.exports = function createTerminalHandlers(ctx) {
 			renderLayer.style.visibility = hasCommandToken ? "visible" : "hidden";
 		};
 
-		const ensureCommandVisualRangeVisible = () => {
+		const ensureCommandVisualRangeVisible = (): void => {
 			if (!isCommand || !textarea || !measure) return;
 
 			const value = textarea.value ?? "";
@@ -506,7 +535,7 @@ module.exports = function createTerminalHandlers(ctx) {
 			}
 		};
 
-		const updateCommandVisuals = () => {
+		const updateCommandVisuals = (): void => {
 			if (!isCommand || !shell || !inputWrap || !measure) return;
 
 			const value = textarea.value ?? "";
@@ -589,7 +618,7 @@ module.exports = function createTerminalHandlers(ctx) {
 		let commandSelectionSyncRaf = 0;
 		let commandSelectionTracking = false;
 
-		const sync = () => {
+		const sync = (): void => {
 			normalizeTextareaValue({ preserveSelection: true });
 			applyLiveTextStatusClasses();
 
@@ -616,7 +645,7 @@ module.exports = function createTerminalHandlers(ctx) {
 			}
 		};
 
-		const queueSync = () => {
+		const queueSync = (): void => {
 			if (commandSelectionSyncRaf) return;
 			commandSelectionSyncRaf = requestAnimationFrame(() => {
 				commandSelectionSyncRaf = 0;
@@ -625,12 +654,12 @@ module.exports = function createTerminalHandlers(ctx) {
 			});
 		};
 
-		const onDocumentSelectionMove = () => {
+		const onDocumentSelectionMove = (): void => {
 			if (!commandSelectionTracking) return;
 			queueSync();
 		};
 
-		const stopCommandSelectionTracking = () => {
+		const stopCommandSelectionTracking = (): void => {
 			if (!commandSelectionTracking) return;
 
 			commandSelectionTracking = false;
@@ -645,7 +674,7 @@ module.exports = function createTerminalHandlers(ctx) {
 			queueSync();
 		};
 
-		const startCommandSelectionTracking = e => {
+		const startCommandSelectionTracking = (e: MouseEvent): void => {
 			if (!isCommand || ctx.quizState.locked) return;
 			if (e && typeof e.button === "number" && e.button !== 0) return;
 			if (commandSelectionTracking) return;
@@ -662,7 +691,7 @@ module.exports = function createTerminalHandlers(ctx) {
 			queueSync();
 		};
 
-		const cleanupTextQuestionBinding = () => {
+		const cleanupTextQuestionBinding = (): void => {
 			stopCommandSelectionTracking();
 
 			if (commandSelectionSyncRaf) {
@@ -676,14 +705,14 @@ module.exports = function createTerminalHandlers(ctx) {
 		// persistSelection écrit l'état SANS re-render : sûr à appeler pendant une
 		// animation de slide. commitValue ajoute le re-render (nav + meta slides),
 		// qu'on garde bloqué pendant le slide pour ne pas casser l'animation.
-		const persistSelection = () => {
+		const persistSelection = (): string => {
 			const finalValue = normalizeTextareaValue({ preserveSelection: true });
 			ctx.invalidateSavedResults?.();
 			ctx.quizState.selections[qi] = finalValue;
 			return finalValue;
 		};
 
-		const commitValue = () => {
+		const commitValue = (): void => {
 			persistSelection();
 			applyLiveTextStatusClasses();
 			ctx.updateNavHighlight();
@@ -771,4 +800,4 @@ module.exports = function createTerminalHandlers(ctx) {
 		textQuestionCardHtml,
 		bindTextQuestion
 	};
-};
+}

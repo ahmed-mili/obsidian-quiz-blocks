@@ -1,17 +1,30 @@
-'use strict';
+import type { EngineCtx } from "../types/engine-ctx";
 
-module.exports = function createExamHandlers(ctx) {
+export interface ExamHandlers {
+	examTimerHtml(): string;
+	startExamTimer(): void;
+	startExam(): void;
+	startTrainingMode(): void;
+	updateExamTimerDisplay(): void;
+	handleExamTimeUp(): void;
+	stopExamTimer(): void;
+	bindExamStartButton(): void;
+}
+
+export function createExamHandlers(ctx: EngineCtx): ExamHandlers {
 	// Variables locales pour le timer
-	let examTimerId = null;
+	let examTimerId: number | null = null;
 	let examStartTime = 0;
 
-	function examTimerHtml() {
+	function examTimerHtml(): string {
     if (!ctx.isExamMode) return "";
     if (!ctx.examStarted) {
         const isTraining = ctx.quizState?.practiceMode === "text";
         const modeSelectorHtml = typeof ctx.cards?.startModeSelectorHtml === "function" ? ctx.cards.startModeSelectorHtml() : "";
         const primaryLabel = isTraining ? "Commencer l'entraînement" : "Commencer l'examen";
-        const summaryLabel = isTraining ? "Sans chrono" : `Durée : ${ctx.examOptions.durationMinutes} minutes`;
+        // examOptions est non-null en mode examen (garde isExamMode ci-dessus) ;
+        // `!` reproduit exactement l'accès direct du JS (throw si null, jamais atteint).
+        const summaryLabel = isTraining ? "Sans chrono" : `Durée : ${ctx.examOptions!.durationMinutes} minutes`;
         return `<div class="quiz-exam-start-screen" data-exam-start-screen="1">
             <div class="quiz-exam-start-content">
                 <div class="quiz-exam-start-icon">
@@ -30,7 +43,7 @@ module.exports = function createExamHandlers(ctx) {
         </div>`;
     }
 
-    if (!ctx.examOptions.showTimer) return "";
+    if (!ctx.examOptions!.showTimer) return "";
 
     const minutes = Math.floor(ctx.examTimeRemaining / 60000);
     const seconds = Math.floor((ctx.examTimeRemaining % 60000) / 1000);
@@ -47,7 +60,7 @@ module.exports = function createExamHandlers(ctx) {
 }
 
 
-	function startExamTimer() {
+	function startExamTimer(): void {
 		if (!ctx.isExamMode || examTimerId || !ctx.examStarted || ctx.examEnded) return;
 
 		stopExamTimer();
@@ -74,10 +87,10 @@ module.exports = function createExamHandlers(ctx) {
 			}
 		};
 
-		examTimerId = setInterval(tick, 250);
+		examTimerId = window.setInterval(tick, 250);
 	}
 
-	function startExam() {
+	function startExam(): void {
     if (!ctx.isExamMode || ctx.examStarted) return;
     if (ctx.quizState?.practiceMode === "text") {
         startTrainingMode();
@@ -88,7 +101,7 @@ module.exports = function createExamHandlers(ctx) {
     ctx.quizState.practiceMode = "qcm";
 
     // Apply out-focus transition to current content
-    const currentSlide = ctx.container.querySelector('.quiz-track-item[data-slide-kind="question"][data-qi="0"]');
+    const currentSlide = ctx.container.querySelector<HTMLElement>('.quiz-track-item[data-slide-kind="question"][data-qi="0"]');
     if (currentSlide) {
         ctx.zoom.applyOutFocusTransition(currentSlide, {
             duration: 400,
@@ -103,7 +116,7 @@ module.exports = function createExamHandlers(ctx) {
 
                 // Apply in-focus transition to new content
                 requestAnimationFrame(() => {
-                    const newSlide = ctx.container.querySelector('.quiz-track-item[data-slide-kind="question"][data-qi="0"]');
+                    const newSlide = ctx.container.querySelector<HTMLElement>('.quiz-track-item[data-slide-kind="question"][data-qi="0"]');
                     if (newSlide) {
                         ctx.zoom.applyInFocusTransition(newSlide, {
                             duration: 500,
@@ -125,7 +138,7 @@ module.exports = function createExamHandlers(ctx) {
     }
 }
 
-    function startTrainingMode() {
+    function startTrainingMode(): void {
         if (!ctx.isExamMode || ctx.examStarted) return;
 
         ctx.trainingSession = true;
@@ -146,9 +159,9 @@ module.exports = function createExamHandlers(ctx) {
         ctx.render();
     }
 
-			function updateExamTimerDisplay() {
-			const progressEl = ctx.container?.querySelector('[data-exam-progress="1"]');
-			const textEl = ctx.container?.querySelector('[data-exam-text="1"]');
+			function updateExamTimerDisplay(): void {
+			const progressEl = ctx.container?.querySelector<HTMLElement>('[data-exam-progress="1"]');
+			const textEl = ctx.container?.querySelector<HTMLElement>('[data-exam-text="1"]');
 
 			if (!progressEl || !textEl) return;
 
@@ -168,7 +181,7 @@ module.exports = function createExamHandlers(ctx) {
 		}
 
 
-	function handleExamTimeUp() {
+	function handleExamTimeUp(): void {
     if (ctx.examEnded) return;
 
     // 1. Forcer l'état final du timer avant tout rendu
@@ -201,14 +214,14 @@ module.exports = function createExamHandlers(ctx) {
 }
 
 
-	function stopExamTimer() {
+	function stopExamTimer(): void {
 		if (examTimerId) {
-			clearInterval(examTimerId);
+			window.clearInterval(examTimerId);
 			examTimerId = null;
 		}
 	}
 
-	function bindExamStartButton() {
+	function bindExamStartButton(): void {
 		const btn = ctx.container?.querySelector('[data-exam-start-screen="1"] .quiz-exam-start-btn');
 		if (btn) {
 			btn.addEventListener('click', () => {
@@ -228,4 +241,4 @@ module.exports = function createExamHandlers(ctx) {
 		stopExamTimer,
 		bindExamStartButton
 	};
-};
+}

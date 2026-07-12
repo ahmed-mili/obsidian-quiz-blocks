@@ -65,75 +65,27 @@ import type { TrackHandlers } from "../engine/track";
 import type { WarmingHandlers } from "../engine/warming";
 import type { ZoomHandlers } from "../engine/zoom";
 import type { CardHandlers } from "../engine/cards";
+import type { ExamHandlers } from "../engine/exam";
+import type { TextOnlyHandlers } from "../engine/text-only";
+import type { TerminalHandlers } from "../engine/terminal";
+import type { InteractionHandlers } from "../engine/interactions";
+import type { StateHandlers } from "../engine/state";
+import type { ResultsSaverHandlers } from "../engine/results-save";
 
 /**
  * Mode du quiz (engine.js ctx.quizMode / originalQuizMode). Miroir du type
  * `QuizMode` de src/quiz-utils.ts (extractExamOptions) qui n'est PAS exporté —
  * dupliqué ici plutôt que modifier quiz-utils.ts (iso-fonctionnalité Task 9).
+ * `"training"` n'est PAS produit par le parsing (quiz-utils) mais assigné au
+ * runtime par engine/exam.ts startTrainingMode (`ctx.quizMode = "training"`) —
+ * ajouté ici en Task 10c pour coller à la réalité de la mutation.
  */
-export type QuizMode = "learn" | "exam" | "quiz";
+export type QuizMode = "learn" | "exam" | "quiz" | "training";
 
 /* ════════════════════════════════════════════════════════
-   17 sous-modules — PLACEHOLDERS `unknown`-based (à compléter en Task 10)
-
-   Chaque interface remplace `{ [method: string]: unknown }` par le vrai
-   handler-type à la conversion de son module engine/*.js → .ts (Task 10).
-   L'index signature fait résoudre tout indexed-access à `unknown` en attendant.
+   Les 17 sous-modules ont tous leur VRAI handler-type (Task 10 terminée) :
+   importés depuis engine/*.ts, plus aucun placeholder `unknown`-based.
    ════════════════════════════════════════════════════════ */
-
-/** Placeholder — vrai type en Task 10 (engine/exam.ts). */
-export interface ExamHandlers { [method: string]: unknown }
-/**
- * Placeholder — vrai type en Task 10c (engine/text-only.ts).
- * Méthodes typées HONNÊTEMENT (lues dans text-only.js) consommées par le
- * cluster 10b (track.ts finishTrackSlideAnimation, cards.ts) ; l'index
- * signature garde `unknown` pour le reste jusqu'à la conversion complète.
- */
-export interface TextOnlyHandlers {
-	/** text-only.js:10 — mode entraînement texte libre actif. */
-	isTextOnlyMode(): boolean;
-	/** text-only.js:14 — phase de saisie d'examen (mode texte). */
-	isExamAnswerPhase(): boolean;
-	/** text-only.js:26 — métadonnées d'une auto-évaluation (label + className CSS). */
-	getRatingMeta(value: TextOnlyRating | null | undefined): { label: string; className: string } | null;
-	/** text-only.js:31 — la question a une réponse libre non vide. */
-	hasAnyAnswer(qi: number): boolean;
-	/** text-only.js:36 — la question a été « Vérifiée » (ou phase de correction). */
-	isChecked(qi: number): boolean;
-	/** text-only.js:44 — comptage des auto-évaluations pour la slide résultats. */
-	computeResults(): { understood: number; partial: number; review: number; pending: number; total: number; rated: number };
-	/** text-only.js:159 — corps HTML d'une question en mode texte libre. */
-	questionCardBodyHtml(q: QuizQuestion, qi: number): string;
-	/** text-only.js:194 — actions (préc./suiv./résultats) d'une question en mode texte. */
-	questionActionsHtml(qi: number): string;
-	[method: string]: unknown;
-}
-/**
- * Placeholder — vrai type en Task 10c (engine/interactions.ts).
- * Méthodes typées HONNÊTEMENT (lues dans interactions.js) consommées par le
- * cluster 10b (cards.ts refreshMetaSlides) ; l'index signature garde `unknown`
- * pour le reste jusqu'à la conversion complète.
- */
-export interface InteractionHandlers {
-	/** interactions.js:319 — bind des contrôles de la slide « submit ». */
-	bindSubmitSlideControls(rootEl: Element | null): void;
-	/** interactions.js:333 — bind des contrôles de la slide « results ». */
-	bindResultsSlideControls(rootEl: Element | null): void;
-	[method: string]: unknown;
-}
-/**
- * Placeholder — vrai type en Task 10c (engine/terminal.ts).
- * Méthode typée honnêtement (terminal.js:234) consommée par cards.ts.
- */
-export interface TerminalHandlers {
-	/** terminal.js:234 — HTML de la carte d'une question texte/terminal. */
-	textQuestionCardHtml(q: TextQuestion, qi: number): string;
-	[method: string]: unknown;
-}
-/** Placeholder — vrai type en Task 10 (engine/state.ts). */
-export interface StateHandlers { [method: string]: unknown }
-/** Placeholder — vrai type en Task 10 (engine/results-save.ts). */
-export interface ResultsSaverHandlers { [method: string]: unknown }
 
 /* ════════════════════════════════════════════════════════
    EngineCtx — le ctx du moteur (assemblé dans engine.js)
@@ -245,38 +197,26 @@ export interface EngineCtx {
 	   signature vit dans leur module source, pas dans engine.js.
 	   ════════════════════════════════════════════════ */
 
-	// depuis state (engine.js:156, 200-219).
-	// Les lignes SIGNÉES HONNÊTEMENT ci-dessous (sourcées dans state.js) sont
-	// consommées par le cluster 10b (cards/track/viewport/zoom) ; elles
-	// reprendront l'indexed-access `StateHandlers["..."]` quand 10c convertira
-	// engine/state.ts (qui confirmera ces types). Les autres restent en
-	// indexed-access `unknown` faute d'usage par 10b.
+	// depuis state (engine.js:156, 200-219) — StateHandlers réel (Task 10c) :
+	// toutes ces méthodes aplaties reprennent l'indexed-access sur le vrai type
+	// (les 9 signatures honnêtes posées par 10b sont confirmées par state.ts).
 	clearNavTabPressState: StateHandlers["clearNavTabPressState"];
-	/** state.js:8 — la question i a une réponse (QCM/ordering/matching/texte/textOnly). */
-	hasAnyAnswer(i: number): boolean;
+	hasAnyAnswer: StateHandlers["hasAnyAnswer"];
 	isComplete: StateHandlers["isComplete"];
-	/** state.js:46 — indices des questions incomplètes. */
-	getMissingIndices(): number[];
-	/** state.js:52 — la question i est correcte. */
-	isCorrect(i: number): boolean;
-	/** state.js:83 — score courant { pct, correct, total }. */
-	computeScorePercent(): QuizResult;
-	/** state.js:89 — signature (JSON) de la slide « submit » pour refresh sélectif. */
-	getSubmitSlideSignature(): string;
-	/** state.js:98 — signature (JSON) de la slide « results » pour refresh sélectif. */
-	getResultsSlideSignature(): string;
+	getMissingIndices: StateHandlers["getMissingIndices"];
+	isCorrect: StateHandlers["isCorrect"];
+	computeScorePercent: StateHandlers["computeScorePercent"];
+	getSubmitSlideSignature: StateHandlers["getSubmitSlideSignature"];
+	getResultsSlideSignature: StateHandlers["getResultsSlideSignature"];
 	goToQuestion: StateHandlers["goToQuestion"];
 	goToSubmit: StateHandlers["goToSubmit"];
 	goToResults: StateHandlers["goToResults"];
-	/** state.js:285 — réinitialise l'instance (relance render). */
-	resetQuiz(opts?: { preserveSliding?: boolean; resetToOriginalMode?: boolean }): void;
+	resetQuiz: StateHandlers["resetQuiz"];
 	setPracticeMode: StateHandlers["setPracticeMode"];
 	goToSlide: StateHandlers["goToSlide"];
 	redirectSlide: StateHandlers["redirectSlide"];
-	/** state.js:209 — recalcule les classes des onglets de navigation. */
-	updateNavHighlight(): void;
-	/** state.js:205 — bascule la classe `quiz-is-sliding` sur le container. */
-	setSlidingClass(on: boolean): void;
+	updateNavHighlight: StateHandlers["updateNavHighlight"];
+	setSlidingClass: StateHandlers["setSlidingClass"];
 	playNavTabPressAndNavigate: StateHandlers["playNavTabPressAndNavigate"];
 	clearAllNavTabPressStates: StateHandlers["clearAllNavTabPressStates"];
 	setNavTabPressState: StateHandlers["setNavTabPressState"];

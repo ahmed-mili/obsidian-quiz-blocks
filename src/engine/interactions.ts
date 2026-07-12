@@ -1,15 +1,39 @@
-'use strict';
+import type { EngineCtx } from "../types/engine-ctx";
+import type { OrderingQuestion, MatchingQuestion } from "../types/quiz";
 
-module.exports = function createInteractionHandlers(ctx) {
+/** Charge utile du drag-and-drop (ordering/matching), sérialisée en JSON dans le dataTransfer. */
+interface DragPayload {
+	mode?: string;
+	oi?: unknown;
+	ci?: unknown;
+	sourceSlot?: unknown;
+}
+
+export interface InteractionHandlers {
+	bindBinaryQuestion(trackItem: HTMLElement, qi: number, isMulti: boolean): void;
+	bindOrderingQuestion(trackItem: HTMLElement, qi: number, q: OrderingQuestion): void;
+	bindMatchingQuestion(trackItem: HTMLElement, qi: number, q: MatchingQuestion): void;
+	bindModeToggleControls(rootEl?: HTMLElement | null): void;
+	bindStartModeControls(rootEl?: HTMLElement | null): void;
+	bindQuestionTrackItem(trackItem: HTMLElement | null): void;
+	bindSubmitSlideControls(rootEl: Element | null): void;
+	bindResultsSlideControls(rootEl: Element | null): void;
+	bindExamStartButton(): void;
+	bindStaticControls(): void;
+	bindZoomFixHandlers(): void;
+	destroyZoomFixHandlers(): void;
+}
+
+export function createInteractionHandlers(ctx: EngineCtx): InteractionHandlers {
 	// Variables locales
 	let __quizZoomFixBound = false;
 	let __quizZoomFixRaf = 0;
 	let __quizZoomFixSettleTimer = 0;
 	let __quizZoomLastDpr = window.devicePixelRatio || 1;
-	let __quizZoomFixHandler = null;
+	let __quizZoomFixHandler: (() => void) | null = null;
 	const MODE_TOGGLE_ANIMATION_MS = 260;
 
-	function commitQuestionInteraction(qi, { syncHeight = true } = {}) {
+	function commitQuestionInteraction(qi: number, { syncHeight = true }: { syncHeight?: boolean } = {}): void {
 		ctx.invalidateSavedResults?.();
 		const slideIdx = ctx.getSlideIndexForQuestion(qi);
 		if (slideIdx >= 0) ctx.__quizSlideHeightCache?.delete(slideIdx);
@@ -17,8 +41,8 @@ module.exports = function createInteractionHandlers(ctx) {
 		ctx.refreshMetaSlides();
 	}
 
-	function bindBinaryQuestion(trackItem, qi, isMulti) {
-		trackItem.querySelectorAll(".quiz-option").forEach(el => {
+	function bindBinaryQuestion(trackItem: HTMLElement, qi: number, isMulti: boolean): void {
+		trackItem.querySelectorAll<HTMLElement>(".quiz-option").forEach(el => {
 			const oi = Number(el.dataset.orig);
 			const trySelect = () => {
 				if (ctx.quizState.isSliding || ctx.quizState.locked) return;
@@ -40,13 +64,14 @@ module.exports = function createInteractionHandlers(ctx) {
 		});
 	}
 
-	function bindOrderingQuestion(trackItem, qi, q) {
+	function bindOrderingQuestion(trackItem: HTMLElement, qi: number, q: OrderingQuestion): void {
 		const qItems = ctx.getOrderingItems(q);
-		if (!Array.isArray(ctx.quizState.selections[qi]) || ctx.quizState.selections[qi].length !== qItems.length) {
-			ctx.quizState.selections[qi] = Array(qItems.length).fill(null);
+		const selInit = ctx.quizState.selections[qi];
+		if (!Array.isArray(selInit) || selInit.length !== qItems.length) {
+			ctx.quizState.selections[qi] = new Array<number | null>(qItems.length).fill(null);
 		}
 
-		trackItem.querySelectorAll("[data-order-item]").forEach(el => {
+		trackItem.querySelectorAll<HTMLElement>("[data-order-item]").forEach(el => {
 			const oi = Number(el.dataset.orderItem);
 			const pickItem = () => {
 				if (ctx.quizState.isSliding || ctx.quizState.locked || ctx.orderingSelectionIncludes(qi, oi)) return;
@@ -75,7 +100,7 @@ module.exports = function createInteractionHandlers(ctx) {
 			});
 		});
 
-		trackItem.querySelectorAll("[data-order-slot]").forEach(el => {
+		trackItem.querySelectorAll<HTMLElement>("[data-order-slot]").forEach(el => {
 			const si = Number(el.dataset.orderSlot);
 			const actOnSlot = () => {
 				if (ctx.quizState.isSliding || ctx.quizState.locked) return;
@@ -133,8 +158,8 @@ module.exports = function createInteractionHandlers(ctx) {
 				if (!Array.isArray(sel)) return;
 				const raw = e.dataTransfer ? e.dataTransfer.getData("text/plain") : "";
 				if (!raw) return;
-				let payload = null;
-				try { payload = JSON.parse(raw); } catch (_) {}
+				let payload: DragPayload | null = null;
+				try { payload = JSON.parse(raw); } catch (_) { /* payload invalide : ignorer */ }
 				if (!payload || payload.mode !== "order") return;
 				const oi = Number(payload.oi);
 				let sourceSlot = Number(payload.sourceSlot);
@@ -157,13 +182,14 @@ module.exports = function createInteractionHandlers(ctx) {
 		});
 	}
 
-	function bindMatchingQuestion(trackItem, qi, q) {
+	function bindMatchingQuestion(trackItem: HTMLElement, qi: number, q: MatchingQuestion): void {
 		const rows = ctx.getMatchRows(q);
-		if (!Array.isArray(ctx.quizState.selections[qi]) || ctx.quizState.selections[qi].length !== rows.length) {
-			ctx.quizState.selections[qi] = Array(rows.length).fill(null);
+		const selInit = ctx.quizState.selections[qi];
+		if (!Array.isArray(selInit) || selInit.length !== rows.length) {
+			ctx.quizState.selections[qi] = new Array<number | null>(rows.length).fill(null);
 		}
 
-		trackItem.querySelectorAll("[data-match-choice]").forEach(el => {
+		trackItem.querySelectorAll<HTMLElement>("[data-match-choice]").forEach(el => {
 			const ci = Number(el.dataset.matchChoice);
 			const pickChoice = () => {
 				if (ctx.quizState.isSliding || ctx.quizState.locked) return;
@@ -192,7 +218,7 @@ module.exports = function createInteractionHandlers(ctx) {
 			});
 		});
 
-		trackItem.querySelectorAll("[data-match-slot]").forEach(el => {
+		trackItem.querySelectorAll<HTMLElement>("[data-match-slot]").forEach(el => {
 			const si = Number(el.dataset.matchSlot);
 			const actOnSlot = () => {
 				if (ctx.quizState.isSliding || ctx.quizState.locked) return;
@@ -250,8 +276,8 @@ module.exports = function createInteractionHandlers(ctx) {
 				if (!Array.isArray(sel)) return;
 				const raw = e.dataTransfer ? e.dataTransfer.getData("text/plain") : "";
 				if (!raw) return;
-				let payload = null;
-				try { payload = JSON.parse(raw); } catch (_) {}
+				let payload: DragPayload | null = null;
+				try { payload = JSON.parse(raw); } catch (_) { /* payload invalide : ignorer */ }
 				if (!payload || payload.mode !== "match") return;
 				const ci = Number(payload.ci);
 				if (!Number.isFinite(ci)) return;
@@ -273,7 +299,7 @@ module.exports = function createInteractionHandlers(ctx) {
 		});
 	}
 
-	function bindQuestionTrackItem(trackItem) {
+	function bindQuestionTrackItem(trackItem: HTMLElement | null): void {
 		if (!trackItem) return;
 
 		const qi = Number(trackItem.dataset.qi);
@@ -283,15 +309,16 @@ module.exports = function createInteractionHandlers(ctx) {
 		const isTxt = ctx.isTextQuestion(q);
 		const isOrd = ctx.isOrderingQuestion(q);
 		const isMatch = ctx.isMatchingQuestion(q);
-		const isMulti = !!q.multiSelect;
+		const isMulti = !!(q as { multiSelect?: boolean }).multiSelect;
 
 		if (ctx.textOnly?.isTextOnlyMode?.()) {
 			ctx.textOnly.bindTextOnlyQuestion(trackItem, qi);
 		} else {
+			// isTxt/isOrd/isMatch garantissent la variante ⇒ casts documentés.
 			if (isTxt) ctx.terminal.bindTextQuestion(trackItem, qi);
 			if (!isTxt && !isOrd && !isMatch) bindBinaryQuestion(trackItem, qi, isMulti);
-			if (isOrd) bindOrderingQuestion(trackItem, qi, q);
-			if (isMatch) bindMatchingQuestion(trackItem, qi, q);
+			if (isOrd) bindOrderingQuestion(trackItem, qi, q as OrderingQuestion);
+			if (isMatch) bindMatchingQuestion(trackItem, qi, q as MatchingQuestion);
 		}
 
 		const hintBtn = trackItem.querySelector(".quiz-hint-btn");
@@ -316,12 +343,12 @@ module.exports = function createInteractionHandlers(ctx) {
 		});
 	}
 
-	function bindSubmitSlideControls(rootEl) {
+	function bindSubmitSlideControls(rootEl: Element | null): void {
 		if (!rootEl) return;
-		rootEl.querySelectorAll("[data-jump]").forEach(btn => btn.addEventListener("click", () => ctx.goToQuestion(Number(btn.dataset.jump))));
+		rootEl.querySelectorAll<HTMLElement>("[data-jump]").forEach(btn => btn.addEventListener("click", () => ctx.goToQuestion(Number(btn.dataset.jump))));
 		const backBtn = rootEl.querySelector(".quiz-back-btn");
 		if (backBtn) backBtn.addEventListener("click", () => ctx.goToQuestion(ctx.quizState.lastQuestionIndex));
-		const showScoreBtn = rootEl.querySelector(".quiz-show-score-btn");
+		const showScoreBtn = rootEl.querySelector<HTMLElement>(".quiz-show-score-btn");
 		if (showScoreBtn) showScoreBtn.addEventListener("click", e => {
 			e.preventDefault();
 			// Remove focus to avoid aria-hidden warning
@@ -330,9 +357,9 @@ module.exports = function createInteractionHandlers(ctx) {
 		});
 	}
 
-	function bindResultsSlideControls(rootEl) {
+	function bindResultsSlideControls(rootEl: Element | null): void {
 		if (!rootEl) return;
-		const saveBtn = rootEl.querySelector(".quiz-save-results-btn");
+		const saveBtn = rootEl.querySelector<HTMLButtonElement>(".quiz-save-results-btn");
 		if (saveBtn) saveBtn.addEventListener("click", async e => {
 			e.preventDefault();
 			if (saveBtn.dataset.saving === "1") return;
@@ -354,7 +381,7 @@ module.exports = function createInteractionHandlers(ctx) {
 				saveBtn.textContent = previousText || "Sauvegarder mes résultats";
 				delete saveBtn.dataset.saving;
 				if (typeof ctx.Notice === "function") {
-					new ctx.Notice(`Erreur sauvegarde résultats : ${error?.message || "erreur inconnue"}`, 6000);
+					new ctx.Notice(`Erreur sauvegarde résultats : ${(error as { message?: string })?.message || "erreur inconnue"}`, 6000);
 				}
 			}
 		});
@@ -376,7 +403,7 @@ module.exports = function createInteractionHandlers(ctx) {
 		});
 	}
 
-	function bindExamStartButton() {
+	function bindExamStartButton(): void {
 		const startBtn = ctx.container.querySelector('.quiz-exam-start-btn');
 		if (startBtn) {
 			startBtn.addEventListener('click', () => {
@@ -386,7 +413,7 @@ module.exports = function createInteractionHandlers(ctx) {
 		}
 	}
 
-	function applyModeToggleVisualState(btn, mode) {
+	function applyModeToggleVisualState(btn: HTMLElement, mode: string): void {
 		const isTextOnly = mode === "text";
 		btn.classList.toggle("is-on", isTextOnly);
 		btn.setAttribute("aria-checked", isTextOnly ? "true" : "false");
@@ -394,8 +421,8 @@ module.exports = function createInteractionHandlers(ctx) {
 		btn.dataset.quizMode = isTextOnly ? "qcm" : "text";
 	}
 
-	function bindModeToggleControls(rootEl = ctx.container) {
-		rootEl?.querySelectorAll?.("[data-quiz-mode]")?.forEach(btn => {
+	function bindModeToggleControls(rootEl: HTMLElement | null = ctx.container): void {
+		rootEl?.querySelectorAll?.<HTMLElement>("[data-quiz-mode]")?.forEach(btn => {
 			btn.addEventListener("click", e => {
 				e.preventDefault();
 				const nextMode = btn.dataset.quizMode === "text" ? "text" : "qcm";
@@ -416,8 +443,8 @@ module.exports = function createInteractionHandlers(ctx) {
 		});
 	}
 
-	function bindStartModeControls(rootEl = ctx.container) {
-		rootEl?.querySelectorAll?.("[data-quiz-start-mode]")?.forEach(btn => {
+	function bindStartModeControls(rootEl: HTMLElement | null = ctx.container): void {
+		rootEl?.querySelectorAll?.<HTMLElement>("[data-quiz-start-mode]")?.forEach(btn => {
 			btn.addEventListener("click", e => {
 				e.preventDefault();
 				const nextMode = btn.dataset.quizStartMode === "training" ? "text" : "qcm";
@@ -427,26 +454,26 @@ module.exports = function createInteractionHandlers(ctx) {
 		});
 	}
 
-	function bindStaticControls() {
+	function bindStaticControls(): void {
 		bindModeToggleControls(ctx.container);
 
 		bindSubmitSlideControls(ctx.container.querySelector('.quiz-track-item[data-slide-kind="submit"]'));
 		bindResultsSlideControls(ctx.container.querySelector('.quiz-track-item[data-slide-kind="results"]'));
 
 		// ── Flèches clavier : navigation entre questions ──
-		const onArrowKey = e => {
+		const onArrowKey = (e: KeyboardEvent) => {
 			if (e.key !== "ArrowRight" && e.key !== "ArrowLeft") return;
 			if (ctx.__quizDestroyed) return;
 			const tag = document.activeElement?.tagName;
 			if (tag === "TEXTAREA" || tag === "INPUT" || tag === "SELECT") return;
-			if (document.activeElement?.isContentEditable) return;
+			if ((document.activeElement as HTMLElement | null)?.isContentEditable) return;
 			if (ctx.quizState.isSliding) return;
 
 			const cur = ctx.quizState.current;
 			let navigated = false;
 			if (e.key === "ArrowRight") {
 				if (ctx.isQuestionSlideIndex(cur)) {
-					const qi = ctx.slideMap[cur].questionIndex;
+					const qi = (ctx.slideMap[cur] as { questionIndex: number }).questionIndex;
 					if (qi < ctx.quiz.length - 1) {
 						ctx.goToSlide(cur + 1, { forceRender: false });
 						navigated = true;
@@ -476,7 +503,7 @@ module.exports = function createInteractionHandlers(ctx) {
 		ctx.container.addEventListener("keydown", onArrowKey);
 		ctx.__quizGlobalCleanups.push(() => ctx.container.removeEventListener("keydown", onArrowKey));
 
-		const bindNavTab = (tab, navigateFn) => {
+		const bindNavTab = (tab: HTMLElement | null, navigateFn: () => void) => {
 			if (!tab) return;
 			tab.addEventListener("pointerdown", e => {
 				if (e.button !== 0) return;
@@ -497,8 +524,8 @@ module.exports = function createInteractionHandlers(ctx) {
 				}
 			});
 		};
-		ctx.container.querySelectorAll("[data-nav]").forEach(a => bindNavTab(a, () => ctx.goToQuestion(Number(a.dataset.nav))));
-		const resultsTab = ctx.container.querySelector("[data-nav-results]");
+		ctx.container.querySelectorAll<HTMLElement>("[data-nav]").forEach(a => bindNavTab(a, () => ctx.goToQuestion(Number(a.dataset.nav))));
+		const resultsTab = ctx.container.querySelector<HTMLElement>("[data-nav-results]");
 		if (resultsTab) bindNavTab(resultsTab, () => {
 			if (ctx.textOnly?.isExamAnswerPhase?.()) ctx.goToSubmit();
 			else if (ctx.textOnly?.isTextOnlyMode?.()) ctx.goToResults();
@@ -507,7 +534,7 @@ module.exports = function createInteractionHandlers(ctx) {
 		});
 	}
 
-	function destroyZoomFixHandlers() {
+	function destroyZoomFixHandlers(): void {
 		if (!__quizZoomFixBound) return;
 		__quizZoomFixBound = false;
 
@@ -528,7 +555,7 @@ module.exports = function createInteractionHandlers(ctx) {
 		}
 	}
 
-	function bindZoomFixHandlers() {
+	function bindZoomFixHandlers(): void {
 		if (__quizZoomFixBound) return;
 		__quizZoomFixBound = true;
 
@@ -542,8 +569,12 @@ module.exports = function createInteractionHandlers(ctx) {
 				__quizZoomFixRaf = 0;
 				if (ctx.__quizDestroyed) return;
 
-				// Invalider les caches liés au layout/zoom
-				ctx.viewport.__quizTrackViewportWidth = 0;
+				// Invalider les caches liés au layout/zoom.
+				// `__quizTrackViewportWidth` n'est PAS exposé sur ViewportHandlers (variable
+				// de closure de viewport.ts) : cette écriture sur l'objet handlers est un
+				// no-op pré-existant du JS — conservée à l'identique. Le vrai rafraîchissement
+				// vient de applyTrackGeometry({ refreshWidth: true }) juste après.
+				(ctx.viewport as { __quizTrackViewportWidth?: number }).__quizTrackViewportWidth = 0;
 				ctx.viewport.__quizSlideHeightCache?.delete(ctx.quizState.current);
 
 				// Recalage géométrie + position
@@ -585,7 +616,7 @@ module.exports = function createInteractionHandlers(ctx) {
 
 			// "settle" : après stabilisation des layouts/fonts
 			if (__quizZoomFixSettleTimer) clearTimeout(__quizZoomFixSettleTimer);
-			__quizZoomFixSettleTimer = setTimeout(() => {
+			__quizZoomFixSettleTimer = window.setTimeout(() => {
 				__quizZoomFixSettleTimer = 0;
 				requestResync(true);
 			}, 260);
@@ -613,4 +644,4 @@ module.exports = function createInteractionHandlers(ctx) {
 		bindZoomFixHandlers,
 		destroyZoomFixHandlers
 	};
-};
+}
