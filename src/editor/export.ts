@@ -1,11 +1,11 @@
-'use strict';
+import { escHtml, esc5, md2html } from "./utils";
+import type { DraftQuestion } from "./utils";
+import type { EditorExamOptions } from "../types/editor-ctx";
 
-const { escHtml, esc5, md2html } = require("./utils");
-
-function exportQuestion(q, idx) {
+function exportQuestion(q: DraftQuestion, idx: number): string {
 	const id = q.title ? q.title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 20) : `q${idx + 1}`;
 	const e = esc5;
-	const L = [];
+	const L: string[] = [];
 	L.push("\t{");
 	L.push(`\t\tid: '${e(id)}',`);
 	L.push(`\t\ttitle: '${e(q.title || `Question ${idx + 1}`)}',`);
@@ -23,11 +23,11 @@ function exportQuestion(q, idx) {
 	}
 	const t = q._type;
 	if (t === "single") {
-		L.push(`\t\toptions: [\n${q.options.map(o => `\t\t\t'${e(o)}',`).join("\n")}\n\t\t],`);
+		L.push(`\t\toptions: [\n${(q.options || []).map(o => `\t\t\t'${e(o)}',`).join("\n")}\n\t\t],`);
 		L.push(`\t\tcorrectIndex: ${q.correctIndex ?? 0},`);
 	}
 	if (t === "multi") {
-		L.push(`\t\toptions: [\n${q.options.map(o => `\t\t\t'${e(o)}',`).join("\n")}\n\t\t],`);
+		L.push(`\t\toptions: [\n${(q.options || []).map(o => `\t\t\t'${e(o)}',`).join("\n")}\n\t\t],`);
 		L.push("\t\tmultiSelect: true,");
 		L.push(`\t\tcorrectIndices: [${(q.correctIndices || []).join(", ")}],`);
 	}
@@ -83,7 +83,7 @@ function exportQuestion(q, idx) {
 			} else if (typeof val === 'boolean') {
 				L.push(`\t\t${key}: ${val},`);
 			} else if (Array.isArray(val)) {
-				const items = val.map(v => typeof v === 'string' ? `'${e(v)}'` : v).join(", ");
+				const items = (val as unknown[]).map(v => typeof v === 'string' ? `'${e(v)}'` : v).join(", ");
 				L.push(`\t\t${key}: [${items}],`);
 			}
 		}
@@ -93,15 +93,15 @@ function exportQuestion(q, idx) {
 	return L.join("\n");
 }
 
-function exportAll(questions, examOptions = null) {
+function exportAll(questions: DraftQuestion[], examOptions: EditorExamOptions | null = null): string {
 	const parts = questions.map((q, i) => exportQuestion(q, i));
 	if (examOptions && examOptions.enabled) {
 		parts.push(`\t// Options mode examen\n\t{\n\t\texamMode: true,\n\t\texamDurationMinutes: ${examOptions.durationMinutes},\n\t\texamAutoSubmit: ${examOptions.autoSubmit},\n\t\texamShowTimer: ${examOptions.showTimer}\n\t}`);
 	}
 	return "[\n" + parts.join(",\n\n") + "\n]";
 }
-function exportAllWithFence(questions, examOptions = null) {
+function exportAllWithFence(questions: DraftQuestion[], examOptions: EditorExamOptions | null = null): string {
 	return "```quiz-blocks\n" + exportAll(questions, examOptions) + "\n```";
 }
 
-module.exports = { exportQuestion, exportAll, exportAllWithFence };
+export { exportQuestion, exportAll, exportAllWithFence };

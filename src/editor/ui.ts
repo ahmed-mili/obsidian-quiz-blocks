@@ -1,14 +1,24 @@
-'use strict';
+import { Notice } from "obsidian";
+import { TypePickerModal, OpenQuizFromNoteModal } from "./modals";
+import { makeDefault } from "./utils";
+import type { EditorCtx, EditorPanelsState } from "../types/editor-ctx";
 
-const obsidian = require("obsidian");
-const { ConfirmModal, TypePickerModal, ImportQuizModal, OpenQuizFromNoteModal } = require('./modals');
+type PanelKey = keyof EditorPanelsState;
 
-module.exports = function createEditorUIHandlers(ctx) {
+/** Handlers de l'ossature UI de l'éditeur (construction, synchro des panneaux, rendu, ajout de question). */
+export interface EditorUIHandlers {
+	buildUI(): void;
+	syncPanels(): void;
+	render(): void;
+	showTypeModal(): void;
+}
+
+export function createEditorUIHandlers(ctx: EditorCtx): EditorUIHandlers {
 	const { _setIcon, _iconSpan, exportAllWithFence } = ctx;
 	const view = ctx.view;
 	view._isDirty = false;
 
-	function buildUI() {
+	function buildUI(): void {
 		const root = view.contentEl;
 		const header = root.createDiv({ cls: "qb-header" });
 
@@ -26,7 +36,8 @@ module.exports = function createEditorUIHandlers(ctx) {
 		}
 
 		const toggles = header.createDiv({ cls: "qb-toggles" });
-		for (const [key, label, lucide] of [["sidebar", "Questions", "list"], ["editor", "Éditeur", "pencil"], ["preview", "Aperçu", "eye"], ["code", "Code", "code"]]) {
+		const toggleEntries: [PanelKey, string, string][] = [["sidebar", "Questions", "list"], ["editor", "Éditeur", "pencil"], ["preview", "Aperçu", "eye"], ["code", "Code", "code"]];
+		for (const [key, label, lucide] of toggleEntries) {
 			const btn = toggles.createEl("button", { cls: `qb-toggle ${ctx.panels[key] ? "active" : ""}` });
 			btn.dataset.panel = key;
 			_iconSpan(btn, lucide, "qb-toggle-icon");
@@ -37,7 +48,7 @@ module.exports = function createEditorUIHandlers(ctx) {
 				if (!Object.values(ctx.panels).some(Boolean)) ctx.panels[key] = true;
 
 				if (!wasVisible && ctx.panels[key]) {
-					const mainEl = view.contentEl.querySelector('.qb-main');
+					const mainEl = view.contentEl.querySelector<HTMLElement>('.qb-main');
 					if (mainEl) {
 						mainEl.style.setProperty('--qb-sidebar-w', '320px');
 						mainEl.style.setProperty('--qb-editor-w', '480px');
@@ -136,7 +147,9 @@ module.exports = function createEditorUIHandlers(ctx) {
 			attr: ctx.examOptions.enabled ? { open: "" } : {}
 		});
 		const examSummary = examSection.createEl("summary", { cls: "qb-section-header" });
-		ctx._setIcon(examSummary, "graduation-cap", "qb-summary-icon");
+		// NB : _setIcon ne prend que (el, name) ; le 3e argument "qb-summary-icon"
+		// de l'ancien code JS était ignoré à l'exécution (aucune classe appliquée).
+		ctx._setIcon(examSummary, "graduation-cap");
 		const examSummaryText = examSummary.createSpan({ text: "Mode Examen", cls: "qb-resource-summary-text" });
 
 		const examToggle = examSummary.createEl("button", { cls: "qb-resource-toggle-btn", attr: { type: "button", title: ctx.examOptions.enabled ? "Désactiver" : "Activer" } });
@@ -162,7 +175,7 @@ module.exports = function createEditorUIHandlers(ctx) {
 		const examBody = examSection.createDiv({ cls: "qb-section-content" });
 		const examOptionsContainer = examBody.createDiv({ cls: "qb-exam-options" });
 
-		function updateExamUIState() {
+		function updateExamUIState(): void {
 			examToggle.title = ctx.examOptions.enabled ? "Désactiver" : "Activer";
 			const dot = examToggle.querySelector(".qb-resource-toggle-dot");
 			if (dot) {
@@ -197,7 +210,7 @@ module.exports = function createEditorUIHandlers(ctx) {
 			max: "180",
 			value: String(ctx.examOptions.durationMinutes),
 			disabled: !ctx.examOptions.enabled
-		});
+		} as DomElementInfo);
 		inputContainer.createSpan({ text: "min", cls: "qb-field-unit" });
 		durationInput.addEventListener("input", () => {
 			ctx.examOptions.durationMinutes = Math.max(1, Math.min(180, parseInt(durationInput.value) || 10));
@@ -211,7 +224,7 @@ module.exports = function createEditorUIHandlers(ctx) {
 			type: "checkbox",
 			checked: ctx.examOptions.autoSubmit,
 			disabled: !ctx.examOptions.enabled
-		});
+		} as DomElementInfo);
 		autoSubmitWrap.createSpan({ text: " Soumettre auto à la fin", cls: "qb-checkbox-label" });
 		autoSubmitCb.addEventListener("change", () => {
 			ctx.examOptions.autoSubmit = autoSubmitCb.checked;
@@ -225,7 +238,7 @@ module.exports = function createEditorUIHandlers(ctx) {
 			type: "checkbox",
 			checked: ctx.examOptions.showTimer,
 			disabled: !ctx.examOptions.enabled
-		});
+		} as DomElementInfo);
 		showTimerWrap.createSpan({ text: " Afficher le timer", cls: "qb-checkbox-label" });
 		showTimerCb.addEventListener("change", () => {
 			ctx.examOptions.showTimer = showTimerCb.checked;
@@ -252,7 +265,7 @@ module.exports = function createEditorUIHandlers(ctx) {
 
 		view.editorInnerEl = view.editorEl.createDiv({ cls: "qb-editor-inner" });
 
-		view.updateSaveIndicator = (saved) => {
+		view.updateSaveIndicator = (saved: boolean) => {
 			if (!view.sourceFile) {
 				view._saveBtn.disabled = true;
 				view._saveBtn.title = "Ouvrez un fichier pour sauvegarder";
@@ -261,7 +274,7 @@ module.exports = function createEditorUIHandlers(ctx) {
 			if (saved) {
 				view._saveBtn.disabled = true;
 				view._saveBtn.title = "Toutes les modifications sont sauvegardées";
-				new obsidian.Notice("✓ Sauvegardé", 2000);
+				new Notice("✓ Sauvegardé", 2000);
 			} else {
 				view._saveBtn.disabled = false;
 				view._saveBtn.title = "Cliquez pour sauvegarder les modifications";
@@ -278,9 +291,9 @@ module.exports = function createEditorUIHandlers(ctx) {
 		}, 1000);
 	}
 
-	function syncPanels() {
-		const mainEl = view.contentEl.querySelector('.qb-main');
-		const map = { sidebar: view.sidebarEl, editor: view.editorEl, preview: view.previewEl, code: view.codeEl };
+	function syncPanels(): void {
+		const mainEl = view.contentEl.querySelector<HTMLElement>('.qb-main');
+		const map: Record<PanelKey, HTMLElement> = { sidebar: view.sidebarEl, editor: view.editorEl, preview: view.previewEl, code: view.codeEl };
 		const defaultWidths = { sidebar: '320px', editor: '352px', code: '288px' };
 		if (ctx.panels.preview && mainEl) {
 			const editorWidth = mainEl.style.getPropertyValue('--qb-editor-w');
@@ -290,7 +303,7 @@ module.exports = function createEditorUIHandlers(ctx) {
 		}
 		for (const [k, el] of Object.entries(map)) {
 			if (!el) continue;
-			el.toggleClass("qb-hidden", !ctx.panels[k]);
+			el.toggleClass("qb-hidden", !ctx.panels[k as PanelKey]);
 		}
 		if (mainEl) {
 			const mainRect = mainEl.getBoundingClientRect();
@@ -304,7 +317,7 @@ module.exports = function createEditorUIHandlers(ctx) {
 				mainEl.style.setProperty('--qb-code-w', '288px');
 			}
 		}
-		view.contentEl.querySelectorAll(".qb-toggle").forEach(btn => btn.toggleClass("active", !!ctx.panels[btn.dataset.panel]));
+		view.contentEl.querySelectorAll<HTMLElement>(".qb-toggle").forEach(btn => btn.toggleClass("active", !!ctx.panels[btn.dataset.panel as PanelKey]));
 		if (view.resizerSidebarEditor) {
 			const showSidebarEditor = ctx.panels.sidebar && ctx.panels.editor;
 			view.resizerSidebarEditor.toggleClass("qb-hidden", !showSidebarEditor);
@@ -330,7 +343,7 @@ module.exports = function createEditorUIHandlers(ctx) {
 		}
 	}
 
-	function render() {
+	function render(): void {
 		view.renderSidebar();
 		view.renderEditor();
 		view.schedulePreview();
@@ -338,9 +351,8 @@ module.exports = function createEditorUIHandlers(ctx) {
 		syncPanels();
 	}
 
-	function showTypeModal() {
+	function showTypeModal(): void {
 		const modal = new TypePickerModal(view.app, type => {
-			const { makeDefault } = require('./utils');
 			const nq = makeDefault(type);
 			nq.title = `Question ${ctx.questions.length + 1}`;
 			ctx.questions.push(nq);
@@ -351,4 +363,4 @@ module.exports = function createEditorUIHandlers(ctx) {
 	}
 
 	return { buildUI, syncPanels, render, showTypeModal };
-};
+}

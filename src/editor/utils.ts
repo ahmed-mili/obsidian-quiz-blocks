@@ -1,7 +1,7 @@
 import { setIcon } from "obsidian";
 import type { ResourceButton } from "../types/quiz";
 
-type QuestionTypeKey = "single" | "multi" | "ordering" | "matching" | "text" | "cmd" | "powershell" | "bash";
+export type QuestionTypeKey = "single" | "multi" | "ordering" | "matching" | "text" | "cmd" | "powershell" | "bash";
 
 interface QuizTypeDef {
 	key: QuestionTypeKey;
@@ -37,7 +37,7 @@ function _setIcon(el: HTMLElement, name: string): void { try { setIcon(el, name)
 function _iconSpan(parent: HTMLElement, name: string, cls?: string): HTMLSpanElement { const s = parent.createSpan({ cls: cls || "qb-icon" }); _setIcon(s, name); return s; }
 
 /** Question en cours d'édition côté éditeur — champs internes (_type/_id) en plus des champs de données. */
-interface DraftQuestion {
+export interface DraftQuestion {
 	_type: QuestionTypeKey;
 	_id: string;
 	title: string;
@@ -59,6 +59,15 @@ interface DraftQuestion {
 	acceptedAnswers?: string[];
 	caseSensitive?: boolean;
 	commandPrefix?: string;
+	/** Énoncé/explication en HTML pré-rendu (édition mode HTML + fallback import). */
+	_promptHtml?: string;
+	_explainHtml?: string;
+	/** Titre modifié manuellement (bloque la renumérotation auto "Question N"). */
+	_userModifiedTitle?: boolean;
+	/** Clés inconnues préservées au round-trip import→export (editor/modals.js convertToInternalFormat). */
+	_extraFields?: Record<string, unknown>;
+	/** Gabarit guidé de l'éditeur math (miroir de TextQuestion.answerTemplate). */
+	answerTemplate?: string;
 }
 
 function makeDefault(type: QuestionTypeKey): DraftQuestion {

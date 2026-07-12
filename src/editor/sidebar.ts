@@ -1,13 +1,20 @@
-'use strict';
+import { Notice } from "obsidian";
+import { mathifyElement } from "../engine/mathjax";
+import { ConfirmModal } from "./modals";
+import type { EditorCtx } from "../types/editor-ctx";
 
-const obsidian = require("obsidian");
-const { ConfirmModal } = require("./modals");
+/** Handlers de la liste des questions (barre latérale) : rendu, réordonnancement, suppression. */
+export interface SidebarHandlers {
+	renderSidebar(): void;
+	moveQuestion(i: number, dir: number): void;
+	deleteQuestion(i: number): void;
+}
 
-module.exports = function createSidebarHandlers(ctx) {
+export function createSidebarHandlers(ctx: EditorCtx): SidebarHandlers {
 	const { Q_TYPES, _setIcon } = ctx;
 	const view = ctx.view;
 
-	function renderSidebar() {
+	function renderSidebar(): void {
 		const list = view.sidebarListEl;
 		list.empty();
 		view.qCountEl.textContent = `Questions (${ctx.questions.length})`;
@@ -39,7 +46,7 @@ module.exports = function createSidebarHandlers(ctx) {
 			}
 			// LaTeX $...$ du titre et de l'aperçu : rendu MathJax (les
 			// items affichaient les dollars bruts — demande 2026-07-11).
-			require("../engine/mathjax").mathifyElement(text);
+			mathifyElement(text);
 
 			const acts = item.createDiv({ cls: "qb-q-actions" });
 			const up = acts.createEl("button", { cls: "qb-btn-icon qb-btn-sm" }); _setIcon(up, "chevron-up");
@@ -47,7 +54,7 @@ module.exports = function createSidebarHandlers(ctx) {
 			const del = acts.createEl("button", { cls: "qb-btn-icon qb-btn-sm qb-btn-danger" }); _setIcon(del, "x");
 
 			item.addEventListener("click", e => {
-				if (e.target.closest(".qb-q-actions")) return;
+				if ((e.target as HTMLElement).closest(".qb-q-actions")) return;
 				ctx.activeIdx = i;
 				view.render();
 			});
@@ -57,7 +64,7 @@ module.exports = function createSidebarHandlers(ctx) {
 		});
 	}
 
-	function moveQuestion(i, dir) {
+	function moveQuestion(i: number, dir: number): void {
 		const ni = i + dir;
 		if (ni < 0 || ni >= ctx.questions.length) return;
 		[ctx.questions[i], ctx.questions[ni]] = [ctx.questions[ni], ctx.questions[i]];
@@ -67,9 +74,9 @@ module.exports = function createSidebarHandlers(ctx) {
 		view.render();
 	}
 
-	function deleteQuestion(i) {
+	function deleteQuestion(i: number): void {
 		if (ctx.questions.length <= 1) {
-			new obsidian.Notice("Impossible de supprimer la dernière question");
+			new Notice("Impossible de supprimer la dernière question");
 			return;
 		}
 
@@ -89,7 +96,7 @@ module.exports = function createSidebarHandlers(ctx) {
 					else if (ctx.activeIdx === i) ctx.activeIdx = Math.min(i, ctx.questions.length - 1);
 						ctx.questions.forEach((qq, idx) => { if (!qq._userModifiedTitle && /^Question \d+$/.test(qq.title)) qq.title = `Question ${idx + 1}`; });
 					view.render();
-					new obsidian.Notice(`Question "${title}" supprimée`);
+					new Notice(`Question "${title}" supprimée`);
 				}
 			}
 		);
@@ -101,4 +108,4 @@ module.exports = function createSidebarHandlers(ctx) {
 		moveQuestion,
 		deleteQuestion
 	};
-};
+}

@@ -1,15 +1,33 @@
-'use strict';
+import type { EditorCtx } from "../types/editor-ctx";
+import { mathifyElement } from "../engine/mathjax";
 
-module.exports = function createPreviewHandlers(ctx) {
+/** API interne non publique d'Obsidian : lecture d'un réglage du vault (ex. attachmentFolderPath). */
+type VaultWithGetConfig = { getConfig(key: string): string | null };
+
+/** Sous-ensemble typé du module moteur engine/math-input.js (encore .js). */
+interface MathInputModule {
+	isMathQuestion(q: unknown): boolean;
+	createMathField(host: HTMLElement, opts?: { readOnly?: boolean; template?: unknown }): unknown;
+}
+
+/** Handlers d'aperçu (rendu fidèle au quiz) et de génération du code JSON5. */
+export interface PreviewHandlers {
+	schedulePreview(): void;
+	renderPreview(): void;
+	_resolveImagesInHtml(html: string): string;
+	renderCode(): void;
+}
+
+export function createPreviewHandlers(ctx: EditorCtx): PreviewHandlers {
 	const { Q_TYPES, md2html, exportAllWithFence } = ctx;
 	const view = ctx.view;
 
-	function schedulePreview() {
+	function schedulePreview(): void {
 		if (view._previewDebounce) clearTimeout(view._previewDebounce);
-			view._previewDebounce = setTimeout(() => { if (view.previewBodyEl && view.previewBodyEl.isConnected) renderPreview(); }, 150);
+			view._previewDebounce = window.setTimeout(() => { if (view.previewBodyEl && view.previewBodyEl.isConnected) renderPreview(); }, 150);
 	}
 
-	function renderPreview() {
+	function renderPreview(): void {
 		const body = view.previewBodyEl;
 		body.empty();
 
@@ -43,10 +61,10 @@ module.exports = function createPreviewHandlers(ctx) {
 		} else if (q.prompt) {
 			const promptEl = card.createDiv({ cls: "quiz-question" });
 			promptEl.innerHTML = md2html(q.prompt);
-			promptEl.querySelectorAll("img.qb-md-img").forEach(img => {
+			promptEl.querySelectorAll<HTMLImageElement>("img.qb-md-img").forEach(img => {
 				const fileName = img.getAttribute("src");
 				if (fileName) {
-					const attachFolder = view.app.vault.getConfig("attachmentFolderPath") || "";
+					const attachFolder = (view.app.vault as unknown as VaultWithGetConfig).getConfig("attachmentFolderPath") || "";
 					const folderPath = attachFolder.replace("${file}", "").replace(/\/$/, "") || ".";
 					const filePath = folderPath === "." ? fileName : `${folderPath}/${fileName}`;
 					const file = view.app.vault.getAbstractFileByPath(filePath);
@@ -105,7 +123,7 @@ module.exports = function createPreviewHandlers(ctx) {
 			// placeholder — pré-remplir avec acceptedAnswers[0] SPOILAIT la
 			// réponse dès l'arrivée sur l'aperçu (demande 2026-07-11),
 			// en LaTeX brut de surcroît.
-			const mathInput = require("../engine/math-input");
+			const mathInput = require("../engine/math-input") as MathInputModule;
 			if (mathInput.isMathQuestion(q)) {
 				// Question math : le même éditeur d'équations que le quiz,
 				// en lecture seule, gabarit affiché s'il existe.
@@ -171,17 +189,17 @@ module.exports = function createPreviewHandlers(ctx) {
 		// LaTeX $...$ / $$...$$ : même rendu MathJax natif que le moteur —
 		// l'aperçu doit être fidèle au quiz final (titre, énoncé, options,
 		// explication).
-		require("../engine/mathjax").mathifyElement(card);
+		mathifyElement(card);
 	}
 
-	function _resolveImagesInHtml(html) {
+	function _resolveImagesInHtml(html: string): string {
 		if (!html) return html;
 		const temp = document.createElement('div');
 		temp.innerHTML = html;
-		temp.querySelectorAll("img.qb-md-img").forEach(img => {
+		temp.querySelectorAll<HTMLImageElement>("img.qb-md-img").forEach(img => {
 			const fileName = img.getAttribute("src");
 			if (fileName) {
-				const attachFolder = view.app.vault.getConfig("attachmentFolderPath") || "";
+				const attachFolder = (view.app.vault as unknown as VaultWithGetConfig).getConfig("attachmentFolderPath") || "";
 				const folderPath = attachFolder.replace("${file}", "").replace(/\/$/, "") || ".";
 				const filePath = folderPath === "." ? fileName : `${folderPath}/${fileName}`;
 				const file = view.app.vault.getAbstractFileByPath(filePath);
@@ -193,7 +211,7 @@ module.exports = function createPreviewHandlers(ctx) {
 		return temp.innerHTML;
 	}
 
-	function renderCode() {
+	function renderCode(): void {
 		view.codeOutputEl.textContent = exportAllWithFence(ctx.questions, ctx.examOptions);
 	}
 
@@ -203,4 +221,4 @@ module.exports = function createPreviewHandlers(ctx) {
 		_resolveImagesInHtml,
 		renderCode
 	};
-};
+}

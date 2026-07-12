@@ -1,15 +1,68 @@
-'use strict';
+import { Modal, FuzzySuggestModal, Notice } from "obsidian";
+import type { App, TFile, FuzzyMatch, WorkspaceLeaf } from "obsidian";
+import { Q_TYPES, _setIcon, makeDefault } from "./utils";
+import type { QuestionTypeKey, DraftQuestion } from "./utils";
+import { parseQuizSource } from "../quiz-utils";
+import type { EditorHostView, EditorExamOptions } from "../types/editor-ctx";
+import type { ResourceButton } from "../types/quiz";
 
-const obsidian = require("obsidian");
-const { Q_TYPES, _setIcon, makeDefault } = require("./utils");
-const { parseQuizSource } = require("../quiz-utils");
+/**
+ * Question brute telle que lue du JSON5 (parseQuizSource) ou d'un marqueur
+ * mode-examen. Forme volontairement permissive (index signature) : l'import
+ * lit des champs hétérogènes et préserve les clés inconnues (_extraFields).
+ */
+interface ParsedQuizItem {
+	[key: string]: unknown;
+	examMode?: boolean;
+	examDurationMinutes?: number;
+	examAutoSubmit?: boolean;
+	examShowTimer?: boolean;
+	ordering?: unknown;
+	matching?: unknown;
+	multiSelect?: boolean;
+	type?: string;
+	terminalVariant?: string;
+	textVariant?: string;
+	id?: string;
+	title?: string;
+	hint?: string;
+	prompt?: string;
+	promptHtml?: string;
+	explain?: string;
+	explainHtml?: string;
+	resourceButton?: ResourceButton;
+	options?: string[];
+	correctIndex?: number;
+	correctIndices?: number[];
+	slots?: string[];
+	possibilities?: string[];
+	correctOrder?: number[];
+	rows?: string[];
+	choices?: string[];
+	correctMap?: number[];
+	acceptedAnswers?: string[];
+	acceptableAnswers?: string[];
+	correctText?: unknown;
+	answer?: unknown;
+	caseSensitive?: boolean;
+	placeholder?: string;
+	commandPrefix?: string;
+}
+
+/** Accès aux champs non déclarés sur `View` selon la vue concrète (MarkdownView.file/data, éditeur quiz sourceFile/openQuizFile). */
+type ViewLike = {
+	file?: TFile | null;
+	data?: string;
+	sourceFile?: TFile | null;
+	openQuizFile?: (file: TFile, source: string) => Promise<void>;
+};
 
 /**
  * Convert HTML to plain text using the DOM, preserving inner text of
  * structural elements like <pre>, <code>, <br> instead of stripping them.
  * This avoids data loss that a regex (/<[^>]+>/g) would cause.
  */
-function _htmlToText(html) {
+function _htmlToText(html: string): string {
 	const temp = document.createElement("div");
 	temp.innerHTML = html;
 	// Convert <br> to newlines before extracting text
@@ -24,8 +77,15 @@ function _htmlToText(html) {
 /* ════════════════════════════════════════════════════════
    CONFIRM MODAL
    ════════════════════════════════════════════════════════ */
-class ConfirmModal extends obsidian.Modal {
-	constructor(app, title, message, confirmText, cancelText, callback) {
+export class ConfirmModal extends Modal {
+	modalTitle: string;
+	message: string;
+	confirmText: string;
+	cancelText: string;
+	callback: (confirmed: boolean) => void;
+	confirmed: boolean;
+
+	constructor(app: App, title: string, message: string, confirmText: string, cancelText: string, callback: (confirmed: boolean) => void) {
 		super(app);
 		this.modalTitle = title;
 		this.message = message;
@@ -35,7 +95,7 @@ class ConfirmModal extends obsidian.Modal {
 		this.confirmed = false;
 	}
 
-	onOpen() {
+	onOpen(): void {
 		const { contentEl } = this;
 		contentEl.empty();
 		contentEl.addClass("qb-confirm-modal");
@@ -64,7 +124,7 @@ class ConfirmModal extends obsidian.Modal {
 		});
 	}
 
-	onClose() {
+	onClose(): void {
 		this.callback(this.confirmed);
 		this.contentEl.empty();
 	}
@@ -73,13 +133,15 @@ class ConfirmModal extends obsidian.Modal {
 /* ════════════════════════════════════════════════════════
    TYPE PICKER MODAL
    ════════════════════════════════════════════════════════ */
-class TypePickerModal extends obsidian.Modal {
-	constructor(app, onPick) {
+export class TypePickerModal extends Modal {
+	onPick: (key: QuestionTypeKey) => void;
+
+	constructor(app: App, onPick: (key: QuestionTypeKey) => void) {
 		super(app);
 		this.onPick = onPick;
 	}
 
-	onOpen() {
+	onOpen(): void {
 		const { contentEl } = this;
 		contentEl.empty();
 		contentEl.addClass("qb-type-modal");
@@ -97,19 +159,21 @@ class TypePickerModal extends obsidian.Modal {
 		}
 	}
 
-	onClose() { this.contentEl.empty(); }
+	onClose(): void { this.contentEl.empty(); }
 }
 
 /* ════════════════════════════════════════════════════════
    IMPORT QUIZ MODAL
    ════════════════════════════════════════════════════════ */
-class ImportQuizModal extends obsidian.Modal {
-	constructor(app, builderView) {
+export class ImportQuizModal extends Modal {
+	builderView: EditorHostView;
+
+	constructor(app: App, builderView: EditorHostView) {
 		super(app);
 		this.builderView = builderView;
 	}
 
-	onOpen() {
+	onOpen(): void {
 		const { contentEl } = this;
 		contentEl.empty();
 		contentEl.addClass("qb-import-modal");
@@ -135,7 +199,7 @@ class ImportQuizModal extends obsidian.Modal {
 		});
 	}
 
-	async loadQuiz(text) {
+	async loadQuiz(text: string): Promise<void> {
 		try {
 			let jsonText = text;
 			const fenceMatch = text.match(/```quiz-blocks\n([\s\S]*?)\n```/);
@@ -143,14 +207,14 @@ class ImportQuizModal extends obsidian.Modal {
 				jsonText = fenceMatch[1];
 			}
 
-			const parsed = parseQuizSource(jsonText);
+			const parsed = parseQuizSource(jsonText) as ParsedQuizItem[];
 			if (!Array.isArray(parsed) || parsed.length === 0) {
-				new obsidian.Notice("Aucune question trouvée dans le contenu");
+				new Notice("Aucune question trouvée dans le contenu");
 				return;
 			}
 
-			const questions = [];
-			let examOptions = null;
+			const questions: DraftQuestion[] = [];
+			let examOptions: EditorExamOptions | null = null;
 
 			for (const q of parsed) {
 				if (q.examMode) {
@@ -168,7 +232,7 @@ class ImportQuizModal extends obsidian.Modal {
 			}
 
 			if (questions.length === 0) {
-				new obsidian.Notice("Aucune question valide trouvée");
+				new Notice("Aucune question valide trouvée");
 				return;
 			}
 
@@ -184,16 +248,16 @@ class ImportQuizModal extends obsidian.Modal {
 			}
 
 			this.builderView.render();
-			new obsidian.Notice(`${questions.length} question(s) importée(s)`);
+			new Notice(`${questions.length} question(s) importée(s)`);
 			this.close();
 		} catch (err) {
 			console.error("Import error:", err);
-			new obsidian.Notice("Erreur lors de l'import: " + err.message);
+			new Notice("Erreur lors de l'import: " + (err as Error).message);
 		}
 	}
 
-	convertToInternalFormat(q) {
-		let type = "single";
+	convertToInternalFormat(q: ParsedQuizItem): DraftQuestion {
+		let type: QuestionTypeKey = "single";
 		if (q.ordering) type = "ordering";
 		else if (q.matching) type = "matching";
 		else if (q.multiSelect) type = "multi";
@@ -255,19 +319,20 @@ class ImportQuizModal extends obsidian.Modal {
 		}
 
 		if (["text", "cmd", "powershell", "bash"].includes(type)) {
-			question.acceptedAnswers = (q.acceptedAnswers || q.acceptableAnswers || [""]).slice();
+			let accepted = (q.acceptedAnswers || q.acceptableAnswers || [""]).slice();
 			// Union answer/correctText comme le moteur (terminal.js) —
 			// même logique que editor.js (copie à factoriser un jour).
 			for (const extra of [q.correctText, q.answer]) {
 				if (extra == null) continue;
 				if (typeof extra !== "string" && typeof extra !== "number") continue;
 				const v = String(extra);
-				if (question.acceptedAnswers.length === 1 && question.acceptedAnswers[0] === "") {
-					question.acceptedAnswers = [v];
-				} else if (!question.acceptedAnswers.includes(v)) {
-					question.acceptedAnswers.push(v);
+				if (accepted.length === 1 && accepted[0] === "") {
+					accepted = [v];
+				} else if (!accepted.includes(v)) {
+					accepted.push(v);
 				}
 			}
+			question.acceptedAnswers = accepted;
 			question.caseSensitive = q.caseSensitive || false;
 			question.placeholder = q.placeholder || "";
 			if (type === "cmd" || type === "powershell") {
@@ -276,37 +341,42 @@ class ImportQuizModal extends obsidian.Modal {
 		}
 
 		const knownKeys = new Set(['id','title','prompt','promptHtml','options','correctIndex','multiSelect','correctIndices','ordering','slots','possibilities','correctOrder','matching','rows','choices','correctMap','type','terminalVariant','textVariant','commandPrefix','placeholder','caseSensitive','acceptedAnswers','acceptableAnswers','correctText','answer','hint','explain','explainHtml','resourceButton','examMode','examDurationMinutes','examAutoSubmit','examShowTimer']);
-		question._extraFields = {};
+		const extraFields: Record<string, unknown> = {};
 		for (const key of Object.keys(q)) {
-			if (!knownKeys.has(key)) question._extraFields[key] = q[key];
+			if (!knownKeys.has(key)) extraFields[key] = q[key];
 		}
+		question._extraFields = extraFields;
 
 		return question;
 	}
 
-	onClose() { this.contentEl.empty(); }
+	onClose(): void { this.contentEl.empty(); }
 }
 
 /* ════════════════════════════════════════════════════════
    QUIZ FILE SUGGEST MODAL
    ════════════════════════════════════════════════════════ */
-class QuizFileSuggestModal extends obsidian.FuzzySuggestModal {
-	constructor(app, onChoose) {
+export class QuizFileSuggestModal extends FuzzySuggestModal<TFile> {
+	onChooseCallback: (file: TFile) => void;
+	openFiles: Set<string>;
+
+	constructor(app: App, onChoose: (file: TFile) => void) {
 		super(app);
 		this.onChooseCallback = onChoose;
 		this.setPlaceholder("Choisir une note contenant un quiz...");
 		this.openFiles = new Set();
 	}
 
-	getItems() {
-		const result = [];
-		const seenPaths = new Set();
+	getItems(): TFile[] {
+		const result: TFile[] = [];
+		const seenPaths = new Set<string>();
 
 		this.app.workspace.getLeavesOfType('markdown').forEach(leaf => {
-			if (leaf.view && leaf.view.file) {
-				result.push(leaf.view.file);
-				seenPaths.add(leaf.view.file.path);
-				this.openFiles.add(leaf.view.file.path);
+			const file = (leaf.view as ViewLike).file;
+			if (leaf.view && file) {
+				result.push(file);
+				seenPaths.add(file.path);
+				this.openFiles.add(file.path);
 			}
 		});
 
@@ -320,11 +390,11 @@ class QuizFileSuggestModal extends obsidian.FuzzySuggestModal {
 		return result;
 	}
 
-	getItemText(file) {
+	getItemText(file: TFile): string {
 		return file.path;
 	}
 
-	renderSuggestion(fuzzyMatch, el) {
+	renderSuggestion(fuzzyMatch: FuzzyMatch<TFile>, el: HTMLElement): void {
 		const file = fuzzyMatch.item;
 		el.createDiv({ cls: "qb-suggest-item" }, div => {
 			const isOpen = this.openFiles.has(file.path);
@@ -340,7 +410,7 @@ class QuizFileSuggestModal extends obsidian.FuzzySuggestModal {
 		});
 	}
 
-	async onChooseItem(file) {
+	async onChooseItem(file: TFile): Promise<void> {
 		this.onChooseCallback(file);
 	}
 }
@@ -348,13 +418,15 @@ class QuizFileSuggestModal extends obsidian.FuzzySuggestModal {
 /* ════════════════════════════════════════════════════════
    IMPORT FROM NOTE MODAL
    ════════════════════════════════════════════════════════ */
-class ImportFromNoteModal extends obsidian.Modal {
-	constructor(app, builderView) {
+export class ImportFromNoteModal extends Modal {
+	builderView: EditorHostView;
+
+	constructor(app: App, builderView: EditorHostView) {
 		super(app);
 		this.builderView = builderView;
 	}
 
-	onOpen() {
+	onOpen(): void {
 		const { contentEl } = this;
 		contentEl.empty();
 		// Ne pas fermer immédiatement - ouvre une autre modal directement
@@ -365,27 +437,34 @@ class ImportFromNoteModal extends obsidian.Modal {
 				const content = await this.app.vault.read(file);
 				const match = content.match(/```quiz-blocks\n([\s\S]*?)\n```/);
 				if (!match) {
-					new obsidian.Notice("Aucun bloc quiz-blocks trouvé dans cette note");
+					new Notice("Aucun bloc quiz-blocks trouvé dans cette note");
 					return;
 				}
 
 				await this.builderView.importQuizSource(match[1], file.name);
-				new obsidian.Notice(`Quiz importé depuis ${file.name}`);
+				new Notice(`Quiz importé depuis ${file.name}`);
 			} catch (err) {
 				console.error("Import from note error:", err);
-				new obsidian.Notice("Erreur lors de la lecture de la note");
+				new Notice("Erreur lors de la lecture de la note");
 			}
 		}).open();
 	}
 
-	onClose() { this.contentEl.empty(); }
+	onClose(): void { this.contentEl.empty(); }
 }
 
 /* ════════════════════════════════════════════════════════
    OPEN QUIZ FROM NOTE MODAL
    ════════════════════════════════════════════════════════ */
-class OpenQuizFromNoteModal extends obsidian.FuzzySuggestModal {
-	constructor(app, builderView) {
+export class OpenQuizFromNoteModal extends FuzzySuggestModal<TFile> {
+	builderView: EditorHostView;
+	openFiles: Set<string>;
+	resultItems: TFile[];
+	quizFiles: Set<string>;
+	activeQuizFile: string | null;
+	loading: boolean;
+
+	constructor(app: App, builderView: EditorHostView) {
 		super(app);
 		this.builderView = builderView;
 		this.openFiles = new Set();
@@ -395,7 +474,7 @@ class OpenQuizFromNoteModal extends obsidian.FuzzySuggestModal {
 		this.loading = true;
 	}
 
-	onOpen() {
+	onOpen(): void {
 		super.onOpen();
 
 		// Verrouiller l'input pendant le chargement :
@@ -427,7 +506,7 @@ class OpenQuizFromNoteModal extends obsidian.FuzzySuggestModal {
 		this.loadQuizFiles();
 	}
 
-	onClose() {
+	onClose(): void {
 		// Nettoyage défensif : si la modale est fermée pendant le chargement,
 		// restaurer l'état normal de l'input
 		if (this.inputEl) {
@@ -437,21 +516,22 @@ class OpenQuizFromNoteModal extends obsidian.FuzzySuggestModal {
 		super.onClose?.();
 	}
 
-	updateSuggestions() {
+	updateSuggestions(): void {
 		// No-op tant que le scan est en cours : on ne veut pas qu'un rafraîchissement
 		// interne d'Obsidian efface notre spinner
 		if (this.loading) return;
+		// @ts-expect-error API interne Obsidian non typée (SuggestModal.updateSuggestions)
 		return super.updateSuggestions?.();
 	}
 
-	async loadQuizFiles() {
-		const result = [];
-		const seenPaths = new Set();
+	async loadQuizFiles(): Promise<void> {
+		const result: TFile[] = [];
+		const seenPaths = new Set<string>();
 
 		// Vérifier quel fichier est actuellement chargé dans le Quiz Editor
 		const quizEditorLeaves = this.app.workspace.getLeavesOfType("quiz-blocks-builder");
 		if (quizEditorLeaves.length > 0) {
-			const quizEditorView = quizEditorLeaves[0].view;
+			const quizEditorView = quizEditorLeaves[0].view as ViewLike;
 			if (quizEditorView && quizEditorView.sourceFile) {
 				this.activeQuizFile = quizEditorView.sourceFile.path;
 			}
@@ -459,14 +539,15 @@ class OpenQuizFromNoteModal extends obsidian.FuzzySuggestModal {
 
 		// D'abord les fichiers ouverts (priorité 1)
 		this.app.workspace.getLeavesOfType('markdown').forEach(leaf => {
-			if (leaf.view && leaf.view.file) {
-				this.openFiles.add(leaf.view.file.path);
+			const view = leaf.view as ViewLike;
+			if (leaf.view && view.file) {
+				this.openFiles.add(view.file.path);
 				// Vérifier si le fichier contient un quiz
-				const content = leaf.view.data || "";
+				const content = view.data || "";
 				if (content.includes("```quiz-blocks")) {
-					this.quizFiles.add(leaf.view.file.path);
-					result.push(leaf.view.file);
-					seenPaths.add(leaf.view.file.path);
+					this.quizFiles.add(view.file.path);
+					result.push(view.file);
+					seenPaths.add(view.file.path);
 				}
 			}
 		});
@@ -516,15 +597,15 @@ class OpenQuizFromNoteModal extends obsidian.FuzzySuggestModal {
 		this.updateSuggestions();
 	}
 
-	getItems() {
+	getItems(): TFile[] {
 		return this.loading ? [] : this.resultItems;
 	}
 
-	getItemText(file) {
+	getItemText(file: TFile): string {
 		return file.path;
 	}
 
-	renderSuggestion(fuzzyMatch, el) {
+	renderSuggestion(fuzzyMatch: FuzzyMatch<TFile>, el: HTMLElement): void {
 		const file = fuzzyMatch.item;
 		const filePath = file?.path || "";
 		const fileName = file?.basename || "";
@@ -541,18 +622,18 @@ class OpenQuizFromNoteModal extends obsidian.FuzzySuggestModal {
 		});
 	}
 
-	async onChooseItem(file) {
+	async onChooseItem(file: TFile): Promise<void> {
 		try {
 			const content = await this.app.vault.read(file);
 			const match = content.match(/```quiz-blocks\n([\s\S]*?)\n```/);
 			if (!match) {
-				new obsidian.Notice("Aucun bloc quiz-blocks trouvé dans cette note");
+				new Notice("Aucun bloc quiz-blocks trouvé dans cette note");
 				return;
 			}
 
 			// Ouvrir ou révéler le Quiz Editor
 			const existing = this.app.workspace.getLeavesOfType("quiz-blocks-builder");
-			let leaf;
+			let leaf: WorkspaceLeaf;
 			if (existing.length > 0) {
 				leaf = existing[0];
 				this.app.workspace.revealLeaf(leaf);
@@ -563,16 +644,16 @@ class OpenQuizFromNoteModal extends obsidian.FuzzySuggestModal {
 			}
 
 			// Ouvrir le quiz pour édition
-			const view = leaf.view;
+			const view = leaf.view as ViewLike;
 			if (view && view.openQuizFile) {
 				await view.openQuizFile(file, match[1]);
-				new obsidian.Notice(`Quiz ouvert : ${file.name}`);
+				new Notice(`Quiz ouvert : ${file.name}`);
 			}
 		} catch (err) {
 			console.error("Open quiz error:", err);
-			new obsidian.Notice("Erreur lors de l'ouverture");
+			new Notice("Erreur lors de l'ouverture");
 		}
 	}
 }
 
-module.exports = { ConfirmModal, TypePickerModal, ImportQuizModal, QuizFileSuggestModal, ImportFromNoteModal, OpenQuizFromNoteModal, _htmlToText };
+export { _htmlToText };

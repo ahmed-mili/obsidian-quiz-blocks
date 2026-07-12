@@ -1,17 +1,31 @@
-'use strict';
+import type { EditorCtx } from "../types/editor-ctx";
+import type { EditorPanelsState } from "../types/editor-ctx";
 
-module.exports = function createResizeHandlers(ctx) {
+/** Clés des 4 panneaux redimensionnables. */
+type PanelKey = keyof EditorPanelsState;
+/** Type de poignée de redimensionnement (paire de panneaux adjacents, ou bord droit de code). */
+type ResizerType = "sidebar-editor" | "editor-preview" | "preview-code" | "editor-code" | "code-right";
+
+/** Handlers de redimensionnement des panneaux (drag des poignées, fermeture au seuil). */
+export interface ResizeHandlers {
+	_setupResizer(resizerEl: HTMLElement, leftPanel: HTMLElement, rightPanel: HTMLElement, type: ResizerType): void;
+	_closeLeftPanel(type: ResizerType, mainEl: HTMLElement): void;
+	_closeRightPanel(type: ResizerType, mainEl: HTMLElement): void;
+	_resizePanels(type: ResizerType, mainEl: HTMLElement, leftWidth: number, rightWidth: number): void;
+}
+
+export function createResizeHandlers(ctx: EditorCtx): ResizeHandlers {
 	const view = ctx.view;
 
-	function _setupResizer(resizerEl, leftPanel, rightPanel, type) {
+	function _setupResizer(resizerEl: HTMLElement, leftPanel: HTMLElement, rightPanel: HTMLElement, type: ResizerType): void {
 		let startX = 0;
 		let startWidthLeft = 0;
 		let startWidthRight = 0;
 		let isDragging = false;
-		let overlay = null;
-		let rafId = null;
+		let overlay: HTMLElement | null = null;
+		let rafId: number | null = null;
 
-		const dragState = {
+		const dragState: { delta: number; mainEl: HTMLElement | null; needsUpdate: boolean } = {
 			delta: 0,
 			mainEl: null,
 			needsUpdate: false
@@ -101,14 +115,14 @@ module.exports = function createResizeHandlers(ctx) {
 			}
 		};
 
-		const onMouseDown = (e) => {
+		const onMouseDown = (e: MouseEvent) => {
 			if (e.button !== 0) return;
 			e.preventDefault();
 			e.stopPropagation();
 			isDragging = true;
 			startX = e.clientX;
 
-			dragState.mainEl = view.contentEl.querySelector('.qb-main');
+			dragState.mainEl = view.contentEl.querySelector<HTMLElement>('.qb-main');
 			if (!dragState.mainEl) return;
 
 			const leftRect = leftPanel.getBoundingClientRect();
@@ -142,13 +156,13 @@ module.exports = function createResizeHandlers(ctx) {
 			const mainEl = dragState.mainEl;
 			if (mainEl) mainEl.classList.add('is-resizing');
 
-			const onMouseMove = (e) => {
+			const onMouseMove = (e: MouseEvent) => {
 				if (!isDragging) return;
 				dragState.delta = e.clientX - startX;
 				scheduleUpdate();
 			};
 
-			const onMouseUp = (e) => {
+			const onMouseUp = (_e: MouseEvent) => {
 				if (!isDragging) return;
 				isDragging = false;
 
@@ -185,8 +199,8 @@ module.exports = function createResizeHandlers(ctx) {
 		resizerEl.addEventListener('mousedown', onMouseDown);
 	}
 
-	function _closeLeftPanel(type, mainEl) {
-		const panelNames = {
+	function _closeLeftPanel(type: ResizerType, mainEl: HTMLElement): void {
+		const panelNames: Record<ResizerType, PanelKey | null> = {
 			'sidebar-editor': 'sidebar',
 			'editor-preview': 'editor',
 			'preview-code': 'preview',
@@ -210,8 +224,8 @@ module.exports = function createResizeHandlers(ctx) {
 		}
 	}
 
-	function _closeRightPanel(type, mainEl) {
-		const panelNames = {
+	function _closeRightPanel(type: ResizerType, mainEl: HTMLElement): void {
+		const panelNames: Record<ResizerType, PanelKey | null> = {
 			'sidebar-editor': 'editor',
 			'editor-preview': 'preview',
 			'preview-code': 'code',
@@ -235,8 +249,10 @@ module.exports = function createResizeHandlers(ctx) {
 		}
 	}
 
-	function _resizePanels(type, mainEl, leftWidth, rightWidth) {
-		const [leftPanel, rightPanel] = type.split('-');
+	function _resizePanels(type: ResizerType, mainEl: HTMLElement, leftWidth: number, rightWidth: number): void {
+		// _resizePanels n'est appelé que pour les types à deux panneaux (jamais
+		// 'code-right') : les deux moitiés sont donc des PanelKey valides.
+		const [leftPanel, rightPanel] = type.split('-') as [PanelKey, PanelKey];
 		ctx.panels[leftPanel] = true;
 		ctx.panels[rightPanel] = true;
 
@@ -256,4 +272,4 @@ module.exports = function createResizeHandlers(ctx) {
 		_closeRightPanel,
 		_resizePanels
 	};
-};
+}

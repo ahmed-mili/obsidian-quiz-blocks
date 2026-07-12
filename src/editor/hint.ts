@@ -1,10 +1,20 @@
-'use strict';
+import type { EditorCtx } from "../types/editor-ctx";
 
-module.exports = function createHintHandlers(ctx) {
+/** Handlers de la modale d'indice (overlay plein écran, hors flux de l'éditeur). */
+export interface HintHandlers {
+	_ensureHintOverlay(): HTMLElement;
+	_applyHintTheme(overlay: HTMLElement | null): void;
+	_addHintEscHandler(): void;
+	_removeHintEscHandler(): void;
+	_openHint(text: string): void;
+	_closeHint(): void;
+}
+
+export function createHintHandlers(ctx: EditorCtx): HintHandlers {
 	const { md2html } = ctx;
 	const view = ctx.view;
 
-	function _ensureHintOverlay() {
+	function _ensureHintOverlay(): HTMLElement {
 		let overlay = document.getElementById("qb-hint-overlay");
 		if (overlay) return overlay;
 
@@ -21,9 +31,9 @@ module.exports = function createHintHandlers(ctx) {
 			</div>`;
 
 		overlay.addEventListener("click", e => { if (e.target === overlay) _closeHint(); });
-		const modal = overlay.querySelector(".quiz-hint-modal");
+		const modal = overlay.querySelector<HTMLElement>(".quiz-hint-modal");
 		if (modal) modal.addEventListener("click", e => e.stopPropagation());
-		const closeBtn = overlay.querySelector(".quiz-hint-modal-close");
+		const closeBtn = overlay.querySelector<HTMLElement>(".quiz-hint-modal-close");
 		if (closeBtn) closeBtn.addEventListener("click", e => { e.preventDefault(); _closeHint(); });
 
 		document.body.appendChild(overlay);
@@ -32,7 +42,7 @@ module.exports = function createHintHandlers(ctx) {
 		return overlay;
 	}
 
-	function _addHintEscHandler() {
+	function _addHintEscHandler(): void {
 		if (view._hintEscHandler) return; // Already attached
 		view._hintEscHandler = e => {
 			const o = document.getElementById("qb-hint-overlay");
@@ -42,20 +52,20 @@ module.exports = function createHintHandlers(ctx) {
 		document.addEventListener("keydown", view._hintEscHandler);
 	}
 
-	function _removeHintEscHandler() {
+	function _removeHintEscHandler(): void {
 		if (view._hintEscHandler) {
 			document.removeEventListener("keydown", view._hintEscHandler);
 			view._hintEscHandler = null;
 		}
 	}
 
-	function _applyHintTheme(overlay) {
+	function _applyHintTheme(overlay: HTMLElement | null): void {
 		if (!overlay) return;
-		const modal = overlay.querySelector(".quiz-hint-modal");
-		const header = overlay.querySelector(".quiz-hint-modal-header");
-		const title = overlay.querySelector(".quiz-hint-modal-title");
-		const bodyEl = overlay.querySelector(".quiz-hint-modal-body");
-		const closeBtn = overlay.querySelector(".quiz-hint-modal-close");
+		const modal = overlay.querySelector<HTMLElement>(".quiz-hint-modal");
+		const header = overlay.querySelector<HTMLElement>(".quiz-hint-modal-header");
+		const title = overlay.querySelector<HTMLElement>(".quiz-hint-modal-title");
+		const bodyEl = overlay.querySelector<HTMLElement>(".quiz-hint-modal-body");
+		const closeBtn = overlay.querySelector<HTMLElement>(".quiz-hint-modal-close");
 
 		const body = document.body;
 		const root = document.documentElement;
@@ -79,10 +89,10 @@ module.exports = function createHintHandlers(ctx) {
 		if (closeBtn) { closeBtn.style.color = textNormal; closeBtn.style.border = `1px solid ${border}`; closeBtn.style.background = mode === "dark" ? "rgba(255,255,255,.06)" : "rgba(15,23,42,.04)"; }
 	}
 
-	function _openHint(text) {
+	function _openHint(text: string): void {
 		const overlay = _ensureHintOverlay();
-		const body = overlay.querySelector(".quiz-hint-modal-body");
-		const modal = overlay.querySelector(".quiz-hint-modal");
+		const body = overlay.querySelector<HTMLElement>(".quiz-hint-modal-body");
+		const modal = overlay.querySelector<HTMLElement>(".quiz-hint-modal");
 		if (body) body.innerHTML = view._resolveImagesInHtml(md2html(text));
 		_applyHintTheme(overlay);
 		_addHintEscHandler();
@@ -102,16 +112,16 @@ module.exports = function createHintHandlers(ctx) {
 					modal.style.opacity = "1";
 					modal.style.transform = "translateY(0) scale(1)";
 				}
-				const focus = overlay.querySelector(".quiz-hint-modal-close");
-				if (focus) setTimeout(() => { try { focus.focus(); } catch (_) {} }, 340);
+				const focus = overlay.querySelector<HTMLElement>(".quiz-hint-modal-close");
+				if (focus) setTimeout(() => { try { focus.focus(); } catch (_) { /* noop */ } }, 340);
 			});
 		});
 	}
 
-	function _closeHint() {
+	function _closeHint(): void {
 		const overlay = document.getElementById("qb-hint-overlay");
 		if (!overlay || !overlay.classList.contains("is-open")) return;
-		const modal = overlay.querySelector(".quiz-hint-modal");
+		const modal = overlay.querySelector<HTMLElement>(".quiz-hint-modal");
 		_removeHintEscHandler();
 
 		overlay.style.transition = "opacity 240ms cubic-bezier(0.4, 0, 0.2, 1)";
@@ -137,4 +147,4 @@ module.exports = function createHintHandlers(ctx) {
 		_openHint,
 		_closeHint
 	};
-};
+}

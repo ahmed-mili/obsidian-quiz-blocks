@@ -7,22 +7,32 @@
  * 94-110), puis recopie ~35 méthodes liées (`.bind()`) sur `view` (editor.js:
  * 113-143 + les 5 méthodes partagées `view.xxx = async function…`,
  * editor.js:150-378). Ce fichier type le ctx lui-même : l'état de base, le
- * getter/setter `activeQuestion`, les utilitaires greffés et les slots des 6
- * sous-modules. Il ne modélise PAS les ~35 méthodes bindées sur `view`
- * elles-mêmes (leur signature réelle vient des modules editor/*.js, encore
- * .js aujourd'hui) : `EditorHostView` ci-dessous ne porte que le socle d'état
- * garanti par attachQuizEditorCore ; Task 6 y ajoutera buildUI/render/
- * renderSidebar/etc. au fil de la conversion de chaque module editor/*.
- *
- * Fichier isolé (aucun runtime touché) — base pour Task 6, qui convertira les
- * modules editor/*.js en .ts et branchera les vrais handler-types en lieu et
- * place des placeholders déclarés ici.
+ * getter/setter `activeQuestion`, les utilitaires greffés et les 6 sous-modules
+ * (désormais typés — Task 6a a converti editor/*.js en .ts). `EditorHostView`
+ * ci-dessous porte le socle d'état garanti par attachQuizEditorCore ainsi que
+ * les méthodes aplaties effectivement lues via `view` par les modules convertis
+ * en Task 6a. Les méthodes aplaties restantes (buildUI, moveQuestion, _field,
+ * showTypeModal, renderPreview, _close*Panel, _ensureHintOverlay…) et la classe
+ * QuizBuilderView seront ajoutées en Task 6b, à la conversion de editor.js.
  */
 
 import type { App, Plugin, TFile } from "obsidian";
-import type { QuizQuestion, ExamOptions } from "./quiz";
+import type { ExamOptions } from "./quiz";
 import type { parseQuizSource } from "../quiz-utils";
 import type * as EditorUtils from "../editor/utils";
+import type * as EditorExport from "../editor/export";
+import type { DraftQuestion } from "../editor/utils";
+
+// ── Handler-types réels des 6 sous-modules editor/* (convertis en Task 6a) ──
+import type { EditorUIHandlers } from "../editor/ui";
+import type { ResizeHandlers } from "../editor/resize";
+import type { SidebarHandlers } from "../editor/sidebar";
+import type { EditorFormHandlers } from "../editor/editor-form";
+import type { PreviewHandlers } from "../editor/preview";
+import type { HintHandlers } from "../editor/hint";
+
+// ── Classes de modale (editor/modals.ts, converti en Task 6a) ──
+import type { ConfirmModal, TypePickerModal, ImportQuizModal, QuizFileSuggestModal, ImportFromNoteModal } from "../editor/modals";
 
 /* ════════════════════════════════════════════════════════
    Types d'état dérivés de l'assemblage réel (editor.js)
@@ -30,13 +40,13 @@ import type * as EditorUtils from "../editor/utils";
 
 /**
  * Options d'examen ÉDITEUR (view.examOptions / ctx.examOptions, editor.js:
- * 35-40, lues/écrites dans editor/ui.js:135-231 et editor/export.js:98-99).
- * Sur-ensemble de `ExamOptions` (types/quiz.ts) : ce dernier modélise les
- * options ACTIVES telles que lues par le moteur une fois l'examen construit
- * (quiz-utils.ts extractExamOptions) — il n'a pas de champ `enabled` car sa
- * seule présence (non-null) vaut activation. Le FORMULAIRE éditeur, lui,
- * existe même quand l'examen est désactivé et garde donc un toggle `enabled`
- * explicite en plus des 3 champs de `ExamOptions`.
+ * 35-40, lues/écrites dans editor/ui.ts et editor/export.ts). Sur-ensemble de
+ * `ExamOptions` (types/quiz.ts) : ce dernier modélise les options ACTIVES
+ * telles que lues par le moteur une fois l'examen construit (quiz-utils.ts
+ * extractExamOptions) — il n'a pas de champ `enabled` car sa seule présence
+ * (non-null) vaut activation. Le FORMULAIRE éditeur, lui, existe même quand
+ * l'examen est désactivé et garde donc un toggle `enabled` explicite en plus
+ * des 3 champs de `ExamOptions`.
  */
 export interface EditorExamOptions extends ExamOptions {
 	enabled: boolean;
@@ -58,50 +68,9 @@ export interface EditorPanelWidths {
 	code: number;
 }
 
-/**
- * Constructeur d'une modale Obsidian (Modal ou FuzzySuggestModal) greffée sur
- * ctx (ConfirmModal, TypePickerModal, ImportQuizModal, QuizFileSuggestModal,
- * ImportFromNoteModal — src/editor/modals.js, encore .js). Les 5 classes ont
- * des signatures de constructeur différentes ; ce placeholder les couvre
- * honnêtement sans deviner leurs paramètres exacts. Task 6 remplacera ce type
- * par les vraies classes quand modals.js devient modals.ts.
- */
-export type EditorModalCtor = new (...args: unknown[]) => unknown;
-
-/* ════════════════════════════════════════════════════════
-   Handler-types des sous-modules editor/* — PLACEHOLDERS
-   ════════════════════════════════════════════════════════
-   Chacun des 6 modules editor/*.js (ui, resize, sidebar, editor-form,
-   preview, hint) exporte une factory `createXxxHandlers(ctx) => { ... }`
-   greffée sur ctx via Object.assign (editor.js:94-110). Ces modules sont
-   encore .js aujourd'hui et n'exportent aucun type : importer un type de
-   handler concret depuis eux échouerait ("has no exported member") et
-   casserait `npm run check`.
-   Ces interfaces sont donc des placeholders permissifs (index signature
-   `unknown`) — À COMPLÉTER EN TASK 6, module par module, quand chacun passe
-   en .ts et exporte son vrai type Xxx Handlers (alors importé ici via
-   `import type` et substitué à ces déclarations locales). */
-
-/** Placeholder — src/editor/ui.js (createEditorUIHandlers). À compléter en Task 6. */
-export interface EditorUIHandlers { [method: string]: unknown }
-
-/** Placeholder — src/editor/resize.js (createResizeHandlers). À compléter en Task 6. */
-export interface ResizeHandlers { [method: string]: unknown }
-
-/** Placeholder — src/editor/sidebar.js (createSidebarHandlers). À compléter en Task 6. */
-export interface SidebarHandlers { [method: string]: unknown }
-
-/** Placeholder — src/editor/editor-form.js (createEditorFormHandlers). À compléter en Task 6. */
-export interface EditorFormHandlers { [method: string]: unknown }
-
-/** Placeholder — src/editor/preview.js (createPreviewHandlers). À compléter en Task 6. */
-export interface PreviewHandlers { [method: string]: unknown }
-
-/** Placeholder — src/editor/hint.js (createHintHandlers). À compléter en Task 6. */
-export interface HintHandlers { [method: string]: unknown }
-
 /* ════════════════════════════════════════════════════════
    Hôte de l'éditeur (`view`) — socle garanti par attachQuizEditorCore
+   + méthodes aplaties lues par les modules editor/* (Task 6a)
    ════════════════════════════════════════════════════════ */
 
 /**
@@ -111,20 +80,18 @@ export interface HintHandlers { [method: string]: unknown }
  * 386-392, qui étend `obsidian.ItemView`), SOIT un simple objet sans `leaf`
  * (éditeur embarqué dans la page "Générer" du dashboard). D'où un type
  * dédié plutôt que `ItemView` strict : seuls les champs effectivement
- * assignés par attachQuizEditorCore sont modélisés ici (garantis dans les
- * deux cas). Les ~35 méthodes liées (buildUI, syncPanels, render,
- * renderSidebar, renderEditor, schedulePreview, _openHint, etc. —
- * editor.js:113-143 et les 5 méthodes partagées editor.js:150-378) ainsi que
- * les champs optionnels propres à la vue onglet (leaf, sourceFile réel,
- * getDisplayText…) restent À AJOUTER EN TASK 6, au fil de la conversion de
- * chaque module editor/*.js dont elles proviennent.
+ * assignés par attachQuizEditorCore (et les méthodes aplaties lues par les
+ * sous-modules) sont modélisés ici. Les méthodes aplaties non encore lues par
+ * un module converti (buildUI, moveQuestion, _field, renderPreview, etc.) et
+ * les champs propres à la vue onglet (leaf, getDisplayText…) restent à AJOUTER
+ * EN TASK 6b, à la conversion de editor.js.
  */
 export interface EditorHostView {
 	app: App;
 	plugin: Plugin;
 	/** contentEl du ItemView réel, ou `host` fourni tel quel pour l'éditeur embarqué (editor.js:30). */
 	contentEl: HTMLElement;
-	questions: QuizQuestion[];
+	questions: DraftQuestion[];
 	activeIdx: number;
 	panels: EditorPanelsState;
 	examOptions: EditorExamOptions;
@@ -142,6 +109,53 @@ export interface EditorHostView {
 	_previewDebounce: number;
 	/** Timer de sauvegarde automatique différée (editor.js:43, scheduleSave editor.js:276-282). */
 	_saveDebounce: number;
+
+	/** Référence au ctx sauvegardée sur l'hôte (editor.js:146, `view._ctx = ctx`). */
+	_ctx?: EditorCtx;
+
+	// ── État/champs DOM assignés par les sous-modules (editor/ui.ts) ──
+	_isDirty: boolean;
+	importedFileName?: string | null;
+	_fileNameEl: HTMLElement;
+	_saveBtn: HTMLButtonElement;
+	_exportBtn: HTMLButtonElement;
+	sidebarEl: HTMLElement;
+	editorEl: HTMLElement;
+	previewEl: HTMLElement;
+	codeEl: HTMLElement;
+	resizerSidebarEditor: HTMLElement;
+	resizerEditorCode: HTMLElement;
+	resizerEditorPreview: HTMLElement;
+	resizerPreviewCode: HTMLElement;
+	resizerCodeRight: HTMLElement;
+	qCountEl: HTMLElement;
+	sidebarListEl: HTMLElement;
+	previewTitleEl: HTMLElement;
+	previewBodyEl: HTMLElement;
+	codeOutputEl: HTMLElement;
+	editorInnerEl: HTMLElement;
+	/** Handler Échap de la modale d'indice (editor/hint.ts), attaché/détaché à la volée. */
+	_hintEscHandler?: ((e: KeyboardEvent) => void) | null;
+
+	// ── Méthodes aplaties lues via `view` par les modules convertis (Task 6a) ──
+	render: EditorUIHandlers["render"];
+	syncPanels: EditorUIHandlers["syncPanels"];
+	renderSidebar: SidebarHandlers["renderSidebar"];
+	renderEditor: EditorFormHandlers["renderEditor"];
+	renderCode: PreviewHandlers["renderCode"];
+	schedulePreview: PreviewHandlers["schedulePreview"];
+	_resolveImagesInHtml: PreviewHandlers["_resolveImagesInHtml"];
+	_openHint: HintHandlers["_openHint"];
+	_setupResizer: ResizeHandlers["_setupResizer"];
+
+	// ── Méthodes partagées définies dans attachQuizEditorCore (editor.js:150-378) ──
+	importQuizSource(source: string, fileName?: string | null, opts?: { silent?: boolean }): Promise<void>;
+	saveToSourceFile?(): Promise<void>;
+	scheduleSave?(): void;
+
+	// ── Callbacks UI installés par editor/ui.ts (buildUI) ──
+	updateExamUIState?(): void;
+	updateSaveIndicator?(saved: boolean): void;
 }
 
 /* ════════════════════════════════════════════════════════
@@ -158,16 +172,13 @@ export interface EditorCtx {
 
 	/**
 	 * Copie de `view.questions` au moment de la construction du ctx (même
-	 * référence de tableau — editor.js:61). Les OBJETS question insérés par
-	 * l'éditeur (makeDefault(), editor/utils.ts) sont en réalité des
-	 * "brouillons" internes (discriminés par `_type`/`_id`, pas encore par
-	 * les flags `ordering`/`matching`/`multiSelect`/`type` de `QuizQuestion`)
-	 * — `QuizQuestion[]` est utilisé ici comme approximation du modèle de
-	 * données cible (cohérent avec le brief Task 5) ; Task 6, en convertissant
-	 * editor-form.js/export.js, tranchera si un type "brouillon" dédié
-	 * (dérivé de `DraftQuestion`, editor/utils.ts) est nécessaire à la place.
+	 * référence de tableau — editor.js:61). Les objets question insérés par
+	 * l'éditeur (makeDefault(), editor/utils.ts) sont des "brouillons" internes
+	 * (`DraftQuestion` : discriminés par `_type`/`_id`, avec les champs
+	 * d'édition `_promptHtml`/`_extraFields`…) — d'où `DraftQuestion[]` plutôt
+	 * que `QuizQuestion[]` (trop strict pour l'éditeur).
 	 */
-	questions: QuizQuestion[];
+	questions: DraftQuestion[];
 	/**
 	 * Copie PRIMITIVE de `view.activeIdx` au moment de la construction du ctx
 	 * (editor.js:62) — PAS une référence live : `view.activeIdx` et
@@ -189,8 +200,8 @@ export interface EditorCtx {
 	_previewDebounce: number;
 
 	/** Question active — `ctx.questions[ctx.activeIdx]` (getter/setter, editor.js:71-72). */
-	get activeQuestion(): QuizQuestion;
-	set activeQuestion(value: QuizQuestion);
+	get activeQuestion(): DraftQuestion;
+	set activeQuestion(value: DraftQuestion);
 
 	// ── Utilitaires statiques greffés sur ctx (editor.js:5, 74-81) ──
 	Q_TYPES: typeof EditorUtils.Q_TYPES;
@@ -202,24 +213,19 @@ export interface EditorCtx {
 	escHtml: typeof EditorUtils.escHtml;
 	esc5: typeof EditorUtils.esc5;
 
-	/**
-	 * export/import — src/editor/export.js (encore .js). `exportQuestion`
-	 * prend un brouillon de question (cf. note sur `questions` ci-dessus) et
-	 * l'index de la question ; signature honnête en `unknown` en attendant la
-	 * conversion du module en Task 6.
-	 */
-	exportQuestion: (question: unknown, idx: number) => string;
-	exportAll: (questions: unknown[], examOptions?: EditorExamOptions | null) => string;
-	exportAllWithFence: (questions: unknown[], examOptions?: EditorExamOptions | null) => string;
+	// ── export/import — src/editor/export.ts (converti en Task 6a) ──
+	exportQuestion: typeof EditorExport.exportQuestion;
+	exportAll: typeof EditorExport.exportAll;
+	exportAllWithFence: typeof EditorExport.exportAllWithFence;
 	/** src/quiz-utils.ts (déjà converti) — parse un bloc quiz-blocks JSON5. */
 	parseQuizSource: typeof parseQuizSource;
 
 	// ── Classes de modale greffées sur ctx (editor.js:7, 86-90) ──
-	ConfirmModal: EditorModalCtor;
-	TypePickerModal: EditorModalCtor;
-	ImportQuizModal: EditorModalCtor;
-	QuizFileSuggestModal: EditorModalCtor;
-	ImportFromNoteModal: EditorModalCtor;
+	ConfirmModal: typeof ConfirmModal;
+	TypePickerModal: typeof TypePickerModal;
+	ImportQuizModal: typeof ImportQuizModal;
+	QuizFileSuggestModal: typeof QuizFileSuggestModal;
+	ImportFromNoteModal: typeof ImportFromNoteModal;
 
 	/** Identifiant du type de vue Obsidian de l'éditeur (editor.js:16, "quiz-blocks-builder"). */
 	VIEW_TYPE: string;
@@ -232,20 +238,4 @@ export interface EditorCtx {
 	editorForm: EditorFormHandlers;
 	preview: PreviewHandlers;
 	hint: HintHandlers;
-
-	// ── Méthodes aplaties (.bind() sur `view`, pas sur `ctx` — editor.js:
-	// 113-143 + 150-378) : PAS modélisées ici. Elles vivent sur `view`
-	// (EditorHostView ci-dessus), qui ne porte pour l'instant que le socle
-	// d'état garanti par attachQuizEditorCore. À AJOUTER EN TASK 6 sur
-	// EditorHostView, au fil de la conversion de chaque module editor/*.js
-	// dont elles proviennent (buildUI/syncPanels/render/showTypeModal →
-	// ui.ts ; _setupResizer/_closeLeftPanel/_closeRightPanel/_resizePanels →
-	// resize.ts ; renderSidebar/moveQuestion/deleteQuestion → sidebar.ts ;
-	// renderEditor/_field/_resourceSection/_renderTypeFields/_arrayEditor →
-	// editor-form.ts ; schedulePreview/renderPreview/_resolveImagesInHtml/
-	// renderCode → preview.ts ; _ensureHintOverlay/_applyHintTheme/_openHint/
-	// _closeHint/_addHintEscHandler/_removeHintEscHandler → hint.ts ; et les
-	// 5 méthodes partagées définies directement dans attachQuizEditorCore :
-	// importQuizSource, openQuizFile, saveToSourceFile, scheduleSave,
-	// convertParsedToInternal, editor.js:150-378).
 }

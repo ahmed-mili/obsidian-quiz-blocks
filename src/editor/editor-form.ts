@@ -1,17 +1,33 @@
-'use strict';
+import type { EditorCtx } from "../types/editor-ctx";
+import type { DraftQuestion } from "./utils";
 
-module.exports = function createEditorFormHandlers(ctx) {
+/** API vault utilisée par l'éditeur : getConfig (non public) + writeBinary (accepte aussi une vue typée). */
+type EditorVault = {
+	getConfig(key: string): string | null;
+	adapter: { writeBinary(path: string, data: ArrayBuffer | ArrayBufferView): Promise<void> };
+};
+
+/** Handlers du formulaire d'édition d'une question (champs, ressource, éditeurs par type, éditeur de tableau). */
+export interface EditorFormHandlers {
+	renderEditor(): void;
+	_field(parent: HTMLElement, label: string, value: string | undefined, placeholder: string, multiline: boolean, onChange: (value: string) => void, opts?: Record<string, unknown>): HTMLElement;
+	_resourceSection(parent: HTMLElement, q: DraftQuestion): void;
+	_renderTypeFields(box: HTMLElement, q: DraftQuestion): void;
+	_arrayEditor(parent: HTMLElement, label: string, items: string[], onChange: () => void, placeholder: string, addLabel: string): void;
+}
+
+export function createEditorFormHandlers(ctx: EditorCtx): EditorFormHandlers {
 	const { Q_TYPES, _setIcon, _iconSpan, md2html } = ctx;
 	const view = ctx.view;
 
 	// Helper pour marquer comme modifié et planifier la sauvegarde
-	function onEdit() {
+	function onEdit(): void {
 		view.renderCode();
 		view.schedulePreview();
 		view.scheduleSave?.();
 	}
 
-	function renderEditor() {
+	function renderEditor(): void {
 		const q = ctx.questions[ctx.activeIdx];
 		if (!q) return;
 		const ti = Q_TYPES.find(t => t.key === q._type) || Q_TYPES[0];
@@ -74,14 +90,14 @@ module.exports = function createEditorFormHandlers(ctx) {
 		{ label: '&', insert: '&amp;', title: 'Esperluette (&)' },
 		{ label: '␣', insert: '&nbsp;', title: 'Espace insécable' },
 		{ label: "'", insert: "&#39;", title: 'Apostrophe' },
-		{ label: '"', insert: '&quot;', title: 'Guillemet' },
+		{ label: '"', insert: "&quot;", title: 'Guillemet' },
 		{ label: '```', insert: '<pre><code>\n</code></pre>', title: 'Bloc de code' },
 	];
 
-	function _insertAt(ta, text, cb) {
-		const s = ta.selectionStart;
+	function _insertAt(ta: HTMLTextAreaElement, text: string, cb: (value: string) => void): void {
+		const s = ta.selectionStart ?? 0;
 		const before = ta.value.substring(0, s);
-		const after = ta.value.substring(ta.selectionEnd);
+		const after = ta.value.substring(ta.selectionEnd ?? 0);
 		ta.value = before + text + after;
 		const nl = text.indexOf('\n');
 		ta.selectionStart = ta.selectionEnd = before.length + (nl !== -1 ? nl + 1 : text.length);
@@ -89,14 +105,14 @@ module.exports = function createEditorFormHandlers(ctx) {
 		cb(ta.value);
 	}
 
-	function _autoResize(ta) {
+	function _autoResize(ta: HTMLTextAreaElement): void {
 		ta.style.height = 'auto';
 		const minHeight = 100; // Hauteur minimale plus grande pour être plus propre
 		const newHeight = Math.max(minHeight, ta.scrollHeight);
 		ta.style.height = newHeight + 'px';
 	}
 
-	function _field(parent, label, value, placeholder, multiline, onChange, opts = {}) {
+	function _field(parent: HTMLElement, label: string, value: string | undefined, placeholder: string, multiline: boolean, onChange: (value: string) => void, opts: Record<string, unknown> = {}): HTMLElement {
 		const wrap = parent.createDiv();
 		wrap.createEl("label", { cls: "qb-field-label", text: label });
 		if (multiline) {
@@ -117,7 +133,7 @@ module.exports = function createEditorFormHandlers(ctx) {
 			// Raccourci ``` + Enter
 			ta.addEventListener("keydown", (e) => {
 				if (e.key === "Enter") {
-					const pos = ta.selectionStart;
+					const pos = ta.selectionStart ?? 0;
 					const lineStart = ta.value.lastIndexOf('\n', pos - 1) + 1;
 					if (ta.value.substring(lineStart, pos).trim() === '```') {
 						e.preventDefault();
@@ -135,7 +151,7 @@ module.exports = function createEditorFormHandlers(ctx) {
 			ta.addEventListener("paste", async (e) => {
 				const items = e.clipboardData?.items;
 				if (!items) return;
-				for (const item of items) {
+				for (const item of Array.from(items)) {
 					if (item.type.startsWith("image/")) {
 						e.preventDefault();
 						const file = item.getAsFile();
@@ -149,10 +165,11 @@ module.exports = function createEditorFormHandlers(ctx) {
 							String(now.getSeconds()).padStart(2, "0");
 						const ext = item.type.split("/")[1] || "png";
 						const fileName = `Pasted image ${ts}.${ext}`;
-						const attachFolder = ctx.plugin.app.vault.getConfig("attachmentFolderPath") || "";
+						const vault = ctx.plugin.app.vault as unknown as EditorVault;
+						const attachFolder = vault.getConfig("attachmentFolderPath") || "";
 						const filePath = attachFolder ? attachFolder + "/" + fileName : fileName;
 						const buffer = await file.arrayBuffer();
-						await ctx.plugin.app.vault.adapter.writeBinary(filePath, new Uint8Array(buffer));
+						await vault.adapter.writeBinary(filePath, new Uint8Array(buffer));
 						_insertAt(ta, `![[${fileName}]]`, onChange);
 						_autoResize(ta);
 						view.schedulePreview();
@@ -167,9 +184,10 @@ module.exports = function createEditorFormHandlers(ctx) {
 		return wrap;
 	}
 
-	function _resourceSection(parent, q) {
-		const has = !!q.resourceButton;
-		const fileName = has && q.resourceButton.fileName ? q.resourceButton.fileName : "";
+	function _resourceSection(parent: HTMLElement, q: DraftQuestion): void {
+		const rb0 = q.resourceButton;
+		const has = !!rb0;
+		const fileName = rb0 && rb0.fileName ? rb0.fileName : "";
 		const summaryText = has && fileName ? `Ressource — ${fileName}` : "Ressource";
 
 		const details = parent.createEl("details", { cls: "qb-section-collapsible" + (has ? "" : " qb-section-locked"), attr: has ? { open: "" } : {} });
@@ -188,22 +206,22 @@ module.exports = function createEditorFormHandlers(ctx) {
 			renderEditor();
 		});
 
-		if (!has) return;
+		if (!rb0) return;
 		const contentDiv = details.createDiv({ cls: "qb-section-content" });
 const group = contentDiv.createDiv({ cls: "qb-resource-group" });
 const updateSummary = () => {
     const fn = q.resourceButton?.fileName || "";
     summaryLabel.textContent = fn ? `Ressource — ${fn}` : "Ressource";
 };
-_field(group, "Label", q.resourceButton.label, "Activité PT", false, v => { q.resourceButton.label = v; onEdit(); updateSummary(); });
-_field(group, "Nom du fichier à ouvrir", q.resourceButton.fileName, "fichier.pka", false, v => { q.resourceButton.fileName = v; onEdit(); updateSummary(); });
+_field(group, "Label", rb0.label, "Activité PT", false, v => { rb0.label = v; onEdit(); updateSummary(); });
+_field(group, "Nom du fichier à ouvrir", rb0.fileName, "fichier.pka", false, v => { rb0.fileName = v; onEdit(); updateSummary(); });
 
 
 		const helpNote = contentDiv.createEl("p", { cls: "qb-resource-help-note" });
 		helpNote.createSpan({ text: "Le fichier doit être placé dans le coffre" });
 	}
 
-	function _renderTypeFields(box, q) {
+	function _renderTypeFields(box: HTMLElement, q: DraftQuestion): void {
 		const t = q._type;
 		const rerender = () => { onEdit(); };
 
@@ -214,7 +232,7 @@ _field(group, "Nom du fichier à ouvrir", q.resourceButton.fileName, "fichier.pk
 			const renderCards = () => {
 				cardsContainer.empty();
 
-				q.options.forEach((o, i) => {
+				q.options!.forEach((o, i) => {
 					const isCorrect = isMulti ? (q.correctIndices || []).includes(i) : i === q.correctIndex;
 					const card = cardsContainer.createDiv({ cls: `qb-answer-card ${isCorrect ? "qb-answer-correct" : "qb-answer-wrong"}` });
 
@@ -226,7 +244,7 @@ _field(group, "Nom du fichier à ouvrir", q.resourceButton.fileName, "fichier.pk
 					const thumb = track.createDiv({ cls: "qb-answer-toggle-thumb" });
 					_setIcon(thumb, isCorrect ? "check" : "x");
 
-					const triggerFlash = (toCorrect) => {
+					const triggerFlash = (toCorrect: boolean) => {
 						card.classList.remove("qb-answer-flash-green", "qb-answer-flash-red");
 						void card.offsetWidth;
 						card.classList.add(toCorrect ? "qb-answer-flash-green" : "qb-answer-flash-red");
@@ -266,7 +284,7 @@ _field(group, "Nom du fichier à ouvrir", q.resourceButton.fileName, "fichier.pk
 					});
 
 					input.addEventListener("input", () => {
-						q.options[i] = input.value;
+						q.options![i] = input.value;
 						rerender();
 					});
 
@@ -274,7 +292,7 @@ _field(group, "Nom du fichier à ouvrir", q.resourceButton.fileName, "fichier.pk
 						const items = e.clipboardData?.items;
 						if (!items) return;
 
-						for (const item of items) {
+						for (const item of Array.from(items)) {
 							if (item.type.startsWith("image/")) {
 								e.preventDefault();
 								const file = item.getAsFile();
@@ -291,19 +309,20 @@ _field(group, "Nom du fichier à ouvrir", q.resourceButton.fileName, "fichier.pk
 									const ext = file.type?.split("/")[1] || "png";
 									const fileName = `Pasted image ${ts}.${ext}`;
 
-									const folder = ctx.plugin.app.vault.getConfig('attachmentFolderPath') || '';
+									const vault = ctx.plugin.app.vault as unknown as EditorVault;
+									const folder = vault.getConfig('attachmentFolderPath') || '';
 									const path = folder ? folder + '/' + fileName : fileName;
 
 									const buf = await file.arrayBuffer();
-									await ctx.plugin.app.vault.adapter.writeBinary(path, new Uint8Array(buf));
+									await vault.adapter.writeBinary(path, new Uint8Array(buf));
 
-									const before = input.value.slice(0, input.selectionStart);
-									const after = input.value.slice(input.selectionEnd);
+									const before = input.value.slice(0, input.selectionStart ?? 0);
+									const after = input.value.slice(input.selectionEnd ?? 0);
 									const wikiLink = `![[${fileName}]]`;
 									input.value = before + wikiLink + after;
 									input.selectionStart = input.selectionEnd = before.length + wikiLink.length;
 
-									q.options[i] = input.value;
+									q.options![i] = input.value;
 									view.schedulePreview();
 									view.renderCode();
 								} catch (err) {
@@ -314,16 +333,16 @@ _field(group, "Nom du fichier à ouvrir", q.resourceButton.fileName, "fichier.pk
 						}
 					});
 
-					if (!isCorrect && q.options.length > 2) {
+					if (!isCorrect && q.options!.length > 2) {
 						const delBtn = card.createEl("button", { cls: "qb-answer-delete" });
 						_setIcon(delBtn, "x");
 						delBtn.addEventListener("click", () => {
-							q.options.splice(i, 1);
+							q.options!.splice(i, 1);
 							if (isMulti) {
 								q.correctIndices = (q.correctIndices || []).filter(idx => idx !== i).map(idx => idx > i ? idx - 1 : idx);
 							} else {
 								if (q.correctIndex === i) q.correctIndex = 0;
-								else if (q.correctIndex > i) q.correctIndex--;
+								else if ((q.correctIndex ?? 0) > i) q.correctIndex = (q.correctIndex ?? 0) - 1;
 							}
 							view.render(); view.scheduleSave?.();
 						});
@@ -333,8 +352,8 @@ _field(group, "Nom du fichier à ouvrir", q.resourceButton.fileName, "fichier.pk
 				const addBtn = box.createEl("button", { cls: "qb-answer-add" });
 				addBtn.appendChild(document.createTextNode("Ajouter une réponse"));
 				addBtn.addEventListener("click", () => {
-					q.options.push("");
-					if (isMulti && q.options.length === 1) {
+					q.options!.push("");
+					if (isMulti && q.options!.length === 1) {
 						q.correctIndices = [0];
 					}
 					view.render(); view.scheduleSave?.();
@@ -345,33 +364,33 @@ _field(group, "Nom du fichier à ouvrir", q.resourceButton.fileName, "fichier.pk
 		}
 
 		if (t === "ordering") {
-			_arrayEditor(box, "Possibilités", q.possibilities, () => {
-				while (q.correctOrder.length < q.possibilities.length) q.correctOrder.push(q.correctOrder.length);
-				q.correctOrder = q.correctOrder.slice(0, q.possibilities.length);
-				while (q.slots.length < q.possibilities.length) q.slots.push(`Étape ${q.slots.length + 1}`);
-				q.slots = q.slots.slice(0, q.possibilities.length);
+			_arrayEditor(box, "Possibilités", q.possibilities!, () => {
+				while (q.correctOrder!.length < q.possibilities!.length) q.correctOrder!.push(q.correctOrder!.length);
+				q.correctOrder = q.correctOrder!.slice(0, q.possibilities!.length);
+				while (q.slots!.length < q.possibilities!.length) q.slots!.push(`Étape ${q.slots!.length + 1}`);
+				q.slots = q.slots!.slice(0, q.possibilities!.length);
 				rerender();
 			}, "Élément", "Ajouter");
-			_arrayEditor(box, "Labels des slots", q.slots, rerender, "Slot", "Ajouter");
+			_arrayEditor(box, "Labels des slots", q.slots!, rerender, "Slot", "Ajouter");
 
 			box.createEl("label", { cls: "qb-field-label", text: "Ordre correct (index → slot)" });
 			(q.correctOrder || []).forEach((val, i) => {
 				const row = box.createDiv({ cls: "qb-arr-row" });
 				row.createSpan({ cls: "qb-arr-idx", text: (q.slots?.[i] || `S${i}`) + " →" });
-				const inp = row.createEl("input", { cls: "qb-field-input qb-field-sm", type: "number", value: val });
-				inp.min = 0; inp.max = q.possibilities.length - 1; inp.style.width = "55px";
-				inp.addEventListener("input", () => { q.correctOrder[i] = parseInt(inp.value) || 0; rerender(); });
+				const inp = row.createEl("input", { cls: "qb-field-input qb-field-sm", type: "number", value: String(val) });
+				inp.min = "0"; inp.max = String(q.possibilities!.length - 1); inp.style.width = "55px";
+				inp.addEventListener("input", () => { q.correctOrder![i] = parseInt(inp.value) || 0; rerender(); });
 			});
 		}
 
 		if (t === "matching") {
-			_arrayEditor(box, "Lignes (situations)", q.rows, () => {
-				while (q.correctMap.length < q.rows.length) q.correctMap.push(0);
-				q.correctMap = q.correctMap.slice(0, q.rows.length);
+			_arrayEditor(box, "Lignes (situations)", q.rows!, () => {
+				while (q.correctMap!.length < q.rows!.length) q.correctMap!.push(0);
+				q.correctMap = q.correctMap!.slice(0, q.rows!.length);
 				rerender();
 			}, "Situation", "Ajouter");
-			_arrayEditor(box, "Choix (supports)", q.choices, () => {
-				q.correctMap = q.correctMap.map(v => Math.min(v, q.choices.length - 1));
+			_arrayEditor(box, "Choix (supports)", q.choices!, () => {
+				q.correctMap = q.correctMap!.map(v => Math.min(v, q.choices!.length - 1));
 				rerender();
 			}, "Choix", "Ajouter");
 
@@ -382,10 +401,10 @@ _field(group, "Nom du fichier à ouvrir", q.resourceButton.fileName, "fichier.pk
 				_iconSpan(r, "arrow-right", "qb-match-arrow");
 				const sel = r.createEl("select", { cls: "qb-field-select" });
 				(q.choices || []).forEach((c, ci) => {
-					const opt = sel.createEl("option", { text: c || "...", value: ci });
+					const opt = sel.createEl("option", { text: c || "...", value: String(ci) });
 					if ((q.correctMap?.[i] ?? 0) === ci) opt.selected = true;
 				});
-				sel.addEventListener("change", () => { q.correctMap[i] = parseInt(sel.value) || 0; rerender(); });
+				sel.addEventListener("change", () => { q.correctMap![i] = parseInt(sel.value) || 0; rerender(); });
 			});
 		}
 
@@ -393,7 +412,7 @@ _field(group, "Nom du fichier à ouvrir", q.resourceButton.fileName, "fichier.pk
 			if (t === "cmd" || t === "powershell")
 				_field(box, "Préfix du prompt", q.commandPrefix, t === "cmd" ? "C:\\>" : "PS>", false, v => { q.commandPrefix = v; rerender(); });
 			_field(box, "Placeholder", q.placeholder, "Texte indicatif...", false, v => { q.placeholder = v; rerender(); });
-			_arrayEditor(box, "Réponses acceptées", q.acceptedAnswers, rerender, "Réponse", "Ajouter");
+			_arrayEditor(box, "Réponses acceptées", q.acceptedAnswers!, rerender, "Réponse", "Ajouter");
 			const toggleWrap = box.createDiv({ cls: "qb-toggle-wrap" });
 			const track = toggleWrap.createDiv({ cls: `qb-toggle-track ${q.caseSensitive ? "on" : ""}` });
 			track.createDiv({ cls: "qb-toggle-thumb" });
@@ -402,7 +421,7 @@ _field(group, "Nom du fichier à ouvrir", q.resourceButton.fileName, "fichier.pk
 		}
 	}
 
-	function _arrayEditor(parent, label, items, onChange, placeholder, addLabel) {
+	function _arrayEditor(parent: HTMLElement, label: string, items: string[], onChange: () => void, placeholder: string, addLabel: string): void {
 		parent.createEl("label", { cls: "qb-field-label", text: label });
 		const container = parent.createDiv();
 		const renderItems = () => {
@@ -430,4 +449,4 @@ _field(group, "Nom du fichier à ouvrir", q.resourceButton.fileName, "fichier.pk
 		_renderTypeFields,
 		_arrayEditor
 	};
-};
+}
