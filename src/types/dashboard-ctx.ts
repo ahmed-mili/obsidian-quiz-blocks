@@ -61,8 +61,10 @@ export interface AiSettings extends VoiceSettings {
 	aiCodexFast?: boolean;
 	aiOllamaUrl?: string;
 	aiOllamaCloudKey?: string;
-	aiOllamaModels?: string[];
-	aiOllamaCatalog?: OllamaCatalogEntry[];
+	// `null` = sentinelle « défaut » réellement persistée par le plugin
+	// (plugin.ts DEFAULT_SETTINGS) ; les helpers ollama la traitent comme « unset ».
+	aiOllamaModels?: string[] | null;
+	aiOllamaCatalog?: OllamaCatalogEntry[] | null;
 	hotkeyAddFiles?: Hotkey | null;
 	hotkeyAddNotes?: Hotkey | null;
 }

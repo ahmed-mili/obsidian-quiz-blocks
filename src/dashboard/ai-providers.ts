@@ -411,7 +411,7 @@ export function prettyOllamaLabel(value?: string): string {
 /* Catalogue effectif : cache dynamique (settings.aiOllamaCatalog) sinon repli.
    TOUJOURS filtré par dedupeOllamaLatest → garantit qu'une seule version par
    modèle survit, quelle que soit la source (règle absolue, cf. dedupeOllamaLatest). */
-export function getOllamaCatalog(cached?: OllamaCatalogEntry[]): OllamaCatalogEntry[] {
+export function getOllamaCatalog(cached?: OllamaCatalogEntry[] | null): OllamaCatalogEntry[] {
 	const base = Array.isArray(cached) && cached.length ? cached : OLLAMA_FALLBACK_CATALOG;
 	return dedupeOllamaLatest(base);
 }
@@ -420,7 +420,7 @@ export function getOllamaCatalog(cached?: OllamaCatalogEntry[]): OllamaCatalogEn
    prettify), cloud d'après le suffixe. On ne fige NI le prix NI thinking : un
    modèle cloud propose l'effort (le param `think` est ignoré sans erreur s'il
    n'est pas supporté — vérifié). Le local raffine thinking via ses capabilities. */
-export function getOllamaModelMeta(value: string, catalog?: OllamaCatalogEntry[]): OllamaModelMeta {
+export function getOllamaModelMeta(value: string, catalog?: OllamaCatalogEntry[] | null): OllamaModelMeta {
 	// Le label curé du repli prime (ex. « Kimi K2.7 Code » plutôt que le
 	// « Kimi-K2.7-Code » dérivé par prettyOllamaLabel dans un cache) ; sinon le
 	// cache dynamique, sinon prettify.
@@ -438,7 +438,7 @@ export function getOllamaModelMeta(value: string, catalog?: OllamaCatalogEntry[]
 /* Résout une sélection (liste ordonnée, ex. settings.aiOllamaModels) en options
    complètes, dédupliquée et plafonnée à OLLAMA_MAX_MODELS. Retombe sur la
    sélection par défaut si vide. `catalog` = cache dynamique optionnel. */
-export function resolveOllamaSelection(values?: string[], catalog?: OllamaCatalogEntry[]): OllamaModelMeta[] {
+export function resolveOllamaSelection(values?: string[] | null, catalog?: OllamaCatalogEntry[] | null): OllamaModelMeta[] {
 	let list = Array.isArray(values) ? values.filter(v => typeof v === "string" && v) : [];
 	if (!list.length) list = DEFAULT_OLLAMA_SELECTION.slice();
 	const seen = new Set<string>();

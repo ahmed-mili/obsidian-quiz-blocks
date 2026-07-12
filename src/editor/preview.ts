@@ -4,7 +4,7 @@ import { mathifyElement } from "../engine/mathjax";
 /** API interne non publique d'Obsidian : lecture d'un réglage du vault (ex. attachmentFolderPath). */
 type VaultWithGetConfig = { getConfig(key: string): string | null };
 
-/** Sous-ensemble typé du module moteur engine/math-input.js (encore .js). */
+/** Sous-ensemble typé du module moteur engine/math-input.ts. */
 interface MathInputModule {
 	isMathQuestion(q: unknown): boolean;
 	createMathField(host: HTMLElement, opts?: { readOnly?: boolean; template?: unknown }): unknown;

@@ -1,18 +1,68 @@
-'use strict';
+import {
+	MarkdownRenderChild,
+	Notice,
+	Plugin,
+	PluginSettingTab,
+	Setting,
+	setIcon,
+} from "obsidian";
+import type {
+	App,
+	ButtonComponent,
+	MarkdownPostProcessorContext,
+	TFile,
+	WorkspaceLeaf,
+} from "obsidian";
 
-const obsidian = require("obsidian");
-const { parseQuizSource, renderInteractiveQuiz } = require("./engine");
-const { QuizBuilderView, VIEW_TYPE } = require("./editor");
-const { QuizDashboardView, VIEW_TYPE_DASHBOARD } = require("./dashboard");
-const { createScanner } = require("./dashboard/scanner");
-const { createStatsStore } = require("./dashboard/stats-store");
-const voiceInstall = require("./dashboard/voice-install");
+import { parseQuizSource, renderInteractiveQuiz } from "./engine";
+import { QuizBuilderView, VIEW_TYPE } from "./editor";
+import { QuizDashboardView, VIEW_TYPE_DASHBOARD } from "./dashboard";
+import { createScanner } from "./dashboard/scanner";
+import type { Scanner } from "./dashboard/scanner";
+import { createStatsStore } from "./dashboard/stats-store";
+import type { StatsStore, QuizStatRecord } from "./dashboard/stats-store";
+import * as voiceInstall from "./dashboard/voice-install";
+import type { VoiceBackend, VoiceModelId, VoiceLang } from "./dashboard/voice-install";
+import * as aiProviders from "./dashboard/ai-providers";
+import type { OllamaCatalogEntry } from "./dashboard/ai-providers";
+import { formatHotkey, eventToHotkey } from "./hotkey-format";
+import type { Hotkey } from "./hotkey-format";
+import { closeAllSelects } from "./dashboard/ui-select";
 
 const PLUGIN_ID = "quiz-blocks";
 const PLUGIN_NAME = "Quiz Blocks";
 const QUIZ_BLOCK_LANGUAGE = "quiz-blocks";
 
-const DEFAULT_SETTINGS = {
+/** Forme complète des réglages persistés du plugin (source unique désormais que
+ *  plugin.js est converti). Le sous-ensemble « IA/dictée » est réexposé aux vues
+ *  via `AiSettings` (types/dashboard-ctx.ts) ; `quizStats` via `StatsStorePlugin`. */
+interface QuizBlocksSettings {
+	enableCodeHighlighting: boolean;
+	quizStats: Record<string, QuizStatRecord>;
+	aiProvider: string;
+	aiModel: string;
+	aiEffort: string;
+	aiCodexFast: boolean;
+	aiOllamaUrl: string;
+	aiOllamaCloudKey: string;
+	// null → sélection/repli par défaut (sentinelle runtime, cf. resolveOllamaSelection / getOllamaCatalog).
+	aiOllamaModels: string[] | null;
+	aiOllamaCatalog: OllamaCatalogEntry[] | null;
+	hotkeyAddFiles: Hotkey;
+	hotkeyAddNotes: Hotkey;
+	voiceEnabled: boolean;
+	voiceBackend: VoiceBackend;
+	voiceModel: VoiceModelId;
+	voiceLang: VoiceLang;
+	// ── Clés héritées supprimées à la migration (loadSettings) : déclarées
+	//    optionnelles uniquement pour autoriser `in`/`delete` sur d'anciennes
+	//    données persistées. Jamais lues comme valeurs. ──
+	enableDebugLogs?: unknown;
+	aiCompatibleUrl?: unknown;
+	aiApiKey?: unknown;
+}
+
+const DEFAULT_SETTINGS: QuizBlocksSettings = {
 	enableCodeHighlighting: true,
 	quizStats: {},
 	aiProvider: "",
@@ -46,30 +96,87 @@ const DEFAULT_SETTINGS = {
 	voiceLang: "fr",          // "fr" | "auto" | "en"
 };
 
-function createLogger() {
+interface Logger {
+	debug(...args: unknown[]): void;
+	info(...args: unknown[]): void;
+	warn(...args: unknown[]): void;
+	error(...args: unknown[]): void;
+}
+
+function createLogger(): Logger {
 	return {
-		debug(...args) {
+		debug(...args: unknown[]): void {
 			console.debug(`[${PLUGIN_ID}]`, ...args);
 		},
-		info(...args) {
+		info(...args: unknown[]): void {
 			console.log(`[${PLUGIN_ID}]`, ...args);
 		},
-		warn(...args) {
+		warn(...args: unknown[]): void {
 			console.warn(`[${PLUGIN_ID}]`, ...args);
 		},
-		error(...args) {
+		error(...args: unknown[]): void {
 			console.error(`[${PLUGIN_ID}]`, ...args);
 		}
 	};
 }
 
-class QuizBlocksSettingTab extends obsidian.PluginSettingTab {
-	constructor(app, plugin) {
+/** API interne non publique d'Obsidian (`app.setting`) : ouvre la fenêtre de
+ *  réglages et navigue vers l'onglet « Raccourcis ». */
+interface HotkeysSettingTab {
+	searchComponent?: { setValue(value: string): void };
+	updateHotkeyVisibility?: () => void;
+}
+interface AppSettingApi {
+	open(): void;
+	openTabById(id: string): void;
+	activeTab: HotkeysSettingTab | null;
+}
+
+/** Vue dashboard exposant le re-bind des raccourcis du composer (méthode custom
+ *  de QuizDashboardView, absente de l'API publique `View`). */
+interface DashboardHotkeyRebindable {
+	bindComposerHotkeys?: () => void;
+}
+
+/** Éditeur exposant l'ouverture d'un fichier quiz (méthode custom greffée sur
+ *  QuizBuilderView, absente de l'API publique `View`). */
+interface QuizFileOpenable {
+	openQuizFile?: (file: TFile, source: string) => Promise<void>;
+}
+
+/** Sous-ensemble de l'API CodeMirror 5 exposée en global (`window.CodeMirror`)
+ *  par le mode Source d'Obsidian — non typée dans l'API publique. */
+interface CodeMirrorGlobal {
+	defineMode(name: string, factory: (config: Record<string, unknown>) => unknown): void;
+	getMode(config: unknown, spec: unknown): unknown;
+}
+
+interface TutorialLink {
+	label: string;
+	url: string;
+}
+interface TutorialSection {
+	heading: string;
+	text: string;
+	link: TutorialLink | null;
+}
+interface TutorialDef {
+	title: string;
+	sections: TutorialSection[];
+	warning?: string;
+	docsLink?: TutorialLink;
+	tips?: string[];
+}
+
+class QuizBlocksSettingTab extends PluginSettingTab {
+	plugin: InteractiveQuizPlugin;
+
+	constructor(app: App, plugin: InteractiveQuizPlugin) {
 		super(app, plugin);
 		this.plugin = plugin;
 	}
 
-	display() {
+	display(): void {
 		const { containerEl } = this;
 		containerEl.empty();
 
@@ -121,7 +228,7 @@ class QuizBlocksSettingTab extends obsidian.PluginSettingTab {
 		copyBtn.setAttr("aria-label", "Copy code");
 		copyBtn.setAttr("title", "Copy code");
 
-		obsidian.setIcon(copyBtn, "copy");
+		setIcon(copyBtn, "copy");
 
 		const pre = codeWrap.createEl("pre", {
 			cls: "quiz-blocks-settings-code-pre"
@@ -138,14 +245,14 @@ class QuizBlocksSettingTab extends obsidian.PluginSettingTab {
 					"```quiz-blocks\n" + exampleCode + "\n```"
 				);
 
-				obsidian.setIcon(copyBtn, "check");
+				setIcon(copyBtn, "check");
 
 				window.setTimeout(() => {
-					obsidian.setIcon(copyBtn, "copy");
+					setIcon(copyBtn, "copy");
 				}, 1200);
 			} catch (error) {
 				console.error("[quiz-blocks] copy failed", error);
-				new obsidian.Notice("Unable to copy the example.");
+				new Notice("Unable to copy the example.");
 			}
 		});
 
@@ -196,7 +303,7 @@ class QuizBlocksSettingTab extends obsidian.PluginSettingTab {
 		}
 
 		// Supprimer la dernière bordure
-		const rows = commandsTable.querySelectorAll('.qb-command-row');
+		const rows = commandsTable.querySelectorAll<HTMLElement>('.qb-command-row');
 		if (rows.length > 0) {
 			rows[rows.length - 1].style.borderBottom = 'none';
 		}
@@ -209,9 +316,10 @@ class QuizBlocksSettingTab extends obsidian.PluginSettingTab {
 		configButton.textContent = "Configurer les raccourcis";
 		configButton.style.cssText = "padding: 0.75em 1.5em; font-size: 1em;";
 		configButton.addEventListener("click", () => {
-			this.app.setting.open();
-			this.app.setting.openTabById('hotkeys');
-			const tab = this.app.setting.activeTab;
+			const settingApi = (this.app as unknown as { setting: AppSettingApi }).setting;
+			settingApi.open();
+			settingApi.openTabById('hotkeys');
+			const tab = settingApi.activeTab;
 			if (tab && tab.searchComponent) {
 				tab.searchComponent.setValue('quiz blocks');
 				if (tab.updateHotkeyVisibility) {
@@ -233,12 +341,7 @@ class QuizBlocksSettingTab extends obsidian.PluginSettingTab {
 			cls: "setting-item-description"
 		});
 
-		// ─── Modèles par fournisseur (registry partagé) ───
-		const aiProviders = require("./dashboard/ai-providers");
-		const CLAUDE_CODE_MODELS = aiProviders.CLAUDE_CODE_MODELS;
-		const OLLAMA_MODELS = aiProviders.OLLAMA_MODELS;
-
-		const TUTORIALS = {
+		const TUTORIALS: Record<string, TutorialDef> = {
 			"claude-code": {
 				title: "Comment configurer Claude (compte par abonnement)",
 				sections: [
@@ -318,7 +421,7 @@ class QuizBlocksSettingTab extends obsidian.PluginSettingTab {
 		};
 
 		// Provider dropdown
-		new obsidian.Setting(containerEl)
+		new Setting(containerEl)
 			.setName("Fournisseur IA")
 			.setDesc("Choisissez le fournisseur pour la génération de quiz")
 			.addDropdown(dropdown => {
@@ -354,7 +457,7 @@ class QuizBlocksSettingTab extends obsidian.PluginSettingTab {
 				? aiProviders.resolveClaudeModel(this.plugin.settings.aiModel || models[0].value)
 				: (this.plugin.settings.aiModel || models[0].value);
 
-			new obsidian.Setting(containerEl)
+			new Setting(containerEl)
 				.setName("Modèle")
 				.setDesc(currentProvider === "ollama"
 					? "Modèle Ollama. Les « :cloud » tournent sur le cloud (compte connecté via ollama signin) ; les autres en local (ollama pull)."
@@ -379,7 +482,7 @@ class QuizBlocksSettingTab extends obsidian.PluginSettingTab {
 
 		// Ollama URL (local only)
 		if (currentProvider === "ollama") {
-			new obsidian.Setting(containerEl)
+			new Setting(containerEl)
 				.setName("URL du serveur Ollama")
 				.setDesc("Adresse du serveur Ollama local.")
 				.addText(text => text
@@ -397,12 +500,12 @@ class QuizBlocksSettingTab extends obsidian.PluginSettingTab {
 			const VISIBLE = aiProviders.OLLAMA_VISIBLE_COUNT;
 			const getCatalog = () => aiProviders.getOllamaCatalog(this.plugin.settings.aiOllamaCatalog);
 			const getSel = () => aiProviders.resolveOllamaSelection(this.plugin.settings.aiOllamaModels, getCatalog()).map(m => m.value);
-			const saveSel = async (arr) => {
+			const saveSel = async (arr: string[]) => {
 				this.plugin.settings.aiOllamaModels = arr.slice(0, MAX);
 				await this.plugin.saveSettings();
 			};
 
-			const setting = new obsidian.Setting(containerEl)
+			const setting = new Setting(containerEl)
 				.setName("Modèles affichés dans le menu")
 				.setDesc("Glissez pour réordonner. Le menu affiche une liste défilante ; les " + VISIBLE + " premiers sont visibles sans défiler (max " + MAX + "). Certains modèles cloud nécessitent un abonnement Ollama Pro/Max (erreur 403 à la génération).");
 			setting.settingEl.style.display = "block";
@@ -416,9 +519,9 @@ class QuizBlocksSettingTab extends obsidian.PluginSettingTab {
 						const cat = await aiProviders.fetchOllamaCloudCatalog();
 						this.plugin.settings.aiOllamaCatalog = cat;
 						await this.plugin.saveSettings();
-						new obsidian.Notice("Catalogue Ollama à jour (" + cat.length + " modèles).");
+						new Notice("Catalogue Ollama à jour (" + cat.length + " modèles).");
 					} catch (e) {
-						new obsidian.Notice("Échec du rafraîchissement (ollama.com injoignable).");
+						new Notice("Échec du rafraîchissement (ollama.com injoignable).");
 					}
 					b.setDisabled(false);
 					render();
@@ -436,19 +539,19 @@ class QuizBlocksSettingTab extends obsidian.PluginSettingTab {
 					const row = listEl.createDiv({ cls: "qbd-model-manager-row" });
 					row.setAttribute("draggable", "true");
 					const handle = row.createSpan({ cls: "qbd-model-manager-handle" });
-					obsidian.setIcon(handle, "grip-vertical");
+					setIcon(handle, "grip-vertical");
 					const icon = row.createSpan({ cls: "qbd-model-manager-icon" });
-					obsidian.setIcon(icon, meta.cloud ? "cloud" : "hard-drive");
+					setIcon(icon, meta.cloud ? "cloud" : "hard-drive");
 					row.createSpan({ cls: "qbd-model-manager-label", text: meta.label });
 					const rm = row.createEl("button", { cls: "qbd-model-manager-remove" });
-					obsidian.setIcon(rm, "x");
+					setIcon(rm, "x");
 					rm.setAttribute("aria-label", "Retirer");
 					rm.addEventListener("click", async () => {
 						const a = getSel(); a.splice(idx, 1); await saveSel(a); render();
 					});
 					row.addEventListener("dragstart", (e) => {
-						e.dataTransfer.setData("text/plain", String(idx));
-						e.dataTransfer.effectAllowed = "move";
+						e.dataTransfer!.setData("text/plain", String(idx));
+						e.dataTransfer!.effectAllowed = "move";
 						row.classList.add("is-dragging");
 					});
 					row.addEventListener("dragend", () => row.classList.remove("is-dragging"));
@@ -456,7 +559,7 @@ class QuizBlocksSettingTab extends obsidian.PluginSettingTab {
 					row.addEventListener("dragleave", () => row.classList.remove("is-drop-target"));
 					row.addEventListener("drop", async (e) => {
 						e.preventDefault(); row.classList.remove("is-drop-target");
-						const from = parseInt(e.dataTransfer.getData("text/plain"), 10);
+						const from = parseInt(e.dataTransfer!.getData("text/plain"), 10);
 						if (isNaN(from) || from === idx) return;
 						const a = getSel();
 						const [moved] = a.splice(from, 1);
@@ -474,7 +577,7 @@ class QuizBlocksSettingTab extends obsidian.PluginSettingTab {
 						avail.forEach(m => {
 							const chip = addWrap.createEl("button", { cls: "qbd-model-manager-chip" });
 							const ci = chip.createSpan({ cls: "qbd-model-manager-chip-icon" });
-							obsidian.setIcon(ci, "plus");
+							setIcon(ci, "plus");
 							chip.createSpan({ text: m.label });
 							chip.addEventListener("click", async () => {
 								const a = getSel();
@@ -514,7 +617,7 @@ class QuizBlocksSettingTab extends obsidian.PluginSettingTab {
 			const tutorialHeader = tutorialEl.createDiv({ cls: "qb-ai-tutorial-header" });
 			tutorialHeader.style.cssText = "display: flex; align-items: center; gap: 0.5em; margin-bottom: 0.8em;";
 			const headerIcon = tutorialHeader.createSpan({ cls: "qb-ai-tutorial-icon" });
-			obsidian.setIcon(headerIcon, currentProvider === "ollama" ? "cpu" : "sparkles");
+			setIcon(headerIcon, currentProvider === "ollama" ? "cpu" : "sparkles");
 			headerIcon.style.cssText = "display: flex; align-items: center; color: var(--interactive-accent);";
 			tutorialHeader.createEl("h4", {
 				text: tutorial.title,
@@ -548,7 +651,7 @@ class QuizBlocksSettingTab extends obsidian.PluginSettingTab {
 				const warnEl = tutorialEl.createDiv({ cls: "qb-ai-tutorial-warning" });
 				warnEl.style.cssText = "margin-top: 0.8em; padding: 0.6em 0.8em; background: var(--background-primary); border-radius: 6px; border-left: 3px solid var(--color-yellow); font-size: 0.88em; color: var(--text-muted);";
 				const warnIcon = warnEl.createSpan();
-				obsidian.setIcon(warnIcon, "alert-triangle");
+				setIcon(warnIcon, "alert-triangle");
 				warnIcon.style.cssText = "display: inline-flex; vertical-align: middle; margin-right: 0.4em; color: var(--color-yellow);";
 				warnEl.createSpan({ text: " " + tutorial.warning });
 			}
@@ -565,7 +668,7 @@ class QuizBlocksSettingTab extends obsidian.PluginSettingTab {
 				const docsEl = tutorialEl.createDiv({ cls: "qb-ai-tutorial-docs" });
 				docsEl.style.cssText = "margin-top: 0.8em; padding-top: 0.6em; border-top: 1px solid var(--background-modifier-border);";
 				const docsIcon = docsEl.createSpan();
-				obsidian.setIcon(docsIcon, "external-link");
+				setIcon(docsIcon, "external-link");
 				docsIcon.style.cssText = "display: inline-flex; vertical-align: middle; margin-right: 0.4em; color: var(--text-muted);";
 				const docsLink = docsEl.createEl("a", {
 					text: tutorial.docsLink.label,
@@ -585,14 +688,14 @@ class QuizBlocksSettingTab extends obsidian.PluginSettingTab {
 		// le raccourci en écrivant dans le composer). Les vues dashboard
 		// ouvertes re-bindent leur Scope immédiatement.
 		containerEl.createEl("h3", { text: "Raccourcis du composer IA" });
-		const { formatHotkey, eventToHotkey } = require("./hotkey-format");
 		const rebindDashboards = () => {
 			for (const leaf of this.app.workspace.getLeavesOfType(VIEW_TYPE_DASHBOARD)) {
-				if (leaf.view && leaf.view.bindComposerHotkeys) leaf.view.bindComposerHotkeys();
+				const view = leaf.view as unknown as DashboardHotkeyRebindable;
+				if (view && view.bindComposerHotkeys) view.bindComposerHotkeys();
 			}
 		};
-		const addHotkeySetting = (name, desc, key) => {
-			new obsidian.Setting(containerEl)
+		const addHotkeySetting = (name: string, desc: string, key: "hotkeyAddFiles" | "hotkeyAddNotes") => {
+			new Setting(containerEl)
 				.setName(name)
 				.setDesc(desc)
 				.addButton((btn) => {
@@ -601,14 +704,14 @@ class QuizBlocksSettingTab extends obsidian.PluginSettingTab {
 					paint();
 					btn.onClick(() => {
 						btn.setButtonText("Appuyez sur une combinaison…");
-						const onKey = async (e) => {
+						const onKey = async (e: KeyboardEvent) => {
 							e.preventDefault();
 							e.stopPropagation();
 							if (e.key === "Escape") { cleanup(); paint(); return; }
 							const hk = eventToHotkey(e);
 							if (!hk) return; // modificateur seul : on attend la touche
 							if (!hk.modifiers.length) {
-								new obsidian.Notice("Ajoutez un modificateur (Ctrl, Alt ou Shift)");
+								new Notice("Ajoutez un modificateur (Ctrl, Alt ou Shift)");
 								return;
 							}
 							cleanup();
@@ -631,7 +734,7 @@ class QuizBlocksSettingTab extends obsidian.PluginSettingTab {
 					.setIcon("rotate-ccw")
 					.setTooltip("Restaurer le défaut")
 					.onClick(async () => {
-						this.plugin.settings[key] = JSON.parse(JSON.stringify(DEFAULT_SETTINGS[key]));
+						this.plugin.settings[key] = JSON.parse(JSON.stringify(DEFAULT_SETTINGS[key])) as Hotkey;
 						await this.plugin.saveSettings();
 						rebindDashboards();
 						this.display();
@@ -648,7 +751,7 @@ class QuizBlocksSettingTab extends obsidian.PluginSettingTab {
 				cls: "setting-item-description",
 			});
 		} else {
-			new obsidian.Setting(containerEl)
+			new Setting(containerEl)
 				.setName("Activer la dictée")
 				.setDesc("Maintenir Espace dans le composer IA pour dicter (transcription 100 % locale, whisper.cpp).")
 				.addToggle(t => t
@@ -660,7 +763,7 @@ class QuizBlocksSettingTab extends obsidian.PluginSettingTab {
 					}));
 
 			if (this.plugin.settings.voiceEnabled) {
-				new obsidian.Setting(containerEl)
+				new Setting(containerEl)
 					.setName("Accélération")
 					.setDesc("CPU : léger (8 Mo), universel. GPU NVIDIA : téléchargement ~680 Mo, transcription quasi instantanée. (Pas de build AMD/Intel en v1.)")
 					.addDropdown(d => d
@@ -668,25 +771,25 @@ class QuizBlocksSettingTab extends obsidian.PluginSettingTab {
 						.addOption("cuda", "GPU NVIDIA (CUDA)")
 						.setValue(this.plugin.settings.voiceBackend)
 						.onChange(async (v) => {
-							this.plugin.settings.voiceBackend = v;
+							this.plugin.settings.voiceBackend = v as VoiceBackend;
 							await this.plugin.saveSettings();
 							this.display();
 						}));
 
-				new obsidian.Setting(containerEl)
+				new Setting(containerEl)
 					.setName("Modèle")
 					.setDesc("Rapide suffit pour une dictée propre ; Max gagne sur le bruit/les accents.")
 					.addDropdown(d => {
 						for (const [id, m] of Object.entries(voiceInstall.MODELS)) d.addOption(id, m.label);
 						d.setValue(this.plugin.settings.voiceModel)
 							.onChange(async (v) => {
-								this.plugin.settings.voiceModel = v;
+								this.plugin.settings.voiceModel = v as VoiceModelId;
 								await this.plugin.saveSettings();
 								this.display();
 							});
 					});
 
-				new obsidian.Setting(containerEl)
+				new Setting(containerEl)
 					.setName("Langue")
 					.addDropdown(d => d
 						.addOption("fr", "Français")
@@ -694,25 +797,25 @@ class QuizBlocksSettingTab extends obsidian.PluginSettingTab {
 						.addOption("en", "Anglais")
 						.setValue(this.plugin.settings.voiceLang)
 						.onChange(async (v) => {
-							this.plugin.settings.voiceLang = v;
+							this.plugin.settings.voiceLang = v as VoiceLang;
 							await this.plugin.saveSettings();
 						}));
 
 				// État d'installation + téléchargements (rien sans clic explicite).
 				const st = voiceInstall.getStatus(this.plugin.settings);
-				const fmtPct = (d, t) => (t ? Math.round((d / t) * 100) + " %" : Math.round(d / 1e6) + " Mo");
+				const fmtPct = (d: number, t: number): string => (t ? Math.round((d / t) * 100) + " %" : Math.round(d / 1e6) + " Mo");
 			// onProgress arrive à CHAQUE chunk (~16 Ko) : sur le zip CUDA
 			// (~678 Mo) ça ferait des dizaines de milliers de setButtonText.
 			// Ne toucher au DOM que quand le libellé change réellement.
-			const throttledProgress = (btn) => {
+			const throttledProgress = (btn: ButtonComponent) => {
 				let last = "";
-				return (d, t) => {
+				return (d: number, t: number): void => {
 					const label = fmtPct(d, t);
 					if (label !== last) { last = label; btn.setButtonText(label); }
 				};
 			};
 
-				const binRow = new obsidian.Setting(containerEl)
+				const binRow = new Setting(containerEl)
 					.setName("Binaire whisper.cpp (" + this.plugin.settings.voiceBackend + ")")
 					.setDesc(st.cliPath ? "Installé — " + st.cliPath : "Non installé.");
 				if (!st.cliPath) binRow.addButton(b => b
@@ -723,16 +826,16 @@ class QuizBlocksSettingTab extends obsidian.PluginSettingTab {
 						try {
 							await voiceInstall.installBinary(this.plugin.settings.voiceBackend,
 								throttledProgress(b));
-							new obsidian.Notice("Binaire whisper.cpp installé.");
+							new Notice("Binaire whisper.cpp installé.");
 						} catch (e) {
 							console.error("[quiz-blocks] install binaire:", e);
-							new obsidian.Notice("Téléchargement échoué : " + e.message);
+							new Notice("Téléchargement échoué : " + (e instanceof Error ? e.message : String(e)));
 						}
 						this.display();
 					}));
 
-				const mdlRow = new obsidian.Setting(containerEl)
-					.setName("Modèle — " + ((voiceInstall.MODELS[this.plugin.settings.voiceModel] || {}).label || this.plugin.settings.voiceModel))
+				const mdlRow = new Setting(containerEl)
+					.setName("Modèle — " + (voiceInstall.MODELS[this.plugin.settings.voiceModel]?.label || this.plugin.settings.voiceModel))
 					.setDesc(st.modelFile ? "Installé — " + st.modelFile : "Non installé.");
 				if (!st.modelFile) mdlRow.addButton(b => b
 					.setButtonText("Télécharger")
@@ -742,10 +845,10 @@ class QuizBlocksSettingTab extends obsidian.PluginSettingTab {
 						try {
 							await voiceInstall.installModel(this.plugin.settings.voiceModel,
 								throttledProgress(b));
-							new obsidian.Notice("Modèle installé.");
+							new Notice("Modèle installé.");
 						} catch (e) {
 							console.error("[quiz-blocks] install modèle:", e);
-							new obsidian.Notice("Téléchargement échoué : " + e.message);
+							new Notice("Téléchargement échoué : " + (e instanceof Error ? e.message : String(e)));
 						}
 						this.display();
 					}));
@@ -754,8 +857,13 @@ class QuizBlocksSettingTab extends obsidian.PluginSettingTab {
 	}
 }
 
-module.exports = class InteractiveQuizPlugin extends obsidian.Plugin {
-	async onload() {
+export default class InteractiveQuizPlugin extends Plugin {
+	settings!: QuizBlocksSettings;
+	log!: Logger;
+	_scanner!: Scanner;
+	_statsStore!: StatsStore;
+
+	async onload(): Promise<void> {
 		await this.loadSettings();
 		this.log = createLogger();
 
@@ -819,7 +927,7 @@ module.exports = class InteractiveQuizPlugin extends obsidian.Plugin {
 				// Check if there's an active file
 				const activeFile = this.app.workspace.getActiveFile();
 				if (!activeFile || !activeFile.path.endsWith('.md')) {
-					new obsidian.Notice("Aucune note active");
+					new Notice("Aucune note active");
 					return;
 				}
 
@@ -829,13 +937,13 @@ module.exports = class InteractiveQuizPlugin extends obsidian.Plugin {
 					// Find first quiz-blocks fence
 					const match = content.match(/```quiz-blocks\n([\s\S]*?)\n```/);
 					if (!match) {
-						new obsidian.Notice("Aucun bloc quiz-blocks trouvé dans cette note");
+						new Notice("Aucun bloc quiz-blocks trouvé dans cette note");
 						return;
 					}
 
 					// Open or get the Quiz Editor
 					const existing = this.app.workspace.getLeavesOfType(VIEW_TYPE);
-					let leaf;
+					let leaf: WorkspaceLeaf;
 					if (existing.length > 0) {
 						leaf = existing[0];
 						this.app.workspace.revealLeaf(leaf);
@@ -846,14 +954,14 @@ module.exports = class InteractiveQuizPlugin extends obsidian.Plugin {
 					}
 
 					// Open the quiz for editing
-					const view = leaf.view;
+					const view = leaf.view as unknown as QuizFileOpenable;
 					if (view && view.openQuizFile) {
 						await view.openQuizFile(activeFile, match[1]);
-						new obsidian.Notice(`Quiz ouvert : ${activeFile.name}`);
+						new Notice(`Quiz ouvert : ${activeFile.name}`);
 					}
 				} catch (err) {
 					console.error("Open error:", err);
-					new obsidian.Notice("Erreur lors de l'ouverture");
+					new Notice("Erreur lors de l'ouverture");
 				}
 			},
 		});
@@ -873,16 +981,16 @@ module.exports = class InteractiveQuizPlugin extends obsidian.Plugin {
 		/* ─── Code Block Processor ─── */
 		this.registerMarkdownCodeBlockProcessor(
 			QUIZ_BLOCK_LANGUAGE,
-			async (source, el, ctx) => {
+			async (source: string, el: HTMLElement, mdCtx: MarkdownPostProcessorContext) => {
 				const host = el.createDiv({ cls: "quiz-blocks-host" });
 
 				// Lie la destruction de l'instance au cycle de vie du bloc : à chaque
 				// re-render/unload, Obsidian appelle onunload → destroyQuiz, ce qui retire
 				// les listeners document/window, ResizeObservers et timers. Sans ça, chaque
 				// re-render (édition de note, toggle mode) fuit une instance complète.
-				const renderChild = new obsidian.MarkdownRenderChild(host);
+				const renderChild = new MarkdownRenderChild(host);
 				renderChild.onunload = () => { try { host.__quizDestroy?.(); } catch (_) {} };
-				ctx.addChild(renderChild);
+				mdCtx.addChild(renderChild);
 
 				try {
 					const quiz = parseQuizSource(source);
@@ -892,36 +1000,38 @@ module.exports = class InteractiveQuizPlugin extends obsidian.Plugin {
 						plugin: this,
 						container: host,
 						quiz,
-						sourcePath: ctx.sourcePath,
-						Notice: obsidian.Notice
+						sourcePath: mdCtx.sourcePath,
+						Notice: Notice
 					});
 				} catch (error) {
 					this.log.error("erreur pendant le rendu du bloc", error);
 
 					host.empty();
 					host.createEl("p", {
-						text: `⚠️ Impossible de charger le quiz : ${error?.message || "erreur inconnue"}`
+						text: `⚠️ Impossible de charger le quiz : ${error instanceof Error ? error.message : "erreur inconnue"}`
 					});
 				}
 			}
 		);
 
 		/* ─── Scanner init (async, non-blocking) ─── */
-		this._scanner.init().catch(err => this.log.warn("Scanner init error:", err));
+		this._scanner.init().catch((err: unknown) => this.log.warn("Scanner init error:", err));
 	}
 
-	onunload() {
+	onunload(): void {
 		this._scanner?.destroy();
 		this._statsStore?.destroy();
 		// Menus/popovers portalés au <body> (ui-select) : sans fermeture ici,
 		// un menu ouvert au moment d'un unload (update/reload du plugin)
 		// resterait orphelin dans le DOM avec ses closures mortes.
-		try { require("./dashboard/ui-select").closeAllSelects(); } catch (e) { /* best effort */ }
+		try { closeAllSelects(); } catch (e) { /* best effort */ }
 		this.log?.info("plugin déchargé");
 	}
 
-	async loadSettings() {
-		const data = await this.loadData();
+	async loadSettings(): Promise<void> {
+		// loadData() renvoie les réglages persistés (any) : cast vers la forme
+		// attendue, fusionnée par-dessus les défauts.
+		const data = await this.loadData() as Partial<QuizBlocksSettings> | null;
 		this.settings = Object.assign({}, DEFAULT_SETTINGS, data || {});
 
 		if ("enableDebugLogs" in this.settings) {
@@ -957,20 +1067,20 @@ module.exports = class InteractiveQuizPlugin extends obsidian.Plugin {
 		}
 	}
 
-	async saveSettings() {
+	async saveSettings(): Promise<void> {
 		await this.saveData(this.settings);
 	}
 
-	getCodeMirrorGlobal() {
+	getCodeMirrorGlobal(): CodeMirrorGlobal | null {
 		if (typeof window === "undefined") return null;
-		const cm = window.CodeMirror;
+		const cm = (window as unknown as { CodeMirror?: CodeMirrorGlobal }).CodeMirror;
 		if (!cm || typeof cm.defineMode !== "function" || typeof cm.getMode !== "function") {
 			return null;
 		}
 		return cm;
 	}
 
-	registerQuizBlocksCodeHighlighting() {
+	registerQuizBlocksCodeHighlighting(): void {
 		const cm = this.getCodeMirrorGlobal();
 
 		if (!cm) {
@@ -995,7 +1105,7 @@ module.exports = class InteractiveQuizPlugin extends obsidian.Plugin {
 		}
 	}
 
-	unregisterQuizBlocksCodeHighlighting() {
+	unregisterQuizBlocksCodeHighlighting(): void {
 		const cm = this.getCodeMirrorGlobal();
 		if (!cm) return;
 
@@ -1005,5 +1115,5 @@ module.exports = class InteractiveQuizPlugin extends obsidian.Plugin {
 		} catch (error) {
 			this.log.error("impossible de retirer la coloration", error);
 		}
-	} 
-};
+	}
+}
