@@ -1,4 +1,15 @@
-'use strict';
+import { Platform } from "obsidian";
+import type { ChildProcess } from "child_process";
+import type { Plugin } from "obsidian";
+import type { AiSettings } from "../types/dashboard-ctx";
+import {
+	resolveClaudeModel,
+	resolveCodexModel,
+	resolveEffort,
+	getCodexModels,
+	buildChildEnv,
+	isOllamaCloudModel,
+} from "./ai-providers";
 
 /* ══════════════════════════════════════════════════════════
    AI CLIENT — Claude Code + Ollama
@@ -7,8 +18,39 @@
    Ollama: fetch() pour lire les corps d'erreur. Multimodal pour images.
 ══════════════════════════════════════════════════════════ */
 
-function createAiClient(plugin) {
-	const DEFAULT_MODELS = {
+/** Hôte plugin attendu par createAiClient (seul `settings` est lu). */
+export type AiPlugin = Plugin & { settings: AiSettings };
+
+/** Image jointe à la génération (vision). */
+export interface ImagePayload {
+	base64: string;
+	mediaType?: string;
+}
+
+/** Options de génération (nombre, type, source, images). */
+export interface GenerateOptions {
+	count?: number;
+	type?: string;
+	source?: string;
+	images?: ImagePayload[];
+}
+
+/** Client IA — retour de createAiClient(plugin). */
+export interface AiClient {
+	generate(prompt: string, options?: GenerateOptions): Promise<unknown[]>;
+	abort(): void;
+}
+
+/** Erreur d'exécution CLI enrichie (child_process.exec). */
+type ExecError = Error & {
+	code?: string | number;
+	stderr?: string;
+	stdout?: string;
+	killed?: boolean;
+};
+
+export function createAiClient(plugin: AiPlugin): AiClient {
+	const DEFAULT_MODELS: Record<string, string> = {
 		"claude-code": "sonnet",
 		codex: "gpt-5.6-terra",
 		ollama: "glm-5.2:cloud",
@@ -19,28 +61,28 @@ function createAiClient(plugin) {
 	// l'invoque. L'erreur qui en résulte (process tué, fetch avorté) est
 	// traduite en erreur marquée `aborted` que l'UI traite comme un retour
 	// à l'état initial, pas comme une erreur.
-	let abortCurrent = null;
+	let abortCurrent: (() => void) | null = null;
 	let aborted = false;
 
-	function killTree(child) {
+	function killTree(child: ChildProcess): void {
 		// Windows : taskkill /T /F sur le PID précis tue tout l'arbre
 		// (codex/claude spawnent des enfants) ; ailleurs SIGTERM suffit.
 		try {
 			if (process.platform === "win32") {
-				require("child_process").exec("taskkill /pid " + child.pid + " /T /F", { windowsHide: true });
+				(require("child_process") as typeof import("child_process")).exec("taskkill /pid " + child.pid + " /T /F", { windowsHide: true });
 			} else {
 				child.kill("SIGTERM");
 			}
 		} catch (e) { /* best effort */ }
 	}
 
-	async function generate(prompt, options = {}) {
+	async function generate(prompt: string, options: GenerateOptions = {}): Promise<unknown[]> {
 		aborted = false;
 		try {
 			return await generateInner(prompt, options);
 		} catch (err) {
 			if (aborted) {
-				const e = new Error("Génération annulée");
+				const e = new Error("Génération annulée") as Error & { aborted?: boolean };
 				e.aborted = true;
 				throw e;
 			}
@@ -50,19 +92,19 @@ function createAiClient(plugin) {
 		}
 	}
 
-	async function generateInner(prompt, options = {}) {
+	async function generateInner(prompt: string, options: GenerateOptions = {}): Promise<unknown[]> {
 		const { count = 5, type = "Mixte", source = "topic", images = [] } = options;
 		const provider = plugin.settings.aiProvider || "claude-code";
 		let model = plugin.settings.aiModel || DEFAULT_MODELS[provider];
 		// Fable 5 masqué après le 12 juillet → retombe sur le défaut Claude
 		if (provider === "claude-code") {
-			model = require("./ai-providers").resolveClaudeModel(model);
+			model = resolveClaudeModel(model);
 		}
 		// Codex : si le modèle persisté n'est pas dans la liste réelle du
 		// compte (~/.codex/models_cache.json — ex. bascule récente de
 		// provider, slug retiré), retombe sur le défaut Codex.
 		if (provider === "codex") {
-			model = require("./ai-providers").resolveCodexModel(model);
+			model = resolveCodexModel(model);
 		}
 
 		const typeInstruction = type === "Mixte"
@@ -109,15 +151,14 @@ function createAiClient(plugin) {
 			// besoin) ; envoyée en Authorization si l'utilisateur en a défini une.
 			const ollamaUrl = (plugin.settings.aiOllamaUrl || "http://localhost:11434").replace(/\/+$/, "");
 			const key = (plugin.settings.aiOllamaCloudKey || "").trim();
-			const authHeader = key ? { "Authorization": "Bearer " + key } : {};
+			const authHeader: Record<string, string> = key ? { "Authorization": "Bearer " + key } : {};
 			// Effort réel : niveau `think` (low/medium/high/max) passé à l'API
 			// pour les modèles à raisonnement (ignoré sinon, cf. callOllama).
-			const effort = require("./ai-providers").resolveEffort("ollama", plugin.settings.aiEffort);
+			const effort = resolveEffort("ollama", plugin.settings.aiEffort);
 			return callOllama(model, systemPrompt, userPrompt, ollamaUrl, authHeader, images, effort);
 		} else if (provider === "codex") {
 			// Effort clampé aux niveaux supportés par CE modèle (ex. ultra
 			// persisté + gpt-5.5 → xhigh), sinon le CLI rejetterait la valeur.
-			const { resolveEffort, getCodexModels } = require("./ai-providers");
 			const effort = resolveEffort("codex", plugin.settings.aiEffort, model);
 			// Mode Fast (éclair du popover effort) : service tier « priority »,
 			// seulement si CE modèle l'expose (cf. models_cache service_tiers).
@@ -133,8 +174,7 @@ function createAiClient(plugin) {
 	   Aucune clé API : réutilise la session du CLI connecté au
 	   compte Pro/Max/Team/Enterprise. Prompt complet par stdin
 	   (aucun échappement d'argument), sortie --output-format json. */
-	async function callClaudeCode(model, systemPrompt, userPrompt, images = []) {
-		const { Platform } = require("obsidian");
+	async function callClaudeCode(model: string, systemPrompt: string, userPrompt: string, images: ImagePayload[] = []): Promise<unknown[]> {
 		if (!Platform.isDesktopApp) {
 			throw new Error("La génération via Claude est disponible sur desktop uniquement.");
 		}
@@ -142,22 +182,21 @@ function createAiClient(plugin) {
 			throw new Error("Nom de modèle Claude invalide : " + model);
 		}
 
-		const cp = require("child_process");
-		const os = require("os");
-		const path = require("path");
-		const fs = require("fs");
-		const { buildChildEnv } = require("./ai-providers");
+		const cp = require("child_process") as typeof import("child_process");
+		const os = require("os") as typeof import("os");
+		const path = require("path") as typeof import("path");
+		const fs = require("fs") as typeof import("fs");
 
 		// Images : écrites en fichiers temporaires que Claude lit
 		// avec le tool Read (multimodal, read-only)
 		let tools = '""';
 		let imageNote = "";
-		let tmpDir = null;
+		let tmpDir: string | null = null;
 		if (images.length > 0) {
 			tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "quiz-blocks-"));
 			const paths = images.map((img, i) => {
 				const ext = ((img.mediaType || "image/png").split("/")[1] || "png").replace("jpeg", "jpg");
-				const p = path.join(tmpDir, "image-" + (i + 1) + "." + ext);
+				const p = path.join(tmpDir as string, "image-" + (i + 1) + "." + ext);
 				fs.writeFileSync(p, Buffer.from(img.base64, "base64"));
 				return p;
 			});
@@ -170,9 +209,9 @@ function createAiClient(plugin) {
 		const cmd = "claude -p --output-format json --model " + model +
 			" --tools " + tools + " --no-session-persistence --setting-sources \"\"";
 
-		let stdout;
+		let stdout: string;
 		try {
-			stdout = await new Promise((resolve, reject) => {
+			stdout = await new Promise<string>((resolve, reject) => {
 				const child = cp.exec(cmd, {
 					cwd: os.homedir(),
 					env: buildChildEnv(),
@@ -181,37 +220,39 @@ function createAiClient(plugin) {
 					windowsHide: true
 				}, (err, out, stderr) => {
 					if (err) {
-						err.stderr = stderr;
-						err.stdout = out;
-						reject(err);
+						const e = err as ExecError;
+						e.stderr = stderr;
+						e.stdout = out;
+						reject(e);
 					} else {
 						resolve(out);
 					}
 				});
 				abortCurrent = () => { aborted = true; killTree(child); };
-				child.stdin.write(fullPrompt);
-				child.stdin.end();
+				child.stdin!.write(fullPrompt);
+				child.stdin!.end();
 			});
 		} catch (err) {
-			console.error("[quiz-blocks] Claude Code error:", err.message, err.stderr || "");
-			const detail = ((err.stderr || "") + " " + (err.stdout || "") + " " + err.message).toLowerCase();
-			if (err.code === "ENOENT" || err.code === 127 || detail.includes("not recognized") || detail.includes("introuvable") || detail.includes("command not found")) {
+			const e = err as ExecError;
+			console.error("[quiz-blocks] Claude Code error:", e.message, e.stderr || "");
+			const detail = ((e.stderr || "") + " " + (e.stdout || "") + " " + e.message).toLowerCase();
+			if (e.code === "ENOENT" || e.code === 127 || detail.includes("not recognized") || detail.includes("introuvable") || detail.includes("command not found")) {
 				throw new Error("Claude Code n'est pas installé. Installez-le depuis claude.com/claude-code puis connectez-vous avec /login.");
 			}
-			if (err.killed || detail.includes("etimedout")) {
+			if (e.killed || detail.includes("etimedout")) {
 				throw new Error("Claude n'a pas répondu dans le délai imparti (3 min). Réessayez.");
 			}
 			if (detail.includes("login") || detail.includes("api key") || detail.includes("authentication") || detail.includes("credential")) {
 				throw new Error("Compte Claude non connecté. Dans un terminal, lancez \"claude\" puis /login avec votre compte Pro/Max/Team/Enterprise.");
 			}
-			throw new Error("Erreur Claude Code : " + (err.stderr || err.message).trim().slice(0, 300));
+			throw new Error("Erreur Claude Code : " + (e.stderr || e.message).trim().slice(0, 300));
 		} finally {
 			if (tmpDir) {
 				try { fs.rmSync(tmpDir, { recursive: true, force: true }); } catch (e) { /* best effort */ }
 			}
 		}
 
-		let data;
+		let data: { is_error?: boolean; result?: string };
 		try {
 			data = JSON.parse(stdout);
 		} catch (e) {
@@ -244,8 +285,7 @@ function createAiClient(plugin) {
 	   effort de raisonnement via -c model_reasoning_effort=…, réponse finale
 	   écrite dans un fichier (-o) pour un parsing propre. Sandbox read-only et
 	   --ignore-user-config isolent la génération (pas de MCP/hooks perso). */
-	async function callCodex(model, systemPrompt, userPrompt, images = [], effort = "medium", fast = false) {
-		const { Platform } = require("obsidian");
+	async function callCodex(model: string, systemPrompt: string, userPrompt: string, images: ImagePayload[] = [], effort = "medium", fast = false): Promise<unknown[]> {
 		if (!Platform.isDesktopApp) {
 			throw new Error("La génération via ChatGPT (Codex) est disponible sur desktop uniquement.");
 		}
@@ -254,11 +294,10 @@ function createAiClient(plugin) {
 		}
 		const effortVal = /^[a-z]+$/.test(effort) ? effort : "medium";
 
-		const cp = require("child_process");
-		const os = require("os");
-		const path = require("path");
-		const fs = require("fs");
-		const { buildChildEnv } = require("./ai-providers");
+		const cp = require("child_process") as typeof import("child_process");
+		const os = require("os") as typeof import("os");
+		const path = require("path") as typeof import("path");
+		const fs = require("fs") as typeof import("fs");
 
 		const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "quiz-blocks-codex-"));
 		const outFile = path.join(tmpDir, "last-message.txt");
@@ -285,9 +324,9 @@ function createAiClient(plugin) {
 			" -C \"" + os.homedir() + "\"" +
 			" -o \"" + outFile + "\"" + imageArgs;
 
-		let raw;
+		let raw: string;
 		try {
-			const stdout = await new Promise((resolve, reject) => {
+			const stdout = await new Promise<string>((resolve, reject) => {
 				const child = cp.exec(cmd, {
 					cwd: os.homedir(),
 					env: buildChildEnv(),
@@ -296,26 +335,28 @@ function createAiClient(plugin) {
 					windowsHide: true
 				}, (err, out, stderr) => {
 					if (err) {
-						err.stderr = stderr;
-						err.stdout = out;
-						reject(err);
+						const e = err as ExecError;
+						e.stderr = stderr;
+						e.stdout = out;
+						reject(e);
 					} else {
 						resolve(out);
 					}
 				});
 				abortCurrent = () => { aborted = true; killTree(child); };
-				child.stdin.write(fullPrompt);
-				child.stdin.end();
+				child.stdin!.write(fullPrompt);
+				child.stdin!.end();
 			});
 			// Le fichier -o contient la réponse finale nette ; fallback stdout.
 			raw = fs.existsSync(outFile) ? fs.readFileSync(outFile, "utf8") : (stdout || "");
 		} catch (err) {
-			console.error("[quiz-blocks] Codex error:", err.message, err.stderr || "");
-			const detail = ((err.stderr || "") + " " + (err.stdout || "") + " " + err.message).toLowerCase();
-			if (err.code === "ENOENT" || err.code === 127 || detail.includes("not recognized") || detail.includes("introuvable") || detail.includes("command not found")) {
+			const e = err as ExecError;
+			console.error("[quiz-blocks] Codex error:", e.message, e.stderr || "");
+			const detail = ((e.stderr || "") + " " + (e.stdout || "") + " " + e.message).toLowerCase();
+			if (e.code === "ENOENT" || e.code === 127 || detail.includes("not recognized") || detail.includes("introuvable") || detail.includes("command not found")) {
 				throw new Error("Codex n'est pas installé. Installez-le (npm i -g @openai/codex) puis connectez-vous avec « codex login ».");
 			}
-			if (err.killed || detail.includes("etimedout")) {
+			if (e.killed || detail.includes("etimedout")) {
 				throw new Error("ChatGPT (Codex) n'a pas répondu dans le délai imparti (3 min). Réessayez.");
 			}
 			if (detail.includes("not logged in") || detail.includes("login") || detail.includes("unauthorized") || detail.includes("401") || detail.includes("credential") || detail.includes("authenticat")) {
@@ -324,7 +365,7 @@ function createAiClient(plugin) {
 			if (detail.includes("usage limit") || detail.includes("rate limit") || detail.includes("quota")) {
 				throw new Error("Limite d'utilisation de votre abonnement ChatGPT atteinte. Réessayez plus tard.");
 			}
-			throw new Error("Erreur Codex : " + (err.stderr || err.message).trim().slice(0, 300));
+			throw new Error("Erreur Codex : " + (e.stderr || e.message).trim().slice(0, 300));
 		} finally {
 			try { fs.rmSync(tmpDir, { recursive: true, force: true }); } catch (e) { /* best effort */ }
 		}
@@ -336,7 +377,7 @@ function createAiClient(plugin) {
 		return parseQuizResponse(raw);
 	}
 
-	async function callOllama(model, systemPrompt, userPrompt, ollamaUrl, authHeaders, images = [], effort = null) {
+	async function callOllama(model: string, systemPrompt: string, userPrompt: string, ollamaUrl?: string, authHeaders?: Record<string, string>, images: ImagePayload[] = [], effort: string | null = null): Promise<unknown[]> {
 		if (!ollamaUrl) {
 			ollamaUrl = (plugin.settings.aiOllamaUrl || "http://localhost:11434").replace(/\/+$/, "");
 		}
@@ -349,16 +390,15 @@ function createAiClient(plugin) {
 		// ── Step 1 : serveur joignable ? Un modèle cloud (:cloud) tourne à la
 		// demande via le daemon connecté (absent de /api/tags) → on ne vérifie
 		// PAS qu'il est installé ; un modèle local, si. ──
-		const providers = require("./ai-providers");
-		const isCloud = providers.isOllamaCloudModel(model);
-		let installedModels = [];
-		let tagModels = [];
+		const isCloud = isOllamaCloudModel(model);
+		let installedModels: string[] = [];
+		let tagModels: Array<{ name: string; capabilities?: string[] }> = [];
 		try {
 			const tagsResp = await fetch(`${ollamaUrl}/api/tags`, { method: "GET", headers: authHeaders, signal: ac.signal });
 			if (!tagsResp.ok) {
 				throw new Error("ollama_unreachable");
 			}
-			const tagsData = await tagsResp.json();
+			const tagsData = await tagsResp.json() as { models?: Array<{ name: string; capabilities?: string[] }> };
 			tagModels = tagsData?.models || [];
 			installedModels = tagModels.map(m => m.name);
 			console.log("[quiz-blocks] Ollama installed models:", installedModels.join(", "));
@@ -380,7 +420,8 @@ function createAiClient(plugin) {
 				}
 			}
 		} catch (err) {
-			if (err.message === "ollama_unreachable" || !err.message.startsWith("Le modèle")) {
+			const e = err as Error;
+			if (e.message === "ollama_unreachable" || !e.message.startsWith("Le modèle")) {
 				throw new Error(
 					"Impossible de contacter Ollama sur " + ollamaUrl + ".\n" +
 					"Vérifiez que le serveur est démarré (ollama serve)."
@@ -392,7 +433,7 @@ function createAiClient(plugin) {
 		// Le modèle expose-t-il un raisonnement (`think`) ? Cloud → oui (le param
 		// est ignoré sans erreur si le modèle ne raisonne pas, vérifié) ; local →
 		// capability « thinking » lue de /api/tags. Statut prix jamais figé ici.
-		let supportsThinking;
+		let supportsThinking: boolean;
 		if (isCloud) {
 			supportsThinking = true;
 		} else {
@@ -415,7 +456,7 @@ function createAiClient(plugin) {
 			...(images.length > 0 ? { images: images.map(img => img.base64) } : {})
 		};
 
-		let data;
+		let data: { error?: unknown; message?: { content?: string } };
 		try {
 			const resp = await fetch(`${ollamaUrl}/api/chat`, {
 				method: "POST",
@@ -459,7 +500,8 @@ function createAiClient(plugin) {
 			data = await resp.json();
 
 			if (!resp.ok) {
-				const errMsg = typeof data?.error === "string" ? data.error : (data?.error || "Erreur " + resp.status);
+				const rawErr: unknown = data?.error;
+				const errMsg: unknown = typeof rawErr === "string" ? rawErr : (rawErr || ("Erreur " + resp.status));
 				console.error("[quiz-blocks] Ollama error:", resp.status, errMsg);
 
 				// Specific known errors — show clear French message
@@ -470,7 +512,7 @@ function createAiClient(plugin) {
 					throw new Error("Mémoire insuffisante pour ce modèle" + detail + ".\nChoisissez un modèle plus petit dans la liste.");
 				}
 				if (errLower.includes("not found") || errLower.includes("model not found")) {
-					throw new Error("Le modèle \"" + model + "\" n\u2019est pas installé.\nExécutez : ollama pull " + model);
+					throw new Error("Le modèle \"" + model + "\" n’est pas installé.\nExécutez : ollama pull " + model);
 				}
 				// Modèle cloud réservé à un abonnement (Ollama Pro/Max) : 403
 				// « requires a subscription ». Distinct d'un défaut de connexion.
@@ -480,10 +522,11 @@ function createAiClient(plugin) {
 				if (isCloud && (resp.status === 401 || resp.status === 403 || errLower.includes("sign in") || errLower.includes("signin") || errLower.includes("unauthorized") || errLower.includes("authenticat") || errLower.includes("api key"))) {
 					throw new Error("Modèle cloud Ollama : le daemon n'est pas connecté à votre compte.\nDans un terminal : ollama signin");
 				}
-				throw new Error("Erreur Ollama (" + resp.status + ") : " + errMsg);
+				throw new Error("Erreur Ollama (" + resp.status + ") : " + String(errMsg));
 			}
 		} catch (err) {
-			if (err.message.startsWith("Le modèle") || err.message.startsWith("Mémoire insuffisante") || err.message.startsWith("Erreur Ollama") || err.message.startsWith("Impossible de contacter") || err.message.startsWith("Modèle cloud") || err.message.startsWith("Ce modèle nécessite")) {
+			const e = err as Error;
+			if (e.message.startsWith("Le modèle") || e.message.startsWith("Mémoire insuffisante") || e.message.startsWith("Erreur Ollama") || e.message.startsWith("Impossible de contacter") || e.message.startsWith("Modèle cloud") || e.message.startsWith("Ce modèle nécessite")) {
 				throw err;
 			}
 			throw new Error("Impossible de contacter Ollama sur " + ollamaUrl + ". Vérifiez que le serveur est démarré.");
@@ -516,16 +559,16 @@ function createAiClient(plugin) {
 	   voulus — un placeholder « col1\tcol2 » garde sa tabulation, et
 	   \right/\neq/\xi ne peuvent plus être corrompus puisqu'ils vivent
 	   dans les dollars). */
-	function repairLatexBackslashes(source) {
+	function repairLatexBackslashes(source: string): string {
 		// Segments : $$...$$ d'abord (sauts de ligne possibles), puis
 		// $...$ inline (mêmes gardes anti-dollar-monétaire que le rendu :
 		// collé au contenu des deux côtés, pas de \n).
-		const mathFixed = source.replace(/\$\$[^$]+?\$\$|\$(?!\s)[^$\n]*?[^$\s]\$/g, (seg) =>
+		const mathFixed = source.replace(/\$\$[^$]+?\$\$|\$(?!\s)[^$\n]*?[^$\s]\$/g, (seg: string) =>
 			// L'alternative (\\\\) consomme les paires correctes en
 			// premier — sans elle le 2e backslash de « \\frac » (modèle
 			// qui échappe bien) produirait « \\\frac » → form feed.
 			seg.replace(/(\\\\)|\\([a-zA-Z,;! ])/g,
-				(m, pair, ch) => pair ? pair : "\\\\" + ch));
+				(m: string, pair: string | undefined, ch: string | undefined) => pair ? pair : "\\\\" + ch));
 		// Hors math : SEULS les \x/\u NON suivis d'hexa valide sont
 		// doublés — un \xGG/\uGGGG invalide fait JETER JSON5.parse
 		// (SyntaxError), donc ce doublement ne peut jamais casser un
@@ -534,11 +577,11 @@ function createAiClient(plugin) {
 		// (\t/\n dans « C:\temp\new » restent indécidables — le prompt
 		// système exige désormais les backslashes doublés partout.)
 		return mathFixed
-			.replace(/(\\\\)|\\x(?![0-9a-fA-F]{2})/g, (m, pair) => pair ? pair : "\\\\x")
-			.replace(/(\\\\)|\\u(?![0-9a-fA-F]{4})/g, (m, pair) => pair ? pair : "\\\\u");
+			.replace(/(\\\\)|\\x(?![0-9a-fA-F]{2})/g, (m: string, pair: string | undefined) => pair ? pair : "\\\\x")
+			.replace(/(\\\\)|\\u(?![0-9a-fA-F]{4})/g, (m: string, pair: string | undefined) => pair ? pair : "\\\\u");
 	}
 
-	function parseOllamaResponse(content) {
+	function parseOllamaResponse(content: string): unknown[] {
 		let cleaned = content.trim();
 
 		// Try to extract JSON from markdown code blocks
@@ -551,12 +594,12 @@ function createAiClient(plugin) {
 		// Ollama with format: structured JSON wraps the array in an object
 		// e.g. { "questions": [...] }
 		try {
-			const JSON5 = require("json5");
-			const parsed = JSON5.parse(cleaned);
+			const JSON5 = require("json5") as typeof import("json5");
+			const parsed: unknown = JSON5.parse(cleaned);
 
 			// If it's an object with a "questions" key, extract the array
-			if (parsed && !Array.isArray(parsed) && Array.isArray(parsed.questions)) {
-				return parsed.questions;
+			if (parsed && !Array.isArray(parsed) && Array.isArray((parsed as { questions?: unknown }).questions)) {
+				return (parsed as { questions: unknown[] }).questions;
 			}
 
 			if (Array.isArray(parsed)) {
@@ -570,7 +613,7 @@ function createAiClient(plugin) {
 		}
 	}
 
-	function parseQuizResponse(content) {
+	function parseQuizResponse(content: string): unknown[] {
 		let cleaned = content.trim();
 
 		const jsonMatch = cleaned.match(/```(?:json5?|json)?\s*\n?([\s\S]*?)\n?```/);
@@ -579,8 +622,8 @@ function createAiClient(plugin) {
 		}
 		cleaned = repairLatexBackslashes(cleaned);
 
-		const JSON5 = require("json5");
-		const parsed = JSON5.parse(cleaned);
+		const JSON5 = require("json5") as typeof import("json5");
+		const parsed: unknown = JSON5.parse(cleaned);
 
 		if (!Array.isArray(parsed)) {
 			throw new Error("La réponse IA n'est pas un tableau de questions.");
@@ -591,5 +634,3 @@ function createAiClient(plugin) {
 
 	return { generate, abort: () => { if (abortCurrent) abortCurrent(); } };
 }
-
-module.exports = createAiClient;

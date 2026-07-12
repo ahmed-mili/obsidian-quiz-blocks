@@ -30,33 +30,41 @@ import type { QuizzesHandlers } from "../dashboard/quizzes";
 import type { HomeHandlers } from "../dashboard/home";
 import type { DetailHandlers } from "../dashboard/detail";
 import type { VoiceSettings } from "../dashboard/voice-install";
+import type { Hotkey } from "../hotkey-format";
+import type { OllamaCatalogEntry } from "../dashboard/ai-providers";
+import type { AiClient } from "../dashboard/ai-client";
+import type { AiHandlers } from "../dashboard/ai";
 
-export type { Scanner, StatsStore };
+export type { Scanner, StatsStore, AiClient, AiHandlers };
 
 /** Vues possibles du dashboard (dashboard.js:23 currentView, navigate, previousView). */
 export type DashboardViewName = "home" | "quizzes" | "detail" | "ai";
 
 /**
- * Placeholder du client IA (src/dashboard/ai-client.js, createAiClient(plugin)).
- * NE FIGURE PAS dans le littéral ctx ni sur la vue : instancié à la demande,
- * en interne, par le sous-module `ai` (dashboard/ai.js:1072-1073, `const
- * aiClient = require("./ai-client"); const client = aiClient(ctx.plugin);`).
- * Déclaré ici par anticipation, pour la prochaine tâche (typage de
- * dashboard/ai.js), qui en aura besoin dès que ai-client.js passera en .ts.
+ * Client IA (src/dashboard/ai-client.ts, createAiClient(plugin)) : NE FIGURE
+ * PAS dans le littéral ctx ni sur la vue — instancié à la demande, en interne,
+ * par le sous-module `ai` (dashboard/ai.ts, `const client = createAiClient(
+ * ctx.plugin)`). Le VRAI type est désormais importé d'ai-client.ts (Task 8c)
+ * et ré-exporté ci-dessus.
  */
-export interface AiClient {
-	[member: string]: unknown;
-}
 
 /**
- * Placeholder générique d'un sous-module de handlers dashboard encore en .js.
- * Après Task 8a, seul `ai` (dashboard/ai.js, createAiHandlers(ctx)) l'utilise
- * encore — hors périmètre 8a (lot IA). Chaque handler expose au moins une
- * méthode `render(container, ...)` mais la signature exacte diffère par
- * module ; non modélisé ici pour éviter tout `any` implicite avant conversion.
+ * Réglages IA du plugin (src/plugin.js DEFAULT_SETTINGS, encore .js). Étend
+ * `VoiceSettings` (dictée) avec le sous-ensemble « génération IA » réellement
+ * lu par le lot IA (ai.ts / ai-client.ts) — Task 8c. Les champs non listés
+ * existent au runtime, simplement pas encore déclarés ici.
  */
-export interface DashboardHandlers {
-	[member: string]: unknown;
+export interface AiSettings extends VoiceSettings {
+	aiProvider?: string;
+	aiModel?: string;
+	aiEffort?: string;
+	aiCodexFast?: boolean;
+	aiOllamaUrl?: string;
+	aiOllamaCloudKey?: string;
+	aiOllamaModels?: string[];
+	aiOllamaCatalog?: OllamaCatalogEntry[];
+	hotkeyAddFiles?: Hotkey | null;
+	hotkeyAddNotes?: Hotkey | null;
 }
 
 /* ════════════════════════════════════════════════════════
@@ -88,14 +96,13 @@ export interface DashboardView extends ItemView {
 	/** ctx sauvegardé sur la vue (dashboard.js:66, `this.ctx = ctx`). */
 	ctx?: DashboardCtx;
 
-	// ── Sous-modules assignés en onOpen (dashboard.js:69-73) — Task 8a a typé
-	//    nav/home/quizzes/detail avec leur vrai handler-type ; `ai` reste en
-	//    placeholder DashboardHandlers (hors périmètre 8a, lot IA). ──
+	// ── Sous-modules assignés en onOpen (dashboard.js:69-73) — nav/home/
+	//    quizzes/detail typés en Task 8a ; `ai` typé en AiHandlers (Task 8c). ──
 	nav?: NavHandlers;
 	home?: HomeHandlers;
 	quizzes?: QuizzesHandlers;
 	detail?: DetailHandlers;
-	ai?: DashboardHandlers;
+	ai?: AiHandlers;
 
 	navigate(view: DashboardViewName, data?: { quiz?: QuizIndexEntry }): void;
 	renderSidebar(): void;
@@ -111,14 +118,14 @@ export interface DashboardCtx {
 	view: DashboardView;
 	app: App;
 	/**
-	 * `plugin.settings` : uniquement le sous-ensemble "dictée" (`VoiceSettings`,
-	 * lu par `voice-input.ts` via `ctx.plugin.settings`) est honnêtement typé à
-	 * ce stade (Task 8b) — la forme complète (aiProvider, aiModel, quizStats…)
-	 * sera étoffée par la conversion du lot IA (Task 8c) et de `plugin.js`
-	 * lui-même (encore `.js`). Les champs non listés existent bel et bien au
-	 * runtime, simplement pas encore déclarés ici.
+	 * `plugin.settings` : `AiSettings` (Task 8c) couvre le sous-ensemble
+	 * « dictée » (`VoiceSettings`) + « génération IA » (aiProvider, aiModel,
+	 * aiEffort, aiOllama*, hotkey*…) réellement lu par voice-input.ts, ai.ts et
+	 * ai-client.ts. La forme COMPLÈTE (quizStats…) sera étoffée par la
+	 * conversion de `plugin.js` lui-même (encore `.js`). Les champs non listés
+	 * existent bel et bien au runtime, simplement pas encore déclarés ici.
 	 */
-	plugin: Plugin & { settings: VoiceSettings };
+	plugin: Plugin & { settings: AiSettings; saveSettings(): Promise<void> };
 	/** Copie de `view.scanner` au moment de la construction du ctx (dashboard.js:58). */
 	scanner: Scanner;
 	/** Copie de `view.statsStore` au moment de la construction du ctx (dashboard.js:59). */
