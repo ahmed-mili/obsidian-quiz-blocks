@@ -1,0 +1,362 @@
+/**
+ * Interface du `ctx` (god-object) du MOTEUR de rendu du quiz (src/engine.js,
+ * fonction renderInteractiveQuiz). C'est la plus grande interface du projet :
+ * un contexte partagé, assemblé en plusieurs passes, injecté dans les 17
+ * factories `engine/*` et consommé par elles (référence croisée).
+ *
+ * DÉRIVATION (zones de engine.js) :
+ *   - :93-125   littéral `ctx` initial + getters/setters d'examen + utilitaires
+ *               (shuffleArray, clamp, prédicats isOrdering/isMatching/isText).
+ *   - :128-144  instanciation des 17 factories (createSanitizer, …).
+ *   - :149-222  1er Object.assign : greffe des 17 sous-modules (ctx.sanitize,
+ *               ctx.cards, …) + aplatit ~55 méthodes directement sur ctx.
+ *   - :275-330  ctx.quizState (état runtime), ctx.slideMap, constantes SLIDE_*,
+ *               initialiseurs et prédicats de slide.
+ *   - :397-429  2e Object.assign : flags primitifs __quiz* (SNAPSHOT par valeur)
+ *               + accessors de closure exposés (isDestroyed, currentAsyncEpoch…).
+ *   - :464-826  fonctions locales du moteur greffées sur ctx après leur
+ *               définition (settleViewportHeightToIndex, destroyQuiz, render…).
+ *
+ * SNAPSHOT vs ACCESSOR (spec §7) — distinction CRITIQUE :
+ *   Les flags primitifs `__quiz*` (ex. __quizDestroyed, __quizAsyncEpoch) sont
+ *   COPIÉS PAR VALEUR sur ctx au 2e Object.assign : ce sont des propriétés
+ *   figées (le nombre/booléen de l'instant de l'assemblage), PAS l'état vivant.
+ *   L'état VIVANT se lit via les accessors de closure (isDestroyed(),
+ *   currentAsyncEpoch(), getSlideGeneration()…). Les DEUX sont modélisés :
+ *   les flags comme propriétés de leur type, les accessors comme méthodes.
+ *   Les getters/setters d'examen (closure, :108-115) sont vus comme de simples
+ *   propriétés par les consommateurs — leur nature accessor est transparente.
+ *
+ * SOUS-MODULES : les 17 slots (sanitize, cards, track, viewport, state…) ont des
+ * handler-types réels qui seront définis SEULEMENT en Task 10 (les modules
+ * engine/*.js sont encore .js). On NE PEUT PAS les importer (casserait
+ * `npm run check`) : chaque slot pointe donc vers un PLACEHOLDER `unknown`-based
+ * (interface `XxxHandlers` avec index signature), à REMPLACER par le vrai type
+ * lors de la conversion de son module en Task 10. Les méthodes aplaties issues
+ * d'un sous-module sont typées par indexed-access sur son placeholder
+ * (ex. `escapeHtmlText: SanitizerHandlers["escapeHtmlText"]` → `unknown`
+ * aujourd'hui, résolu automatiquement quand le placeholder deviendra le vrai
+ * type). Les méthodes locales du moteur (render, destroyQuiz…) sont typées
+ * fidèlement dès maintenant depuis engine.js.
+ */
+
+import type { App, Plugin } from "obsidian";
+import type {
+	QuizQuestion,
+	QuizState,
+	SlideMapEntry,
+	ExamOptions,
+	TextOnlyRating,
+	QuestionSelection,
+	QuestionShuffleEntry,
+	OrderingQuestion,
+	MatchingQuestion,
+	TextQuestion,
+} from "./quiz";
+
+/**
+ * Mode du quiz (engine.js ctx.quizMode / originalQuizMode). Miroir du type
+ * `QuizMode` de src/quiz-utils.ts (extractExamOptions) qui n'est PAS exporté —
+ * dupliqué ici plutôt que modifier quiz-utils.ts (iso-fonctionnalité Task 9).
+ */
+export type QuizMode = "learn" | "exam" | "quiz";
+
+/* ════════════════════════════════════════════════════════
+   17 sous-modules — PLACEHOLDERS `unknown`-based (à compléter en Task 10)
+
+   Chaque interface remplace `{ [method: string]: unknown }` par le vrai
+   handler-type à la conversion de son module engine/*.js → .ts (Task 10).
+   L'index signature fait résoudre tout indexed-access à `unknown` en attendant.
+   ════════════════════════════════════════════════════════ */
+
+/** Placeholder — vrai type en Task 10 (engine/sanitizer.ts). */
+export interface SanitizerHandlers { [method: string]: unknown }
+/** Placeholder — vrai type en Task 10 (engine/resources.ts). */
+export interface ResourceHandlers { [method: string]: unknown }
+/** Placeholder — vrai type en Task 10 (engine/exam.ts). */
+export interface ExamHandlers { [method: string]: unknown }
+/** Placeholder — vrai type en Task 10 (engine/text-only.ts). */
+export interface TextOnlyHandlers { [method: string]: unknown }
+/** Placeholder — vrai type en Task 10 (engine/cards.ts). */
+export interface CardHandlers { [method: string]: unknown }
+/** Placeholder — vrai type en Task 10 (engine/viewport.ts). */
+export interface ViewportHandlers { [method: string]: unknown }
+/** Placeholder — vrai type en Task 10 (engine/track.ts). */
+export interface TrackHandlers { [method: string]: unknown }
+/** Placeholder — vrai type en Task 10 (engine/zoom.ts). */
+export interface ZoomHandlers { [method: string]: unknown }
+/** Placeholder — vrai type en Task 10 (engine/interactions.ts). */
+export interface InteractionHandlers { [method: string]: unknown }
+/** Placeholder — vrai type en Task 10 (engine/terminal.ts). */
+export interface TerminalHandlers { [method: string]: unknown }
+/** Placeholder — vrai type en Task 10 (engine/focus.ts). */
+export interface FocusHandlers { [method: string]: unknown }
+/** Placeholder — vrai type en Task 10 (engine/lifecycle.ts). */
+export interface LifecycleHandlers { [method: string]: unknown }
+/** Placeholder — vrai type en Task 10 (engine/warming.ts). */
+export interface WarmingHandlers { [method: string]: unknown }
+/** Placeholder — vrai type en Task 10 (engine/state.ts). */
+export interface StateHandlers { [method: string]: unknown }
+/** Placeholder — vrai type en Task 10 (engine/hint.ts). */
+export interface HintHandlers { [method: string]: unknown }
+/** Placeholder — vrai type en Task 10 (engine/questions.ts). */
+export interface QuestionHandlers { [method: string]: unknown }
+/** Placeholder — vrai type en Task 10 (engine/results-save.ts). */
+export interface ResultsSaverHandlers { [method: string]: unknown }
+
+/* ════════════════════════════════════════════════════════
+   EngineCtx — le ctx du moteur (assemblé dans engine.js)
+   ════════════════════════════════════════════════════════ */
+
+export interface EngineCtx {
+	/* ── Données & DOM (littéral initial, engine.js:93-99) ── */
+	app: App;
+	plugin: Plugin;
+	container: HTMLElement;
+	sourcePath: string;
+	/** Constructeur Notice d'Obsidian, transmis par le contexte d'appel (engine.js:31,98). */
+	Notice: typeof import("obsidian").Notice;
+	quiz: QuizQuestion[];
+
+	/* ── Mode & examen (littéral initial, engine.js:100-107 ; muté par switchToExamMode :808-813) ── */
+	quizMode: QuizMode;
+	isExamMode: boolean;
+	trainingSession: boolean;
+	examOptions: ExamOptions | null;
+	examDurationMs: number;
+	learnExamOptions: ExamOptions | null;
+	originalQuizMode: QuizMode;
+	originalLearnExamOptions: ExamOptions | null;
+
+	/* ── État d'examen : getters/setters de closure (engine.js:108-115),
+	     vus comme de simples propriétés par les consommateurs. ── */
+	examTimeRemaining: number;
+	examStarted: boolean;
+	examEnded: boolean;
+	examStartTime: number;
+
+	/* ── Identifiants d'instance (engine.js:116-118) ── */
+	QUIZ_INSTANCE_ID: string;
+	HINT_OVERLAY_ID: string;
+	HINT_TITLE_ID: string;
+
+	/** File de nettoyages globaux ; chaque entrée est appelée à la destruction (engine.js:73,119,625-628). */
+	__quizGlobalCleanups: Array<() => void>;
+
+	/* ── Utilitaires purs (littéral initial, engine.js:120-124) ── */
+	shuffleArray<T>(arr: T[]): T[];
+	clamp(n: number, min: number, max: number): number;
+	/** Prédicat de variante (engine.js:85), typé en garde de type sur l'union QuizQuestion. */
+	isOrderingQuestion(q: QuizQuestion): q is OrderingQuestion;
+	/** Prédicat de variante (engine.js:86). */
+	isMatchingQuestion(q: QuizQuestion): q is MatchingQuestion;
+	/** Prédicat de variante (engine.js:87 ; tolère aussi le legacy `q.text === true`). */
+	isTextQuestion(q: QuizQuestion): q is TextQuestion;
+
+	/* ── État runtime & carte des slides (engine.js:295-299) ── */
+	quizState: QuizState;
+	slideMap: SlideMapEntry[];
+	SLIDE_SUBMIT_INDEX: number;
+	SLIDE_RESULTS_INDEX: number;
+	TOTAL_SLIDES: number;
+
+	/* ── Initialiseurs d'état (engine.js:300-306), typés depuis quiz.ts ── */
+	initSelections(): QuestionSelection[];
+	initTextOnlyAnswers(): string[];
+	initTextOnlyChecked(): boolean[];
+	initTextOnlyRatings(): Array<TextOnlyRating | null>;
+	buildShuffleMap(): QuestionShuffleEntry[];
+	initOrderingPicks(): Array<number | null>;
+	initMatchPicks(): Array<number | null>;
+
+	/* ── Prédicats & helpers de slide (engine.js:322-330) ── */
+	isQuestionSlideIndex(i: number): boolean;
+	isSubmitSlideIndex(i: number): boolean;
+	isResultsSlideIndex(i: number): boolean;
+	clampSlideIndex(i: number): number;
+	getSlidingWindow(): { from: number; to: number };
+	getSlideIndexForQuestion(qi: number): number;
+	invalidateSavedResults(): void;
+
+	/* ════════════════════════════════════════════════
+	   Sous-modules (1er Object.assign, engine.js:149-168)
+	   Slots vers les PLACEHOLDERS — à remplacer par les vrais types en Task 10.
+	   ════════════════════════════════════════════════ */
+	sanitize: SanitizerHandlers;
+	resources: ResourceHandlers;
+	exam: ExamHandlers;
+	textOnly: TextOnlyHandlers;
+	cards: CardHandlers;
+	viewport: ViewportHandlers;
+	track: TrackHandlers;
+	zoom: ZoomHandlers;
+	interactions: InteractionHandlers;
+	terminal: TerminalHandlers;
+	focus: FocusHandlers;
+	lifecycle: LifecycleHandlers;
+	warming: WarmingHandlers;
+	state: StateHandlers;
+	hint: HintHandlers;
+	questions: QuestionHandlers;
+	resultsSaver: ResultsSaverHandlers;
+
+	/* ════════════════════════════════════════════════
+	   Méthodes APLATIES issues des sous-modules (1er Object.assign, :156-219).
+	   Typées par indexed-access sur le placeholder d'origine : `unknown`
+	   aujourd'hui, résolu à la vraie signature quand le placeholder deviendra
+	   le vrai handler-type (Task 10). Aucune n'est typée en dur ici : leur
+	   signature vit dans leur module source, pas dans engine.js.
+	   ════════════════════════════════════════════════ */
+
+	// depuis state (engine.js:156, 200-219)
+	clearNavTabPressState: StateHandlers["clearNavTabPressState"];
+	hasAnyAnswer: StateHandlers["hasAnyAnswer"];
+	isComplete: StateHandlers["isComplete"];
+	getMissingIndices: StateHandlers["getMissingIndices"];
+	isCorrect: StateHandlers["isCorrect"];
+	computeScorePercent: StateHandlers["computeScorePercent"];
+	getSubmitSlideSignature: StateHandlers["getSubmitSlideSignature"];
+	getResultsSlideSignature: StateHandlers["getResultsSlideSignature"];
+	goToQuestion: StateHandlers["goToQuestion"];
+	goToSubmit: StateHandlers["goToSubmit"];
+	goToResults: StateHandlers["goToResults"];
+	resetQuiz: StateHandlers["resetQuiz"];
+	setPracticeMode: StateHandlers["setPracticeMode"];
+	goToSlide: StateHandlers["goToSlide"];
+	redirectSlide: StateHandlers["redirectSlide"];
+	updateNavHighlight: StateHandlers["updateNavHighlight"];
+	setSlidingClass: StateHandlers["setSlidingClass"];
+	playNavTabPressAndNavigate: StateHandlers["playNavTabPressAndNavigate"];
+	clearAllNavTabPressStates: StateHandlers["clearAllNavTabPressStates"];
+	setNavTabPressState: StateHandlers["setNavTabPressState"];
+	buildNavTabClass: StateHandlers["buildNavTabClass"];
+
+	// depuis cards (engine.js:157)
+	refreshMetaSlides: CardHandlers["refreshMetaSlides"];
+
+	// depuis sanitize (engine.js:170-171)
+	escapeHtmlText: SanitizerHandlers["escapeHtmlText"];
+	escapeHtmlAttr: SanitizerHandlers["escapeHtmlAttr"];
+
+	// depuis lifecycle (engine.js:172-180)
+	createPendingAsyncWaiter: LifecycleHandlers["createPendingAsyncWaiter"];
+	resolveAllPendingAsync: LifecycleHandlers["resolveAllPendingAsync"];
+	sleep: LifecycleHandlers["sleep"];
+	nextFrame: LifecycleHandlers["nextFrame"];
+	waitFrames: LifecycleHandlers["waitFrames"];
+	requestQuizIdle: LifecycleHandlers["requestQuizIdle"];
+	restartAsyncLifecycle: LifecycleHandlers["restartAsyncLifecycle"];
+	bumpSlideGeneration: LifecycleHandlers["bumpSlideGeneration"];
+	bumpAllSlideGenerations: LifecycleHandlers["bumpAllSlideGenerations"];
+
+	// depuis warming (engine.js:181-186)
+	warmSlideForAccurateHeight: WarmingHandlers["warmSlideForAccurateHeight"];
+	warmSlidesAroundIndex: WarmingHandlers["warmSlidesAroundIndex"];
+	startFullBackgroundWarm: WarmingHandlers["startFullBackgroundWarm"];
+	bindTrackItemImages: WarmingHandlers["bindTrackItemImages"];
+	bindAllTrackImages: WarmingHandlers["bindAllTrackImages"];
+	bindCurrentSlideMediaHeightSync: WarmingHandlers["bindCurrentSlideMediaHeightSync"];
+
+	// depuis viewport (engine.js:187)
+	getMaxRenderedSlideHeight: ViewportHandlers["getMaxRenderedSlideHeight"];
+
+	// depuis hint (engine.js:188-189)
+	openHintModal: HintHandlers["openHintModal"];
+	closeHintModal: HintHandlers["closeHintModal"];
+
+	// depuis questions (engine.js:190-199)
+	getOrderingItems: QuestionHandlers["getOrderingItems"];
+	getOrderingCorrectOrder: QuestionHandlers["getOrderingCorrectOrder"];
+	getOrderingSlotLabels: QuestionHandlers["getOrderingSlotLabels"];
+	getMatchRows: QuestionHandlers["getMatchRows"];
+	getMatchChoices: QuestionHandlers["getMatchChoices"];
+	getMatchCorrectMap: QuestionHandlers["getMatchCorrectMap"];
+	orderingSelectionIncludes: QuestionHandlers["orderingSelectionIncludes"];
+	removeOrderingItemFromSlot: QuestionHandlers["removeOrderingItemFromSlot"];
+	placeOrderingItemInSlot: QuestionHandlers["placeOrderingItemInSlot"];
+	matchingSelectionIncludes: QuestionHandlers["matchingSelectionIncludes"];
+
+	// depuis exam (engine.js:825-826)
+	stopExamTimer: ExamHandlers["stopExamTimer"];
+	updateExamTimerDisplay: ExamHandlers["updateExamTimerDisplay"];
+
+	/* ════════════════════════════════════════════════
+	   ACCESSORS de closure (2e Object.assign, engine.js:424-428) — état VIVANT.
+	   À NE PAS confondre avec les flags snapshot ci-dessous.
+	   ════════════════════════════════════════════════ */
+	/** Époque asynchrone courante — valeur vivante (engine.js:375,424). */
+	currentAsyncEpoch(): number;
+	/** L'instance est-elle encore vivante pour cette époque (engine.js:376,425). */
+	isQuizInstanceAlive(epoch?: number): boolean;
+	/** L'instance N'est PAS détruite — état vivant, contraire du snapshot __quizDestroyed (engine.js:426). */
+	isDestroyed(): boolean;
+	/** Génération courante d'une slide (engine.js:377,427). */
+	getSlideGeneration(index: number): number;
+	/** La génération fournie est-elle la génération courante de la slide (engine.js:378,428). */
+	isSlideGenerationCurrent(index: number, generation: number): boolean;
+
+	/* ════════════════════════════════════════════════
+	   Flags primitifs __quiz* — SNAPSHOT par valeur (2e Object.assign, :398-421).
+	   Copie figée à l'assemblage : pour l'état vivant, utiliser les accessors
+	   ci-dessus, jamais ces champs.
+	   ════════════════════════════════════════════════ */
+	/** Set des attentes async en cours (engine.js:367,398). */
+	__quizPendingAsyncWaiters: Set<unknown>;
+	/** Cache hauteur de slide par index — même référence que ctx.viewport (engine.js:370,399 ; viewport.js:24). */
+	__quizSlideHeightCache: Map<number, number>;
+	/** Promesses de préchauffage de slide par index (engine.js:371,400 ; viewport.js:25). */
+	__quizWarmSlidePromises: Map<number, Promise<unknown>>;
+	/** Génération courante par slide (engine.js:366,401). */
+	__quizSlideGeneration: number[];
+	__quizDestroyed: boolean;
+	__quizAsyncEpoch: number;
+	__quizBackgroundWarmIdleHandle: number;
+	__quizBackgroundWarmIdleType: string;
+	__quizBackgroundWarmStarted: boolean;
+	__quizBootstrapRaf1: number;
+	__quizBootstrapRaf2: number;
+	__quizMediaSyncToken: number;
+	__quizEnsureVisibleRaf: number;
+	__quizTrackTransitionFallbackTimer: number;
+	__quizHeightRaf: number;
+	__quizHeightResyncTimer: number;
+	__quizPrimeHeightsRaf: number;
+	__quizActiveSlideResizeObserver: ResizeObserver | null;
+	__quizAllSlidesResizeObserver: ResizeObserver | null;
+	__quizViewportResizeObserver: ResizeObserver | null;
+	__quizViewportResizeRaf: number;
+	__quizViewportResizeSettleTimer: number;
+	__quizViewportSettleTimer: number;
+	__quizTrackFixBound: boolean;
+
+	/* ════════════════════════════════════════════════
+	   Fonctions LOCALES du moteur greffées sur ctx — typées fidèlement depuis
+	   engine.js (leur implémentation vit dans engine.js, converti en Task 10).
+	   ════════════════════════════════════════════════ */
+	/** engine.js:422-423,606,823 — annule le handle idle de préchauffage de fond. */
+	clearBackgroundWarmIdleHandle(): void;
+	/** engine.js:380-385,824 — annule le rAF d'ensureTrackVisible. */
+	cancelEnsureTrackVisibleRaf(): void;
+	/** engine.js:437-464 — cale la hauteur du viewport sur la slide `index`. */
+	settleViewportHeightToIndex(index: number, opts?: { animate?: boolean; refresh?: boolean }): void;
+	/** engine.js:466-492 — planifie une resynchro de hauteur du viewport. */
+	scheduleViewportHeightSync(opts?: { delay?: number; index?: number; animate?: boolean; refresh?: boolean }): void;
+	/** engine.js:494-511 — amorce les hauteurs de toutes les slides (avec retries). */
+	primeAllSlideHeights(opts?: { retries?: number; syncCurrent?: boolean }): void;
+	/** engine.js:513-527 — applique position + hauteur de piste instantanément ; renvoie true si OK. */
+	applyTrackPositionAndHeightInstant(): boolean;
+	/** engine.js:529-558 — force la piste visible après layout (retries + garde d'époque). */
+	ensureTrackVisibleAfterLayout(retries?: number, epoch?: number): void;
+	/** engine.js:560-586 — corrige le layout de piste au 1er chargement (fonts.ready). */
+	bindTrackFirstLoadFix(): void;
+	/** engine.js:591-645 — détruit l'instance (nettoyages, observers, timers, cleanups globaux). */
+	destroyQuiz(): void;
+	/** engine.js:647-697 — reconstruit la slide d'une question ; renvoie le nouvel élément ou null. */
+	refreshQuestionSlide(qi: number, opts?: { syncHeight?: boolean }): Element | null;
+	/** engine.js:699-706 — valide une interaction de question (invalide résultats + refresh). */
+	commitQuestionInteraction(qi: number, opts?: { syncHeight?: boolean }): void;
+	/** engine.js:714-800 — rendu principal (reconstruit tout le HTML des slides). */
+	render(): void;
+	/** engine.js:803-819 — bascule mode Apprentissage → Examen (learn only). */
+	switchToExamMode(): void;
+}
