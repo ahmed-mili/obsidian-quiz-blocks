@@ -4,8 +4,8 @@ const obsidian = require("obsidian");
 const { parseQuizSource, renderInteractiveQuiz } = require("./engine");
 const { QuizBuilderView, VIEW_TYPE } = require("./editor");
 const { QuizDashboardView, VIEW_TYPE_DASHBOARD } = require("./dashboard");
-const createScanner = require("./dashboard/scanner");
-const createStatsStore = require("./dashboard/stats-store");
+const { createScanner } = require("./dashboard/scanner");
+const { createStatsStore } = require("./dashboard/stats-store");
 const voiceInstall = require("./dashboard/voice-install");
 
 const PLUGIN_ID = "quiz-blocks";
