@@ -1,17 +1,41 @@
-'use strict';
+import { Notice, setIcon, TFile } from "obsidian";
+import type { WorkspaceLeaf } from "obsidian";
+import JSON5 from "json5";
+import { VIEW_TYPE } from "../editor";
+import type { DashboardCtx } from "../types/dashboard-ctx";
+import type { QuizIndexEntry } from "./scanner";
+import type { QuizStatRecord } from "./stats-store";
 
 /* ══════════════════════════════════════════════════════════
    DETAIL VIEW — Dashboard
    Top bar (retour, titre, Modifier, Lancer) + 2 colonnes (stats + questions)
 ══════════════════════════════════════════════════════════ */
 
-function createDetailHandlers(ctx) {
+/** Aperçu minimal d'une question brute lue du JSON5 (loadQuestionPreviews). */
+interface RawQuestionPreview {
+	examMode?: boolean;
+	prompt?: string;
+	title?: string;
+}
 
-	function render(container, quiz) {
+/** Accès à `openQuizFile`, greffé au runtime sur QuizBuilderView (editor.ts:239)
+ * mais non déclaré sur la classe elle-même — même pattern que editor/modals.ts
+ * ViewLike (leaf.view est typé `View`, pas le sous-type concret). */
+type QuizEditorViewLike = {
+	openQuizFile?: (file: TFile, source: string) => Promise<void>;
+};
+
+export interface DetailHandlers {
+	render(container: HTMLElement, quiz: QuizIndexEntry): void;
+}
+
+export function createDetailHandlers(ctx: DashboardCtx): DetailHandlers {
+
+	function render(container: HTMLElement, quiz: QuizIndexEntry): void {
 		container.empty();
 
 		const stats = ctx.statsStore ? ctx.statsStore.getRecord(quiz.path) : null;
-		const quizStat = stats || { bestScore: 0, questionsDone: 0, totalQuestions: quiz.questions, lastPlayed: 0, attempts: 0 };
+		const quizStat: QuizStatRecord = stats || { bestScore: 0, questionsDone: 0, totalQuestions: quiz.questions, lastPlayed: 0, attempts: 0 };
 
 		const pct = quizStat.totalQuestions > 0
 			? Math.round(quizStat.questionsDone / quizStat.totalQuestions * 100)
@@ -22,7 +46,7 @@ function createDetailHandlers(ctx) {
 
 		const backBtn = topbar.createEl("button", { cls: "qbd-btn qbd-btn--subtle" });
 		const backIcon = backBtn.createSpan({ cls: "qbd-btn-icon" });
-		obsidian.setIcon(backIcon, "arrow-left");
+		setIcon(backIcon, "arrow-left");
 		backBtn.addEventListener("click", () => ctx.navigate(ctx.view.previousView || "home"));
 
 		const topbarInfo = topbar.createDiv({ cls: "qbd-detail-topbar-info" });
@@ -32,13 +56,13 @@ function createDetailHandlers(ctx) {
 
 		const editBtn = topbar.createEl("button", { cls: "qbd-btn qbd-btn--subtle" });
 		const editIcon = editBtn.createSpan({ cls: "qbd-btn-icon" });
-		obsidian.setIcon(editIcon, "edit");
+		setIcon(editIcon, "edit");
 		editBtn.createSpan({ text: "Modifier" });
 		editBtn.addEventListener("click", () => openInEditor(quiz));
 
 		const playBtn = topbar.createEl("button", { cls: "qbd-btn qbd-btn--primary" });
 		const playIcon = playBtn.createSpan({ cls: "qbd-btn-icon" });
-		obsidian.setIcon(playIcon, "play");
+		setIcon(playIcon, "play");
 		playBtn.createSpan({ text: "Lancer" });
 		playBtn.addEventListener("click", () => openForPlay(quiz));
 
@@ -57,7 +81,7 @@ function createDetailHandlers(ctx) {
 		ringInfo.createEl("p", { cls: "qbd-detail-ring-label", text: `${quizStat.questionsDone}/${quizStat.totalQuestions} questions` });
 
 		// Stat items
-		const statItems = [
+		const statItems: Array<{ label: string; value: string; color: string }> = [
 			{ label: "Meilleur score", value: quizStat.bestScore > 0 ? `${quizStat.bestScore}%` : "—", color: quizStat.bestScore >= 80 ? "var(--color-green)" : quizStat.bestScore >= 60 ? "var(--color-yellow)" : "var(--text-muted)" },
 			{ label: "Type", value: quiz.quizType, color: "var(--text-muted)" },
 			{ label: "Dernière fois", value: ctx.statsStore ? ctx.statsStore.formatRelativeTime(quizStat.lastPlayed) : "—", color: "var(--text-muted)" },
@@ -79,12 +103,12 @@ function createDetailHandlers(ctx) {
 		loadQuestionPreviews(questionsCol, quiz, quizStat);
 	}
 
-	async function loadQuestionPreviews(container, quiz, quizStat) {
+	async function loadQuestionPreviews(container: HTMLElement, quiz: QuizIndexEntry, quizStat: QuizStatRecord): Promise<void> {
 		const wrapper = container.createDiv({ cls: "qbd-detail-questions-list" });
 
 		try {
 			const file = ctx.app.vault.getAbstractFileByPath(quiz.path);
-			if (!file) {
+			if (!file || !(file instanceof TFile)) {
 				wrapper.createEl("p", { cls: "qbd-empty-hint", text: "Fichier introuvable" });
 				return;
 			}
@@ -100,9 +124,12 @@ function createDetailHandlers(ctx) {
 			const closingFence = content.indexOf('\n```', afterStart + 1);
 			const source = content.substring(afterStart + 1, closingFence).trim();
 
-			const JSON5 = require("json5");
-			const parsed = JSON5.parse(source);
-			const questions = parsed.filter(q => q && typeof q === "object" && !q.examMode);
+			const parsed: unknown = JSON5.parse(source);
+			if (!Array.isArray(parsed)) throw new Error("Le contenu du bloc quiz-blocks doit être un tableau.");
+			const questions = parsed.filter((q): q is RawQuestionPreview => {
+				if (!q || typeof q !== "object") return false;
+				return !(q as RawQuestionPreview).examMode;
+			});
 
 			const maxPreview = Math.min(questions.length, 5);
 			for (let i = 0; i < maxPreview; i++) {
@@ -114,7 +141,7 @@ function createDetailHandlers(ctx) {
 
 				if (quizStat.questionsDone > i) {
 					const check = item.createSpan({ cls: "qbd-detail-question-check" });
-					obsidian.setIcon(check, "check");
+					setIcon(check, "check");
 				}
 			}
 
@@ -130,7 +157,7 @@ function createDetailHandlers(ctx) {
 		}
 	}
 
-	function createRingSVG(pct, color, size, sw) {
+	function createRingSVG(pct: number, color: string, size: number, sw: number): SVGSVGElement {
 		const r = (size - sw * 2) / 2;
 		const circ = 2 * Math.PI * r;
 
@@ -164,20 +191,20 @@ function createDetailHandlers(ctx) {
 		return svg;
 	}
 
-	async function openForPlay(quiz) {
+	async function openForPlay(quiz: QuizIndexEntry): Promise<void> {
 		const file = ctx.app.vault.getAbstractFileByPath(quiz.path);
-		if (!file) {
-			new obsidian.Notice("Fichier introuvable");
+		if (!file || !(file instanceof TFile)) {
+			new Notice("Fichier introuvable");
 			return;
 		}
 		const leaf = ctx.app.workspace.getLeaf(false);
 		await leaf.openFile(file);
 	}
 
-	async function openInEditor(quiz) {
+	async function openInEditor(quiz: QuizIndexEntry): Promise<void> {
 		const file = ctx.app.vault.getAbstractFileByPath(quiz.path);
-		if (!file) {
-			new obsidian.Notice("Fichier introuvable");
+		if (!file || !(file instanceof TFile)) {
+			new Notice("Fichier introuvable");
 			return;
 		}
 
@@ -185,13 +212,12 @@ function createDetailHandlers(ctx) {
 			const content = await ctx.app.vault.read(file);
 			const match = content.match(/```quiz-blocks\n([\s\S]*?)\n```/);
 			if (!match) {
-				new obsidian.Notice("Aucun bloc quiz-blocks trouvé dans cette note");
+				new Notice("Aucun bloc quiz-blocks trouvé dans cette note");
 				return;
 			}
 
-			const { QuizBuilderView, VIEW_TYPE } = require("../editor");
 			const existing = ctx.app.workspace.getLeavesOfType(VIEW_TYPE);
-			let leaf;
+			let leaf: WorkspaceLeaf;
 			if (existing.length > 0) {
 				leaf = existing[0];
 				ctx.app.workspace.revealLeaf(leaf);
@@ -201,18 +227,15 @@ function createDetailHandlers(ctx) {
 				ctx.app.workspace.revealLeaf(leaf);
 			}
 
-			const view = leaf.view;
+			const view = leaf.view as QuizEditorViewLike;
 			if (view && view.openQuizFile) {
 				await view.openQuizFile(file, match[1]);
-				new obsidian.Notice(`Quiz ouvert : ${file.basename}`);
+				new Notice(`Quiz ouvert : ${file.basename}`);
 			}
 		} catch (err) {
-			new obsidian.Notice("Erreur lors de l'ouverture");
+			new Notice("Erreur lors de l'ouverture");
 		}
 	}
 
 	return { render };
 }
-
-const obsidian = require("obsidian");
-module.exports = createDetailHandlers;

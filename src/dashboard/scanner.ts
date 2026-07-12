@@ -1,4 +1,6 @@
-'use strict';
+import { TFile } from "obsidian";
+import type { App, EventRef } from "obsidian";
+import JSON5 from "json5";
 
 /* ══════════════════════════════════════════════════════════
    QUIZ SCANNER — Indexeur de vault
@@ -7,32 +9,86 @@
    et maintient un cache à jour via les events vault.
 ══════════════════════════════════════════════════════════ */
 
-const JSON5 = require("json5");
-
 const QUIZ_FENCE_START = "```quiz-blocks";
 const QUIZ_FENCE_END = "```";
 
-function createScanner(app) {
-	const cache = new Map(); // path → { title, questions, types, mtime }
-	const listeners = [];
-	const vaultEventRefs = []; // EventRef des app.vault.on(...) pour les retirer au destroy
+/**
+ * Tag de type de question détecté par le scan (parseQuizMeta ci-dessous).
+ * Les branches `type === "ordering"` / `type === "matching"` ne matchent
+ * jamais en pratique avec les quiz réellement exportés par l'éditeur
+ * (editor/export.ts ne pose `type` que pour la variante texte, cf.
+ * types/quiz.ts) — comportement de scanner.js préservé tel quel, pas « corrigé ».
+ */
+export type QuestionTypeTag = "single" | "multiple" | "text" | "ordering" | "matching";
+
+/** Forme minimale lue sur un item brut du tableau JSON5 par le scanner (pas le
+ * QuizQuestion complet de types/quiz.ts : parseQuizMeta ne lit que ces 3 champs). */
+interface RawQuizItem {
+	examMode?: boolean;
+	multiSelect?: boolean;
+	type?: string;
+}
+
+/** Métadonnées extraites d'un bloc quiz-blocks (parseQuizMeta). */
+export interface QuizMeta {
+	questions: number;
+	types: QuestionTypeTag[];
+	quizType: string;
+}
+
+/**
+ * Entrée du cache du scanner (une par note contenant un bloc quiz-blocks).
+ * `title` vaut toujours `file.basename` (seule valeur jamais assignée, dans
+ * scanVault ET scanFile — scanFile.js d'origine omettait ce champ sur les
+ * mises à jour incrémentales, un oubli de recopie qui rendait `quiz.title`
+ * `undefined` après le premier `create`/`modify` ; corrigé ici en alignant
+ * scanFile sur scanVault pour que le champ reste honnêtement non-optionnel).
+ */
+export interface QuizIndexEntry extends QuizMeta {
+	path: string;
+	basename: string;
+	title: string;
+	mtime: number;
+}
+
+/**
+ * API du scanner de quiz, produite par createScanner(app) (dashboard.js
+ * l'assigne à plugin._scanner, lu ensuite via DashboardView.scanner /
+ * DashboardCtx.scanner).
+ */
+export interface Scanner {
+	init(): Promise<void>;
+	destroy(): void;
+	scanVault(): Promise<void>;
+	scanFile(file: TFile): Promise<void>;
+	getQuizzes(): QuizIndexEntry[];
+	getQuiz(path: string): QuizIndexEntry | null;
+	getTotalQuestions(): number;
+	onChange(callback: (quizzes: QuizIndexEntry[]) => void): () => void;
+}
+
+export function createScanner(app: App): Scanner {
+	const cache = new Map<string, QuizIndexEntry>(); // path → entrée
+	const listeners: Array<(quizzes: QuizIndexEntry[]) => void> = [];
+	const vaultEventRefs: EventRef[] = []; // EventRef des app.vault.on(...) pour les retirer au destroy
 	let scanning = false;
 
 	/* ── Parse un bloc quiz-blocks pour extraire les métadonnées ── */
-	function parseQuizMeta(source) {
+	function parseQuizMeta(source: string): QuizMeta | null {
 		try {
-			const parsed = JSON5.parse(source);
+			const parsed: unknown = JSON5.parse(source);
 			if (!Array.isArray(parsed)) return null;
 
 			// Ignorer l'objet examMode final s'il existe
-			const questions = parsed.filter(q =>
-				q && typeof q === "object" && !q.examMode
-			);
+			const questions = parsed.filter((q): q is RawQuizItem => {
+				if (!q || typeof q !== "object") return false;
+				return !(q as RawQuizItem).examMode;
+			});
 
 			if (questions.length === 0) return null;
 
 			// Détecter les types de questions
-			const typeSet = new Set();
+			const typeSet = new Set<QuestionTypeTag>();
 			for (const q of questions) {
 				if (q.multiSelect) typeSet.add("multiple");
 				else if (q.type === "text") typeSet.add("text");
@@ -42,7 +98,7 @@ function createScanner(app) {
 			}
 
 			// Déterminer le type global du quiz
-			let quizType;
+			let quizType: string;
 			if (typeSet.size > 1) quizType = "Mixte";
 			else if (typeSet.has("single")) quizType = "Choix unique";
 			else if (typeSet.has("multiple")) quizType = "Choix multiple";
@@ -64,7 +120,7 @@ function createScanner(app) {
 	}
 
 	/* ── Extrait le premier bloc quiz-blocks d'un contenu markdown ── */
-	function extractQuizSource(content) {
+	function extractQuizSource(content: string): string | null {
 		const startIdx = content.indexOf(QUIZ_FENCE_START);
 		if (startIdx === -1) return null;
 
@@ -81,7 +137,7 @@ function createScanner(app) {
 	}
 
 	/* ── Scan complet du vault ── */
-	async function scanVault() {
+	async function scanVault(): Promise<void> {
 		scanning = true;
 		cache.clear();
 
@@ -113,7 +169,7 @@ function createScanner(app) {
 	}
 
 	/* ── Scan incrémental d'un seul fichier ── */
-	async function scanFile(file) {
+	async function scanFile(file: TFile): Promise<void> {
 		try {
 			const content = await app.vault.cachedRead(file);
 			const quizSource = extractQuizSource(content);
@@ -131,9 +187,10 @@ function createScanner(app) {
 				return;
 			}
 
-			const entry = {
+			const entry: QuizIndexEntry = {
 				path: file.path,
 				basename: file.basename,
+				title: file.basename,
 				...meta,
 				mtime: file.stat?.mtime || 0
 			};
@@ -152,17 +209,17 @@ function createScanner(app) {
 	}
 
 	/* ── Récupérer les quiz indexés ── */
-	function getQuizzes() {
+	function getQuizzes(): QuizIndexEntry[] {
 		return Array.from(cache.values());
 	}
 
 	/* ── Récupérer un quiz par chemin ── */
-	function getQuiz(path) {
+	function getQuiz(path: string): QuizIndexEntry | null {
 		return cache.get(path) || null;
 	}
 
 	/* ── Récupérer le nombre total de questions ── */
-	function getTotalQuestions() {
+	function getTotalQuestions(): number {
 		let total = 0;
 		for (const quiz of cache.values()) {
 			total += quiz.questions;
@@ -171,7 +228,7 @@ function createScanner(app) {
 	}
 
 	/* ── Écouteurs de changements ── */
-	function onChange(callback) {
+	function onChange(callback: (quizzes: QuizIndexEntry[]) => void): () => void {
 		listeners.push(callback);
 		return () => {
 			const idx = listeners.indexOf(callback);
@@ -179,22 +236,22 @@ function createScanner(app) {
 		};
 	}
 
-	function notifyListeners() {
+	function notifyListeners(): void {
 		for (const cb of listeners) {
 			try { cb(getQuizzes()); } catch { /* ignore */ }
 		}
 	}
 
 	/* ── Setup des events vault ── */
-	function setupVaultListeners() {
+	function setupVaultListeners(): void {
 		vaultEventRefs.push(app.vault.on("create", (file) => {
-			if (file.extension === "md" && !scanning) {
+			if (file instanceof TFile && file.extension === "md" && !scanning) {
 				scanFile(file);
 			}
 		}));
 
 		vaultEventRefs.push(app.vault.on("modify", (file) => {
-			if (file.extension === "md" && !scanning) {
+			if (file instanceof TFile && file.extension === "md" && !scanning) {
 				scanFile(file);
 			}
 		}));
@@ -209,20 +266,20 @@ function createScanner(app) {
 		vaultEventRefs.push(app.vault.on("rename", (file, oldPath) => {
 			if (cache.has(oldPath)) {
 				cache.delete(oldPath);
-				scanFile(file);
-			} else if (file.extension === "md" && !scanning) {
+				if (file instanceof TFile) scanFile(file);
+			} else if (file instanceof TFile && file.extension === "md" && !scanning) {
 				scanFile(file);
 			}
 		}));
 	}
 
 	/* ── Initialisation ── */
-	async function init() {
+	async function init(): Promise<void> {
 		setupVaultListeners();
 		await scanVault();
 	}
 
-	function destroy() {
+	function destroy(): void {
 		for (const ref of vaultEventRefs) {
 			try { app.vault.offref(ref); } catch (_) { /* ignore */ }
 		}
@@ -242,5 +299,3 @@ function createScanner(app) {
 		onChange
 	};
 }
-
-module.exports = createScanner;

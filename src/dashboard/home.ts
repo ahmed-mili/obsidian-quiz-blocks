@@ -1,17 +1,35 @@
-'use strict';
+import { setIcon } from "obsidian";
+import type { DashboardCtx } from "../types/dashboard-ctx";
+import type { QuizIndexEntry } from "./scanner";
+import type { QuizStatRecord } from "./stats-store";
+import { renderQuizCard as renderSharedQuizCard } from "./quiz-card";
 
 /* ══════════════════════════════════════════════════════════
    HOME VIEW — Dashboard
    Header + stats grid + sections "À reprendre" / "Complétés"
 ══════════════════════════════════════════════════════════ */
 
-function createHomeHandlers(ctx) {
+/** Carte de la grille de stats (statCards ci-dessous). */
+interface StatCard {
+	label: string;
+	value: string;
+	sub: string;
+	icon: string;
+	highlight?: boolean;
+	meter?: number;
+}
 
-	function render(container) {
+export interface HomeHandlers {
+	render(container: HTMLElement): void;
+}
+
+export function createHomeHandlers(ctx: DashboardCtx): HomeHandlers {
+
+	function render(container: HTMLElement): void {
 		container.empty();
 
-		const quizzes = ctx.scanner ? ctx.scanner.getQuizzes() : [];
-		const stats = ctx.statsStore ? ctx.statsStore.getAll() : {};
+		const quizzes: QuizIndexEntry[] = ctx.scanner ? ctx.scanner.getQuizzes() : [];
+		const stats: Record<string, QuizStatRecord> = ctx.statsStore ? ctx.statsStore.getAll() : {};
 
 		// ── Premier usage : aucun quiz → onboarding guidé ──
 		if (quizzes.length === 0) {
@@ -47,7 +65,7 @@ function createHomeHandlers(ctx) {
 
 		const genBtn = header.createEl("button", { cls: "qbd-btn qbd-btn--primary" });
 		const genIcon = genBtn.createSpan({ cls: "qbd-btn-icon" });
-		obsidian.setIcon(genIcon, "sparkles");
+		setIcon(genIcon, "sparkles");
 		genBtn.createSpan({ text: "Générer un quiz" });
 		genBtn.addEventListener("click", () => ctx.navigate("ai"));
 
@@ -72,7 +90,7 @@ function createHomeHandlers(ctx) {
 			return s && s.bestScore >= 80;
 		}).length;
 
-		const statCards = [
+		const statCards: StatCard[] = [
 			{ label: "Quiz créés", value: String(quizzes.length), sub: "dans le vault", icon: "layers" },
 			{ label: "Questions totales", value: String(totalQuestions), sub: "toutes notes", icon: "list" },
 			{
@@ -86,7 +104,7 @@ function createHomeHandlers(ctx) {
 			const el = statsGrid.createDiv({ cls: `qbd-stat-card${card.highlight ? " qbd-stat-card--highlight" : ""}` });
 			const head = el.createDiv({ cls: "qbd-stat-head" });
 			const icon = head.createSpan({ cls: "qbd-stat-icon" });
-			obsidian.setIcon(icon, card.icon);
+			setIcon(icon, card.icon);
 			head.createEl("p", { cls: "qbd-stat-label", text: card.label });
 			el.createEl("p", { cls: "qbd-stat-value", text: card.value });
 			if (typeof card.meter === "number") {
@@ -104,13 +122,13 @@ function createHomeHandlers(ctx) {
 			const sectionHeader = section.createDiv({ cls: "qbd-home-section-header" });
 			const todoTitle = sectionHeader.createEl("p", { cls: "qbd-home-section-title" });
 			const todoIcon = todoTitle.createSpan({ cls: "qbd-home-section-title-icon" });
-			obsidian.setIcon(todoIcon, "list-todo");
+			setIcon(todoIcon, "list-todo");
 			todoTitle.createSpan({ text: "À faire" });
 
 			const seeAll = sectionHeader.createEl("button", { cls: "qbd-btn qbd-btn--subtle" });
 			seeAll.createSpan({ text: "Voir tout" });
 			const chevron = seeAll.createSpan({ cls: "qbd-btn-icon qbd-btn-icon--sm" });
-			obsidian.setIcon(chevron, "chevron-right");
+			setIcon(chevron, "chevron-right");
 			seeAll.addEventListener("click", () => ctx.navigate("quizzes"));
 
 			const grid = section.createDiv({ cls: "qbd-home-grid" });
@@ -124,7 +142,7 @@ function createHomeHandlers(ctx) {
 			const section = container.createDiv({ cls: "qbd-home-section" });
 			const doneTitle = section.createEl("p", { cls: "qbd-home-section-title" });
 			const doneIcon = doneTitle.createSpan({ cls: "qbd-home-section-title-icon" });
-			obsidian.setIcon(doneIcon, "circle-check");
+			setIcon(doneIcon, "circle-check");
 			doneTitle.createSpan({ text: "Complétés" });
 
 			const grid = section.createDiv({ cls: "qbd-home-grid" });
@@ -135,7 +153,7 @@ function createHomeHandlers(ctx) {
 
 	}
 
-	function renderResumeHero(container, quiz, stats) {
+	function renderResumeHero(container: HTMLElement, quiz: QuizIndexEntry, stats: QuizStatRecord | null | undefined): void {
 		const total = quiz.questions || (stats && stats.totalQuestions) || 0;
 		const done = stats ? stats.questionsDone : 0;
 		const pct = total > 0 ? Math.round(done / total * 100) : 0;
@@ -148,7 +166,7 @@ function createHomeHandlers(ctx) {
 
 		const label = info.createDiv({ cls: "qbd-resume-label" });
 		const labelIcon = label.createSpan({ cls: "qbd-resume-label-icon" });
-		obsidian.setIcon(labelIcon, "history");
+		setIcon(labelIcon, "history");
 		label.createSpan({ text: "Reprendre là où vous en étiez" });
 
 		info.createEl("p", { cls: "qbd-resume-title", text: quiz.title });
@@ -161,16 +179,16 @@ function createHomeHandlers(ctx) {
 
 		const btn = hero.createEl("button", { cls: "qbd-btn qbd-btn--primary qbd-resume-btn" });
 		const btnIcon = btn.createSpan({ cls: "qbd-btn-icon" });
-		obsidian.setIcon(btnIcon, "play");
+		setIcon(btnIcon, "play");
 		btn.createSpan({ text: "Reprendre" });
 		btn.addEventListener("click", (e) => { e.stopPropagation(); open(); });
 	}
 
-	function renderOnboarding(container) {
+	function renderOnboarding(container: HTMLElement): void {
 		const wrap = container.createDiv({ cls: "qbd-onboarding" });
 
 		const icon = wrap.createDiv({ cls: "qbd-onboarding-icon" });
-		obsidian.setIcon(icon, "graduation-cap");
+		setIcon(icon, "graduation-cap");
 
 		wrap.createEl("h2", { cls: "qbd-onboarding-title", text: "Bienvenue dans Quiz Blocks" });
 		wrap.createEl("p", {
@@ -181,7 +199,7 @@ function createHomeHandlers(ctx) {
 		// Action primaire évidente
 		const primary = wrap.createEl("button", { cls: "qbd-btn qbd-btn--primary qbd-btn--lg" });
 		const pIcon = primary.createSpan({ cls: "qbd-btn-icon" });
-		obsidian.setIcon(pIcon, "sparkles");
+		setIcon(pIcon, "sparkles");
 		primary.createSpan({ text: "Générer mon premier quiz" });
 		primary.addEventListener("click", () => ctx.navigate("ai"));
 
@@ -193,7 +211,7 @@ function createHomeHandlers(ctx) {
 		const manual = wrap.createDiv({ cls: "qbd-onboarding-manual" });
 		const manualHead = manual.createDiv({ cls: "qbd-onboarding-manual-head" });
 		const mIcon = manualHead.createSpan({ cls: "qbd-onboarding-manual-icon" });
-		obsidian.setIcon(mIcon, "code");
+		setIcon(mIcon, "code");
 		manualHead.createSpan({ text: "Créer un quiz à la main" });
 
 		manual.createEl("p", {
@@ -220,24 +238,20 @@ function createHomeHandlers(ctx) {
 
 		const copyBtn = codeWrap.createEl("button", { cls: "qbd-onboarding-copy", attr: { "aria-label": "Copier le bloc" } });
 		const copyIcon = copyBtn.createSpan({ cls: "qbd-btn-icon qbd-btn-icon--sm" });
-		obsidian.setIcon(copyIcon, "copy");
+		setIcon(copyIcon, "copy");
 		copyBtn.addEventListener("click", async () => {
 			try {
 				await navigator.clipboard.writeText(CODE_SAMPLE);
 				copyIcon.empty();
-				obsidian.setIcon(copyIcon, "check");
-				window.setTimeout(() => { copyIcon.empty(); obsidian.setIcon(copyIcon, "copy"); }, 1500);
+				setIcon(copyIcon, "check");
+				window.setTimeout(() => { copyIcon.empty(); setIcon(copyIcon, "copy"); }, 1500);
 			} catch (e) { /* clipboard indisponible : sans effet */ }
 		});
 	}
 
-	function renderQuizCard(container, quiz, stats) {
+	function renderQuizCard(container: HTMLElement, quiz: QuizIndexEntry, stats: QuizStatRecord | null | undefined): HTMLDivElement {
 		return renderSharedQuizCard(container, quiz, stats, (q) => ctx.navigate("detail", { quiz: q }));
 	}
 
 	return { render };
 }
-
-const obsidian = require("obsidian");
-const renderSharedQuizCard = require("./quiz-card");
-module.exports = createHomeHandlers;

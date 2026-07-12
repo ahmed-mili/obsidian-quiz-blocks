@@ -1,21 +1,31 @@
-'use strict';
+import { setIcon } from "obsidian";
+import type { WorkspaceLeaf } from "obsidian";
+import { VIEW_TYPE } from "../editor";
+import type { DashboardCtx } from "../types/dashboard-ctx";
+import type { QuizIndexEntry } from "./scanner";
+import type { QuizStatRecord } from "./stats-store";
+import { renderQuizCard } from "./quiz-card";
 
 /* ══════════════════════════════════════════════════════════
    QUIZZES VIEW — Dashboard
    Header + search + filtres + grid de QuizCards
 ══════════════════════════════════════════════════════════ */
 
-function createQuizzesHandlers(ctx) {
+export interface QuizzesHandlers {
+	render(container: HTMLElement): void;
+}
+
+export function createQuizzesHandlers(ctx: DashboardCtx): QuizzesHandlers {
 	let currentFilter = "Tous";
 	let searchQuery = "";
 
 	const FILTERS = ["Tous", "En cours", "Maîtrisés", "Non commencés"];
 
-	function render(container) {
+	function render(container: HTMLElement): void {
 		container.empty();
 
-		const quizzes = ctx.scanner ? ctx.scanner.getQuizzes() : [];
-		const stats = ctx.statsStore ? ctx.statsStore.getAll() : {};
+		const quizzes: QuizIndexEntry[] = ctx.scanner ? ctx.scanner.getQuizzes() : [];
+		const stats: Record<string, QuizStatRecord> = ctx.statsStore ? ctx.statsStore.getAll() : {};
 
 		// ── Header ──
 		const header = container.createDiv({ cls: "qbd-quizzes-header" });
@@ -23,12 +33,11 @@ function createQuizzesHandlers(ctx) {
 
 		const newBtn = header.createEl("button", { cls: "qbd-btn qbd-btn--ghost" });
 		const newIcon = newBtn.createSpan({ cls: "qbd-btn-icon" });
-		obsidian.setIcon(newIcon, "plus");
+		setIcon(newIcon, "plus");
 		newBtn.createSpan({ text: "Nouveau" });
 		newBtn.addEventListener("click", async () => {
-			const { QuizBuilderView, VIEW_TYPE } = require("../editor");
 			const existing = ctx.app.workspace.getLeavesOfType(VIEW_TYPE);
-			let leaf;
+			let leaf: WorkspaceLeaf;
 			if (existing.length > 0) {
 				leaf = existing[0];
 				ctx.app.workspace.revealLeaf(leaf);
@@ -42,7 +51,7 @@ function createQuizzesHandlers(ctx) {
 		// ── Search ──
 		const searchWrap = container.createDiv({ cls: "qbd-quizzes-search" });
 		const searchIcon = searchWrap.createSpan({ cls: "qbd-quizzes-search-icon" });
-		obsidian.setIcon(searchIcon, "search");
+		setIcon(searchIcon, "search");
 
 		const searchInput = searchWrap.createEl("input", {
 			type: "text",
@@ -51,7 +60,7 @@ function createQuizzesHandlers(ctx) {
 		});
 		searchInput.value = searchQuery;
 		searchInput.addEventListener("input", (e) => {
-			searchQuery = e.target.value;
+			searchQuery = (e.target as HTMLInputElement).value;
 			renderQuizGrid(gridEl, quizzes, stats);
 		});
 
@@ -73,7 +82,7 @@ function createQuizzesHandlers(ctx) {
 		renderQuizGrid(gridEl, quizzes, stats);
 	}
 
-	function renderQuizGrid(gridEl, quizzes, stats) {
+	function renderQuizGrid(gridEl: HTMLElement, quizzes: QuizIndexEntry[], stats: Record<string, QuizStatRecord>): void {
 		gridEl.empty();
 
 		const filtered = quizzes.filter(q => {
@@ -103,7 +112,3 @@ function createQuizzesHandlers(ctx) {
 
 	return { render };
 }
-
-const obsidian = require("obsidian");
-const renderQuizCard = require("./quiz-card");
-module.exports = createQuizzesHandlers;

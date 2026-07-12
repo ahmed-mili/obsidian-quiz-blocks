@@ -1,4 +1,6 @@
-'use strict';
+import { setIcon } from "obsidian";
+import type { QuizIndexEntry } from "./scanner";
+import type { QuizStatRecord } from "./stats-store";
 
 /* ══════════════════════════════════════════════════════════
    QUIZ CARD — composant carte partagé (home + quizzes)
@@ -7,9 +9,12 @@
    `onOpen(quiz)` est appelé au clic (navigation laissée à l'appelant).
 ══════════════════════════════════════════════════════════ */
 
-const obsidian = require("obsidian");
-
-function renderQuizCard(container, quiz, stats, onOpen) {
+export function renderQuizCard(
+	container: HTMLElement,
+	quiz: QuizIndexEntry,
+	stats: QuizStatRecord | null | undefined,
+	onOpen?: (quiz: QuizIndexEntry) => void
+): HTMLDivElement {
 	const card = container.createDiv({ cls: "qbd-quiz-card" });
 	card.dataset.path = quiz.path;
 
@@ -19,7 +24,7 @@ function renderQuizCard(container, quiz, stats, onOpen) {
 	const best = stats ? stats.bestScore : 0;
 	const pct = total > 0 ? Math.round(done / total * 100) : 0;
 
-	let state, stateLabel, stateIcon;
+	let state: string, stateLabel: string, stateIcon: string;
 	if (stats && total > 0 && done >= total) {
 		if (best >= 80) { state = "mastered"; stateLabel = "Maîtrisé"; stateIcon = "circle-check"; }
 		else { state = "review"; stateLabel = "À revoir"; stateIcon = "rotate-ccw"; }
@@ -38,10 +43,10 @@ function renderQuizCard(container, quiz, stats, onOpen) {
 	const head = body.createDiv({ cls: "qbd-quiz-card-head" });
 	const pill = head.createDiv({ cls: `qbd-quiz-card-status qbd-quiz-card-status--${state}` });
 	const sIcon = pill.createSpan({ cls: "qbd-quiz-card-status-icon" });
-	obsidian.setIcon(sIcon, stateIcon);
+	setIcon(sIcon, stateIcon);
 	pill.createSpan({ text: stateLabel });
 	const openEl = head.createSpan({ cls: "qbd-quiz-card-open" });
-	obsidian.setIcon(openEl, "chevron-right");
+	setIcon(openEl, "chevron-right");
 
 	// Titre
 	body.createEl("p", { cls: "qbd-quiz-card-title", text: quiz.title });
@@ -80,5 +85,3 @@ function renderQuizCard(container, quiz, stats, onOpen) {
 
 	return card;
 }
-
-module.exports = renderQuizCard;

@@ -15,65 +15,44 @@
  * littéral ctx réel) et `DashboardView` (l'hôte `this`, qui porte les 5
  * handlers + l'état propre à la vue).
  *
- * scanner/statsStore sont produits par des factories à signature NON-ctx
- * (createScanner(app) et createStatsStore(plugin), src/dashboard/scanner.js
- * et src/dashboard/stats-store.js) et les 5 modules dashboard/*.js listés
- * ci-dessus ne sont PAS encore convertis en .ts → aucun type ne peut être
- * importé depuis eux sans casser `npm run check`. Placeholders `unknown`-based
- * ci-dessous, à remplacer par les vrais types en Task 8 (conversion du lot
- * dashboard).
+ * Task 8a convertit le cluster RENDU (scanner/stats-store/quiz-card/nav/
+ * home/quizzes/detail/effort-canvas) : Scanner/StatsStore sont désormais les
+ * vrais types importés depuis scanner.ts/stats-store.ts. `ai` (dashboard/ai.js)
+ * et `AiClient` (ai-client.js) restent en placeholder `unknown`-based — hors
+ * périmètre 8a (lot IA, tâche suivante).
  */
 
 import type { App, ItemView, Plugin, TFile } from "obsidian";
+import type { Scanner, QuizIndexEntry } from "../dashboard/scanner";
+import type { StatsStore } from "../dashboard/stats-store";
+import type { NavHandlers } from "../dashboard/nav";
+import type { QuizzesHandlers } from "../dashboard/quizzes";
+import type { HomeHandlers } from "../dashboard/home";
+import type { DetailHandlers } from "../dashboard/detail";
 
-/* ════════════════════════════════════════════════════════
-   Placeholders — remplacés par les vrais types en Task 8
-   quand scanner.js / stats-store.js / ai-client.js et les
-   5 modules dashboard/{nav,home,quizzes,detail,ai}.js
-   passeront en .ts. Volontairement `unknown`-based (jamais
-   `any`) : aucun membre n'est garanti tant que le module
-   source reste en JS.
-   ════════════════════════════════════════════════════════ */
+export type { Scanner, StatsStore };
 
-/**
- * Placeholder du scanner de quiz (src/dashboard/scanner.js, createScanner(app)).
- * Usages observés côté dashboard/*.js (non modélisés ici) : init(), destroy(),
- * scanVault(), scanFile(), getQuizzes(), getQuiz(), getTotalQuestions(),
- * onChange(cb) — scanner.js:234-243.
- */
-export interface Scanner {
-	[member: string]: unknown;
-}
-
-/**
- * Placeholder du store de stats (src/dashboard/stats-store.js, createStatsStore(plugin)).
- * Usages observés côté dashboard/*.js (non modélisés ici) : load(), updateRecord(),
- * getRecord(), getAll(), deleteRecord(), formatRelativeTime(), destroy() —
- * stats-store.js:94-102.
- */
-export interface StatsStore {
-	[member: string]: unknown;
-}
+/** Vues possibles du dashboard (dashboard.js:23 currentView, navigate, previousView). */
+export type DashboardViewName = "home" | "quizzes" | "detail" | "ai";
 
 /**
  * Placeholder du client IA (src/dashboard/ai-client.js, createAiClient(plugin)).
  * NE FIGURE PAS dans le littéral ctx ni sur la vue : instancié à la demande,
  * en interne, par le sous-module `ai` (dashboard/ai.js:1072-1073, `const
  * aiClient = require("./ai-client"); const client = aiClient(ctx.plugin);`).
- * Déclaré ici par anticipation pour Task 8 (typage de dashboard/ai.js), qui
- * en aura besoin dès que ai-client.js passera en .ts.
+ * Déclaré ici par anticipation, pour la prochaine tâche (typage de
+ * dashboard/ai.js), qui en aura besoin dès que ai-client.js passera en .ts.
  */
 export interface AiClient {
 	[member: string]: unknown;
 }
 
 /**
- * Placeholder d'un sous-module de handlers dashboard (nav/home/quizzes/detail/ai),
- * produit par sa factory `createXxxHandlers(ctx)` (dashboard/{nav,home,quizzes,
- * detail,ai}.js, toutes encore en .js). Chaque module expose au moins une
- * méthode `render(container, ...)` mais la signature exacte diffère par module
- * (ex. detail.render(container, quiz)) — non modélisé ici pour éviter tout
- * `any` implicite avant Task 8.
+ * Placeholder générique d'un sous-module de handlers dashboard encore en .js.
+ * Après Task 8a, seul `ai` (dashboard/ai.js, createAiHandlers(ctx)) l'utilise
+ * encore — hors périmètre 8a (lot IA). Chaque handler expose au moins une
+ * méthode `render(container, ...)` mais la signature exacte diffère par
+ * module ; non modélisé ici pour éviter tout `any` implicite avant conversion.
  */
 export interface DashboardHandlers {
 	[member: string]: unknown;
@@ -93,11 +72,11 @@ export interface DashboardHandlers {
 export interface DashboardView extends ItemView {
 	plugin: Plugin;
 	/** dashboard.js:23, valeurs réellement utilisées (switch dashboard.js:149-169). */
-	currentView: "home" | "quizzes" | "detail" | "ai";
-	/** Quiz sélectionné pour la vue détail (dashboard.js:24) ; forme réelle non typée, cf. Scanner (Task 8). */
-	selectedQuiz: unknown;
+	currentView: DashboardViewName;
+	/** Quiz sélectionné pour la vue détail (dashboard.js:24). */
+	selectedQuiz: QuizIndexEntry | null;
 	/** Vue précédente, pour le retour depuis "detail" (dashboard.js:25, 131-134). */
-	previousView: string;
+	previousView: DashboardViewName;
 	/** dashboard.js:26, 50 — conteneur sidebar, assigné en onOpen. */
 	navEl: HTMLElement | null;
 	/** dashboard.js:27, 51 — conteneur contenu, assigné en onOpen (nommé `contentEl_` pour ne pas masquer `ItemView.contentEl`). */
@@ -108,15 +87,16 @@ export interface DashboardView extends ItemView {
 	/** ctx sauvegardé sur la vue (dashboard.js:66, `this.ctx = ctx`). */
 	ctx?: DashboardCtx;
 
-	// ── Sous-modules assignés en onOpen (dashboard.js:69-73) — Task 8 remplacera
-	//    DashboardHandlers par le type réel de chaque factory createXxxHandlers. ──
-	nav?: DashboardHandlers;
-	home?: DashboardHandlers;
-	quizzes?: DashboardHandlers;
-	detail?: DashboardHandlers;
+	// ── Sous-modules assignés en onOpen (dashboard.js:69-73) — Task 8a a typé
+	//    nav/home/quizzes/detail avec leur vrai handler-type ; `ai` reste en
+	//    placeholder DashboardHandlers (hors périmètre 8a, lot IA). ──
+	nav?: NavHandlers;
+	home?: HomeHandlers;
+	quizzes?: QuizzesHandlers;
+	detail?: DetailHandlers;
 	ai?: DashboardHandlers;
 
-	navigate(view: string, data?: { quiz?: unknown }): void;
+	navigate(view: DashboardViewName, data?: { quiz?: QuizIndexEntry }): void;
 	renderSidebar(): void;
 	renderCurrentView(): void;
 }
@@ -139,7 +119,7 @@ export interface DashboardCtx {
 	/** Même référence DOM que `view.contentEl_` (dashboard.js:61) — nommé `contentEl` dans le littéral ctx réel. */
 	contentEl: HTMLElement;
 	/** dashboard.js:62, délègue à `view.navigate(view, data)` (dashboard.js:127-139). `data.quiz` est le seul champ lu. */
-	navigate: (view: string, data?: { quiz?: unknown }) => void;
+	navigate: (view: DashboardViewName, data?: { quiz?: QuizIndexEntry }) => void;
 	/** dashboard.js:63, `() => this.app.workspace.getActiveFile()`. */
 	getActiveFile: () => TFile | null;
 }

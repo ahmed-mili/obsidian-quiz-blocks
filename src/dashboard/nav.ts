@@ -1,27 +1,39 @@
-'use strict';
+import { setIcon } from "obsidian";
+import type { DashboardCtx, DashboardViewName } from "../types/dashboard-ctx";
 
 /* ══════════════════════════════════════════════════════════
    NAVIGATION SIDEBAR — Dashboard
    Sidebar avec brand et nav items stylisés.
 ══════════════════════════════════════════════════════════ */
 
-function createNavHandlers(ctx) {
-	let activeNav = "home";
+interface NavItem {
+	key: Exclude<DashboardViewName, "detail">;
+	label: string;
+	icon: string;
+}
 
-	const NAV_ITEMS = [
+export interface NavHandlers {
+	render(container: HTMLElement): void;
+	setActive(key: DashboardViewName): void;
+}
+
+export function createNavHandlers(ctx: DashboardCtx): NavHandlers {
+	let activeNav: DashboardViewName = "home";
+
+	const NAV_ITEMS: NavItem[] = [
 		{ key: "home", label: "Accueil", icon: "home" },
 		{ key: "quizzes", label: "Mes quiz", icon: "layers" },
 		{ key: "ai", label: "Générer", icon: "sparkles" }
 	];
 
-	function render(container) {
+	function render(container: HTMLElement): void {
 		container.empty();
 
 		// Brand header
 		const brand = container.createDiv({ cls: "qbd-nav-brand" });
 		const brandRow = brand.createDiv({ cls: "qbd-nav-brand-row" });
 		const brandIcon = brandRow.createSpan({ cls: "qbd-nav-brand-icon" });
-		obsidian.setIcon(brandIcon, "graduation-cap");
+		setIcon(brandIcon, "graduation-cap");
 		brandRow.createEl("span", { cls: "qbd-nav-brand-title", text: "Quiz Blocks" });
 
 		// Separator
@@ -37,7 +49,7 @@ function createNavHandlers(ctx) {
 			});
 
 			const iconWrap = btn.createSpan({ cls: "qbd-nav-icon" });
-			obsidian.setIcon(iconWrap, item.icon);
+			setIcon(iconWrap, item.icon);
 
 			btn.createSpan({ cls: "qbd-nav-label", text: item.label });
 
@@ -53,12 +65,9 @@ function createNavHandlers(ctx) {
 
 	}
 
-	function setActive(key) {
+	function setActive(key: DashboardViewName): void {
 		activeNav = key;
 	}
 
 	return { render, setActive };
 }
-
-const obsidian = require("obsidian");
-module.exports = createNavHandlers;

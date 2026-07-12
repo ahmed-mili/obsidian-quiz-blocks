@@ -1,5 +1,3 @@
-'use strict';
-
 /* ══════════════════════════════════════════════════════════
    EFFORT CANVAS — piste Ultracode du slider d'effort Claude.
    Port fidèle du handoff « design_handoff_effort_slider »
@@ -15,16 +13,32 @@
 
 /* Bruit déterministe par pixel — NE PAS remplacer par Math.random()
    (identités stables des points : toute l'animation en dépend). */
-function hash(x, y) {
+function hash(x: number, y: number): number {
 	let h = x * 374761393 + y * 668265263;
 	h = (h ^ (h >> 13)) * 1274126177;
 	h = h ^ (h >> 16);
 	return ((h >>> 0) % 1000) / 1000;
 }
 
-function hexRGB(hex) {
+function hexRGB(hex: string): [number, number, number] {
 	const h = hex.replace("#", "");
 	return [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16)];
+}
+
+/** Options de createEffortTrackFx (accent hex, vitesse, valeur initiale 0..1). */
+export interface EffortTrackFxOptions {
+	accent?: string;
+	speed?: number;
+	value?: number;
+}
+
+/** API retournée par createEffortTrackFx. */
+export interface EffortTrackFx {
+	setValue(v: number, animate?: boolean): void;
+	setUltra(on: boolean): void;
+	/** Rejoue l'animation de chargement (piste vide → remplissage). */
+	replay(): void;
+	destroy(): void;
 }
 
 /*
@@ -38,7 +52,7 @@ function hexRGB(hex) {
  * chargement droite→gauche. reduced-motion : une frame statique par
  * changement, aucune boucle rAF.
  */
-function createEffortTrackFx(trackEl, thumbEl, opts) {
+export function createEffortTrackFx(trackEl: HTMLElement, thumbEl: HTMLElement, opts: EffortTrackFxOptions): EffortTrackFx {
 	const accent = hexRGB(opts.accent || "#a78bfa");
 	const speed = opts.speed || 0.3;
 	const reduceMotion = !!(window.matchMedia
@@ -57,11 +71,11 @@ function createEffortTrackFx(trackEl, thumbEl, opts) {
 	let raf = 0;
 	let dead = false;
 
-	function schedule() {
+	function schedule(): void {
 		if (!raf && !dead) raf = requestAnimationFrame(frame);
 	}
 
-	function frame(now) {
+	function frame(now: number): void {
 		raf = 0;
 		if (tweening) {
 			let p = (now - tweenT0) / 150;
@@ -73,7 +87,7 @@ function createEffortTrackFx(trackEl, thumbEl, opts) {
 		if ((ultra && !reduceMotion) || tweening) schedule();
 	}
 
-	function draw(now) {
+	function draw(now: number): void {
 		const dpr = window.devicePixelRatio || 1;
 		const W = trackEl.clientWidth, H = trackEl.clientHeight;
 		if (!W) return;
@@ -84,6 +98,7 @@ function createEffortTrackFx(trackEl, thumbEl, opts) {
 
 		if (canvas.width !== W * dpr) { canvas.width = W * dpr; canvas.height = H * dpr; }
 		const ctx = canvas.getContext("2d");
+		if (!ctx) return;
 		ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 		ctx.clearRect(0, 0, W, H);
 
@@ -105,7 +120,7 @@ function createEffortTrackFx(trackEl, thumbEl, opts) {
 
 		// 4 mini-vagues décalées, en continu (jamais de pause)
 		const waveTravel = 0.55, waveCycle = 0.55, NW = 4;
-		const waves = [];
+		const waves: Array<{ wc: number; wi: number }> = [];
 		for (let k = 0; k < NW; k++) {
 			const tk = ts + (k * waveCycle) / NW;
 			const wp = tk % waveCycle;
@@ -144,7 +159,7 @@ function createEffortTrackFx(trackEl, thumbEl, opts) {
 
 				// ~40% des points ne s'allument jamais (restent violet éteint)
 				const nid3 = hash(c + 1733, r + 57);
-				let lit;
+				let lit: number;
 				if (nid3 < 0.4) {
 					lit = 0;
 				} else if (nid2 < 0.2) {
@@ -174,7 +189,7 @@ function createEffortTrackFx(trackEl, thumbEl, opts) {
 				// fondu de 50%→2%, invisible sur les 2% gauche (amendé par
 				// Ahmed 2026-07-10 : le 1/10 du handoff était trop agressif,
 				// affiné 6 % → 4 % → 2 %)
-				let env;
+				let env: number;
 				if (fx >= 0.5) env = 1;
 				else if (fx <= 0.02) env = 0;
 				else { const q = (fx - 0.02) / 0.48; env = q * q * (3 - 2 * q); }
@@ -207,7 +222,7 @@ function createEffortTrackFx(trackEl, thumbEl, opts) {
 	}
 
 	return {
-		setValue(v, animate) {
+		setValue(v: number, animate?: boolean): void {
 			value = Math.min(1, Math.max(0, v));
 			if (animate && !reduceMotion) {
 				tweenFrom = shown;
@@ -219,7 +234,7 @@ function createEffortTrackFx(trackEl, thumbEl, opts) {
 			}
 			schedule();
 		},
-		setUltra(on) {
+		setUltra(on: boolean): void {
 			on = !!on;
 			if (on === ultra) return;
 			ultra = on;
@@ -227,17 +242,19 @@ function createEffortTrackFx(trackEl, thumbEl, opts) {
 				t0 = performance.now(); // rejoue le chargement droite→gauche
 			} else {
 				const c = canvas.getContext("2d");
-				c.setTransform(1, 0, 0, 1, 0, 0);
-				c.clearRect(0, 0, canvas.width, canvas.height);
+				if (c) {
+					c.setTransform(1, 0, 0, 1, 0, 0);
+					c.clearRect(0, 0, canvas.width, canvas.height);
+				}
 			}
 			schedule();
 		},
 		/** Rejoue l'animation de chargement (piste vide → remplissage). */
-		replay() {
+		replay(): void {
 			t0 = performance.now();
 			schedule();
 		},
-		destroy() {
+		destroy(): void {
 			dead = true;
 			if (raf) cancelAnimationFrame(raf);
 			raf = 0;
@@ -245,5 +262,3 @@ function createEffortTrackFx(trackEl, thumbEl, opts) {
 		},
 	};
 }
-
-module.exports = { createEffortTrackFx };
