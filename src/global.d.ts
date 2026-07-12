@@ -16,4 +16,10 @@ declare global {
     // Viewport (engine/viewport.ts)
     __quizAppliedWidth?: number;
   }
+
+  interface Window {
+    // React global optionnel, injecté par un autre plugin (editor/utils.ts loadReact)
+    React?: unknown;
+    ReactDOM?: unknown;
+  }
 }

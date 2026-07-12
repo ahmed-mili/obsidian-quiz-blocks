@@ -1,8 +1,16 @@
-'use strict';
+import { setIcon } from "obsidian";
+import type { ResourceButton } from "../types/quiz";
 
-const obsidian = require("obsidian");
+type QuestionTypeKey = "single" | "multi" | "ordering" | "matching" | "text" | "cmd" | "powershell" | "bash";
 
-const Q_TYPES = [
+interface QuizTypeDef {
+	key: QuestionTypeKey;
+	label: string;
+	lucide: string;
+	desc: string;
+}
+
+const Q_TYPES: QuizTypeDef[] = [
 	{ key: "single", label: "Choix unique", lucide: "circle-dot", desc: "Une seule bonne réponse" },
 	{ key: "multi", label: "Choix multiple", lucide: "check-square", desc: "Plusieurs bonnes réponses" },
 	{ key: "ordering", label: "Classement", lucide: "arrow-up-down", desc: "Ordonner les éléments" },
@@ -13,18 +21,48 @@ const Q_TYPES = [
 	{ key: "bash", label: "Terminal Bash", lucide: "terminal", desc: "Terminal Linux/Bash" },
 ];
 
-function loadReact() {
+interface ReactBridge {
+	React: unknown;
+	ReactDOM: unknown;
+}
+
+function loadReact(): ReactBridge {
 	if (typeof window.React !== 'undefined' && typeof window.ReactDOM !== 'undefined') {
 		return { React: window.React, ReactDOM: window.ReactDOM };
 	}
 	return { React: null, ReactDOM: null };
 }
 
-function _setIcon(el, name) { try { obsidian.setIcon(el, name); } catch (_) {} }
-function _iconSpan(parent, name, cls) { const s = parent.createSpan({ cls: cls || "qb-icon" }); _setIcon(s, name); return s; }
+function _setIcon(el: HTMLElement, name: string): void { try { setIcon(el, name); } catch (_) { /* noop */ } }
+function _iconSpan(parent: HTMLElement, name: string, cls?: string): HTMLSpanElement { const s = parent.createSpan({ cls: cls || "qb-icon" }); _setIcon(s, name); return s; }
 
-function makeDefault(type) {
-	const b = { _type: type, _id: Math.random().toString(36).slice(2, 10), title: "", prompt: "", hint: "", explain: "", resourceButton: null, _useHtmlPrompt: false };
+/** Question en cours d'édition côté éditeur — champs internes (_type/_id) en plus des champs de données. */
+interface DraftQuestion {
+	_type: QuestionTypeKey;
+	_id: string;
+	title: string;
+	prompt: string;
+	hint: string;
+	explain: string;
+	resourceButton: ResourceButton | null;
+	_useHtmlPrompt: boolean;
+	options?: string[];
+	correctIndex?: number;
+	correctIndices?: number[];
+	slots?: string[];
+	possibilities?: string[];
+	correctOrder?: number[];
+	rows?: string[];
+	choices?: string[];
+	correctMap?: number[];
+	placeholder?: string;
+	acceptedAnswers?: string[];
+	caseSensitive?: boolean;
+	commandPrefix?: string;
+}
+
+function makeDefault(type: QuestionTypeKey): DraftQuestion {
+	const b: DraftQuestion = { _type: type, _id: Math.random().toString(36).slice(2, 10), title: "", prompt: "", hint: "", explain: "", resourceButton: null, _useHtmlPrompt: false };
 	switch (type) {
 		case "single": return { ...b, options: ["", ""], correctIndex: 0 };
 		case "multi": return { ...b, options: ["", ""], correctIndices: [] };
@@ -38,7 +76,7 @@ function makeDefault(type) {
 	}
 }
 
-function md2html(src) {
+function md2html(src?: string | null): string {
 	if (!src) return "";
 	let text = String(src);
 
@@ -47,8 +85,8 @@ function md2html(src) {
 
 	// Étape 1: Extraire les blocs de code AVANT toute échappement HTML
 	// Utiliser un placeholder qui ne contient PAS de < ou > pour éviter l'échappement
-	const codeBlocks = [];
-	text = text.replace(/```(\w*)\n?([\s\S]*?)```/g, (match, lang, code) => {
+	const codeBlocks: string[] = [];
+	text = text.replace(/```(\w*)\n?([\s\S]*?)```/g, (_match: string, _lang: string, code: string) => {
 		const idx = codeBlocks.length;
 		const placeholder = `__CODEBLOCK_${idx}__`;
 		// Stocker le code et échapper son contenu pour HTML immédiatement
@@ -84,9 +122,9 @@ function md2html(src) {
 	return text;
 }
 
-function escHtml(s) { return String(s ?? "").replace(/"/g, "&quot;").replace(/'/g, "&#39;"); }
+function escHtml(s?: unknown): string { return String(s ?? "").replace(/"/g, "&quot;").replace(/'/g, "&#39;"); }
 
-function esc5(s) {
+function esc5(s?: unknown): string {
 	return String(s ?? "")
 		.replace(/\\/g, "\\\\")    // Échapper les antislashs d'abord
 		.replace(/'/g, "\\'")          // Échapper les apostrophes (car on utilise ' pour délimiter)
@@ -97,4 +135,4 @@ function esc5(s) {
 	// par md2html() avant d'appeler esc5().
 }
 
-module.exports = { Q_TYPES, loadReact, _setIcon, _iconSpan, makeDefault, md2html, escHtml, esc5 };
+export { Q_TYPES, loadReact, _setIcon, _iconSpan, makeDefault, md2html, escHtml, esc5 };

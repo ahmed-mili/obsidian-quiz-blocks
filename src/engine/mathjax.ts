@@ -1,5 +1,3 @@
-'use strict';
-
 /* ══════════════════════════════════════════════════════════
    MATHJAX — rendu LaTeX natif Obsidian dans le quiz
    Syntaxe $...$ (inline) et $$...$$ (bloc), rendue via l'API
@@ -12,11 +10,14 @@
 
 // loadMathJax() est mémoïsée : MathJax n'est chargé qu'une fois par
 // session, les appels suivants réutilisent la même promesse.
-let __mathJaxReady = null;
+// require("obsidian") reste lazy (à l'intérieur des fonctions) : seul
+// l'appel à loadMathJax() doit être différé jusqu'au premier rendu math,
+// pas la résolution du module (déjà disponible synchrone côté Obsidian).
+let __mathJaxReady: Promise<void> | null = null;
 
-function ensureMathJax() {
+function ensureMathJax(): Promise<void> {
 	if (!__mathJaxReady) {
-		__mathJaxReady = require("obsidian").loadMathJax();
+		__mathJaxReady = (require("obsidian") as typeof import("obsidian")).loadMathJax();
 		// Un échec ne doit pas être mémoïsé : sinon UNE erreur transitoire
 		// (appel très tôt, environnement dégradé) tue le rendu math pour
 		// toute la session. On retentera au prochain mathifyElement.
@@ -31,7 +32,7 @@ function ensureMathJax() {
    ligne dans un inline. */
 const MATH_SEGMENT = /\$\$([^$]+?)\$\$|\$(?!\s)([^$\n]*?[^$\s])\$/g;
 
-function hasMath(text) {
+function hasMath(text: unknown): boolean {
 	if (typeof text !== "string" || text.indexOf("$") === -1) return false;
 	MATH_SEGMENT.lastIndex = 0;
 	return MATH_SEGMENT.test(text);
@@ -42,7 +43,7 @@ function hasMath(text) {
    appel) et fire-and-forget : un re-render régénère le HTML source,
    donc jamais de double traitement. Les zones littérales (code, pre,
    textarea, éléments déjà rendus par MathJax) sont ignorées. */
-async function mathifyElement(root) {
+async function mathifyElement(root: HTMLElement | null | undefined): Promise<void> {
 	if (!root) return;
 	const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
 		acceptNode(node) {
@@ -57,9 +58,10 @@ async function mathifyElement(root) {
 			return NodeFilter.FILTER_ACCEPT;
 		}
 	});
-	const jobs = [];
+	const jobs: Text[] = [];
 	while (walker.nextNode()) {
-		if (hasMath(walker.currentNode.nodeValue)) jobs.push(walker.currentNode);
+		const current = walker.currentNode as Text;
+		if (hasMath(current.nodeValue)) jobs.push(current);
 	}
 	if (!jobs.length) return;
 
@@ -72,15 +74,16 @@ async function mathifyElement(root) {
 		console.warn("[quiz-blocks] MathJax indisponible:", e);
 		return;
 	}
-	const { renderMath, finishRenderMath } = require("obsidian");
+	const { renderMath, finishRenderMath } = require("obsidian") as typeof import("obsidian");
 	for (const node of jobs) {
 		// replaceWith exige un parent ; un re-render a pu orpheliner le
 		// node pendant le chargement MathJax. (Un container encore détaché
 		// du DOM reste traité — l'embed peut monter avant insertion.)
 		if (!node.parentNode) continue;
-		const text = node.nodeValue;
+		const text = node.nodeValue ?? "";
 		const frag = document.createDocumentFragment();
-		let last = 0, m;
+		let last = 0;
+		let m: RegExpExecArray | null;
 		MATH_SEGMENT.lastIndex = 0;
 		while ((m = MATH_SEGMENT.exec(text))) {
 			if (m.index > last) frag.appendChild(document.createTextNode(text.slice(last, m.index)));
@@ -100,4 +103,4 @@ async function mathifyElement(root) {
 	finishRenderMath();
 }
 
-module.exports = { mathifyElement, hasMath };
+export { mathifyElement, hasMath };
