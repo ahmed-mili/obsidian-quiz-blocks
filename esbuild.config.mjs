@@ -65,7 +65,7 @@ async function bundleCSS() {
 }
 
 const ctx = await esbuild.context({
-	entryPoints: ["src/main.js"],
+	entryPoints: ["src/main.ts"],
 	outfile: "main.js",
 	bundle: true,
 	format: "cjs",
