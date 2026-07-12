@@ -147,10 +147,10 @@ Expected : `package.json` gagne `typescript`, `obsidian`, `@types/node` en devDe
     "forceConsistentCasingInFileNames": true,
     "types": ["node"]
   },
-  "include": ["src/**/*.ts", "src/**/*.d.ts"]
+  "include": ["src/**/*.ts", "src/**/*.d.ts", "src/**/*.js"]
 }
 ```
-Note : `allowJs: true` + `checkJs: false` permettent la coexistence `.js`/`.ts` pendant la migration. `module`/`moduleResolution` = `ESNext`/`Bundler` collent au comportement d'esbuild (pas d'extensions `.js` forcées).
+Note : `allowJs: true` + `checkJs: false` permettent la coexistence `.js`/`.ts` pendant la migration ; les `.js` sont inclus dans le programme (résolution des imports `.ts`→`.js`) mais non vérifiés. Inclure `src/**/*.js` évite aussi l'erreur `TS18003 No inputs were found` tant qu'aucun `.ts` n'existe (Task 1). `module`/`moduleResolution` = `ESNext`/`Bundler` collent au comportement d'esbuild (pas d'extensions `.js` forcées). Le glob `src/**/*.js` est retiré de `include` à la finalisation (Task 10).
 
 - [ ] **Step 3 : Ajouter les scripts npm**
 
@@ -648,7 +648,7 @@ Une fois zéro `.js` dans `src/`, retirer les béquilles de migration :
 "allowJs": false,
 "checkJs": true
 ```
-(ou simplement retirer les deux lignes `allowJs`/`checkJs`, `allowJs` valant `false` par défaut).
+(ou simplement retirer les deux lignes `allowJs`/`checkJs`, `allowJs` valant `false` par défaut). Retirer aussi le glob `"src/**/*.js"` de `include`, qui devient `["src/**/*.ts", "src/**/*.d.ts"]`.
 
 - [ ] **Step 5 : Vérifier qu'aucun `.js` ne subsiste dans `src/`**
 
