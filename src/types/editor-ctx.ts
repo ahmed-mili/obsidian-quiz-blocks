@@ -10,13 +10,13 @@
  * getter/setter `activeQuestion`, les utilitaires greffés et les 6 sous-modules
  * (désormais typés — Task 6a a converti editor/*.js en .ts). `EditorHostView`
  * ci-dessous porte le socle d'état garanti par attachQuizEditorCore ainsi que
- * les méthodes aplaties effectivement lues via `view` par les modules convertis
- * en Task 6a. Les méthodes aplaties restantes (buildUI, moveQuestion, _field,
- * showTypeModal, renderPreview, _close*Panel, _ensureHintOverlay…) et la classe
- * QuizBuilderView seront ajoutées en Task 6b, à la conversion de editor.js.
+ * TOUTES les méthodes aplaties greffées sur `view` (les 6 sous-modules + les
+ * méthodes partagées importQuizSource/openQuizFile/saveToSourceFile/
+ * scheduleSave/convertParsedToInternal) et les champs de la vue onglet
+ * (leaf, getDisplayText) — finalisé en Task 6b, à la conversion de editor.ts.
  */
 
-import type { App, Plugin, TFile } from "obsidian";
+import type { App, Plugin, TFile, WorkspaceLeaf } from "obsidian";
 import type { ExamOptions } from "./quiz";
 import type { parseQuizSource } from "../quiz-utils";
 import type * as EditorUtils from "../editor/utils";
@@ -33,6 +33,8 @@ import type { HintHandlers } from "../editor/hint";
 
 // ── Classes de modale (editor/modals.ts, converti en Task 6a) ──
 import type { ConfirmModal, TypePickerModal, ImportQuizModal, QuizFileSuggestModal, ImportFromNoteModal } from "../editor/modals";
+// ── Forme brute d'une question importée (editor/modals.ts) : signature de convertParsedToInternal ──
+import type { ParsedQuizItem } from "../editor/modals";
 
 /* ════════════════════════════════════════════════════════
    Types d'état dérivés de l'assemblage réel (editor.js)
@@ -80,11 +82,10 @@ export interface EditorPanelWidths {
  * 386-392, qui étend `obsidian.ItemView`), SOIT un simple objet sans `leaf`
  * (éditeur embarqué dans la page "Générer" du dashboard). D'où un type
  * dédié plutôt que `ItemView` strict : seuls les champs effectivement
- * assignés par attachQuizEditorCore (et les méthodes aplaties lues par les
- * sous-modules) sont modélisés ici. Les méthodes aplaties non encore lues par
- * un module converti (buildUI, moveQuestion, _field, renderPreview, etc.) et
- * les champs propres à la vue onglet (leaf, getDisplayText…) restent à AJOUTER
- * EN TASK 6b, à la conversion de editor.js.
+ * assignés par attachQuizEditorCore (et les méthodes aplaties greffées sur
+ * `view`) sont modélisés ici. La classe QuizBuilderView (editor.ts) passe
+ * `this as unknown as EditorHostView` à attachQuizEditorCore, qui la MUTE en
+ * hôte complet — d'où le cast : les membres ci-dessous sont assignés au runtime.
  */
 export interface EditorHostView {
 	app: App;
@@ -137,21 +138,49 @@ export interface EditorHostView {
 	/** Handler Échap de la modale d'indice (editor/hint.ts), attaché/détaché à la volée. */
 	_hintEscHandler?: ((e: KeyboardEvent) => void) | null;
 
-	// ── Méthodes aplaties lues via `view` par les modules convertis (Task 6a) ──
+	// ── Champs propres à la VUE ONGLET (QuizBuilderView, editor.ts) — absents
+	//    de l'éditeur EMBARQUÉ du dashboard, d'où l'optionalité ──
+	/** WorkspaceLeaf de l'onglet (ItemView.leaf) ; absent pour l'éditeur embarqué (editor.ts, importQuizSource). */
+	leaf?: WorkspaceLeaf;
+	/** Titre de l'onglet ; réécrit dynamiquement au nom du fichier source (editor.ts, `view.getDisplayText = …`). */
+	getDisplayText?(): string;
+
+	// ── Méthodes aplaties greffées sur `view` par attachQuizEditorCore
+	//    (editor.ts:113-143) — typées par indexed-access sur le handler d'origine ──
 	render: EditorUIHandlers["render"];
 	syncPanels: EditorUIHandlers["syncPanels"];
-	renderSidebar: SidebarHandlers["renderSidebar"];
-	renderEditor: EditorFormHandlers["renderEditor"];
-	renderCode: PreviewHandlers["renderCode"];
-	schedulePreview: PreviewHandlers["schedulePreview"];
-	_resolveImagesInHtml: PreviewHandlers["_resolveImagesInHtml"];
-	_openHint: HintHandlers["_openHint"];
+	buildUI: EditorUIHandlers["buildUI"];
+	showTypeModal: EditorUIHandlers["showTypeModal"];
 	_setupResizer: ResizeHandlers["_setupResizer"];
+	_closeLeftPanel: ResizeHandlers["_closeLeftPanel"];
+	_closeRightPanel: ResizeHandlers["_closeRightPanel"];
+	_resizePanels: ResizeHandlers["_resizePanels"];
+	renderSidebar: SidebarHandlers["renderSidebar"];
+	moveQuestion: SidebarHandlers["moveQuestion"];
+	deleteQuestion: SidebarHandlers["deleteQuestion"];
+	renderEditor: EditorFormHandlers["renderEditor"];
+	_field: EditorFormHandlers["_field"];
+	_resourceSection: EditorFormHandlers["_resourceSection"];
+	_renderTypeFields: EditorFormHandlers["_renderTypeFields"];
+	_arrayEditor: EditorFormHandlers["_arrayEditor"];
+	schedulePreview: PreviewHandlers["schedulePreview"];
+	renderPreview: PreviewHandlers["renderPreview"];
+	renderCode: PreviewHandlers["renderCode"];
+	_resolveImagesInHtml: PreviewHandlers["_resolveImagesInHtml"];
+	_ensureHintOverlay: HintHandlers["_ensureHintOverlay"];
+	_applyHintTheme: HintHandlers["_applyHintTheme"];
+	_openHint: HintHandlers["_openHint"];
+	_closeHint: HintHandlers["_closeHint"];
+	_addHintEscHandler: HintHandlers["_addHintEscHandler"];
+	_removeHintEscHandler: HintHandlers["_removeHintEscHandler"];
 
-	// ── Méthodes partagées définies dans attachQuizEditorCore (editor.js:150-378) ──
+	// ── Méthodes partagées définies dans attachQuizEditorCore (editor.ts:170-395) ──
 	importQuizSource(source: string, fileName?: string | null, opts?: { silent?: boolean }): Promise<void>;
+	openQuizFile(file: TFile, source: string): Promise<void>;
 	saveToSourceFile?(): Promise<void>;
 	scheduleSave?(): void;
+	/** Convertit une question brute (JSON5 importé) en brouillon interne (editor.ts, convertParsedToInternal). */
+	convertParsedToInternal(q: ParsedQuizItem): DraftQuestion;
 
 	// ── Callbacks UI installés par editor/ui.ts (buildUI) ──
 	updateExamUIState?(): void;

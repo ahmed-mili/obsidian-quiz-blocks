@@ -11,7 +11,7 @@ import type { ResourceButton } from "../types/quiz";
  * mode-examen. Forme volontairement permissive (index signature) : l'import
  * lit des champs hétérogènes et préserve les clés inconnues (_extraFields).
  */
-interface ParsedQuizItem {
+export interface ParsedQuizItem {
 	[key: string]: unknown;
 	examMode?: boolean;
 	examDurationMinutes?: number;

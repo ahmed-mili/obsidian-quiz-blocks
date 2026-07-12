@@ -1,19 +1,27 @@
-'use strict';
+import { ItemView, Notice } from "obsidian";
+import type { App, Plugin, TFile, WorkspaceLeaf } from "obsidian";
+import { parseQuizSource } from "./quiz-utils";
+import { Q_TYPES, loadReact, _setIcon, _iconSpan, makeDefault, md2html, escHtml, esc5 } from "./editor/utils";
+import type { DraftQuestion, QuestionTypeKey } from "./editor/utils";
+import { exportQuestion, exportAll, exportAllWithFence } from "./editor/export";
+import { ConfirmModal, TypePickerModal, ImportQuizModal, QuizFileSuggestModal, ImportFromNoteModal, _htmlToText } from "./editor/modals";
+import type { ParsedQuizItem } from "./editor/modals";
 
-const obsidian = require("obsidian");
-const { parseQuizSource } = require("./quiz-utils");
-const { Q_TYPES, loadReact, _setIcon, _iconSpan, makeDefault, md2html, escHtml, esc5 } = require("./editor/utils");
-const { exportQuestion, exportAll, exportAllWithFence } = require("./editor/export");
-const { ConfirmModal, TypePickerModal, ImportQuizModal, QuizFileSuggestModal, ImportFromNoteModal, _htmlToText } = require("./editor/modals");
+// C1 (plan) : les 6 factories des sous-modules editor/* sont désormais des
+// EXPORTS NOMMÉS (Task 6a). L'ancien `const createX = require("./editor/x")`
+// consommait le module ENTIER en supposant que le `module.exports` était la
+// fonction — après conversion ESM ce require renvoyait le namespace, cassant
+// l'appel au runtime. Les imports nommés ci-dessous rétablissent la parité.
+import { createEditorUIHandlers } from "./editor/ui";
+import { createResizeHandlers } from "./editor/resize";
+import { createSidebarHandlers } from "./editor/sidebar";
+import { createEditorFormHandlers } from "./editor/editor-form";
+import { createPreviewHandlers } from "./editor/preview";
+import { createHintHandlers } from "./editor/hint";
 
-const createEditorUIHandlers = require("./editor/ui");
-const createResizeHandlers = require("./editor/resize");
-const createSidebarHandlers = require("./editor/sidebar");
-const createEditorFormHandlers = require("./editor/editor-form");
-const createPreviewHandlers = require("./editor/preview");
-const createHintHandlers = require("./editor/hint");
+import type { EditorCtx, EditorHostView, EditorExamOptions } from "./types/editor-ctx";
 
-const VIEW_TYPE = "quiz-blocks-builder";
+export const VIEW_TYPE = "quiz-blocks-builder";
 
 /* ════════════════════════════════════════════════════════
    CŒUR DE L'ÉDITEUR — attachQuizEditorCore(view, host, app, plugin)
@@ -22,10 +30,10 @@ const VIEW_TYPE = "quiz-blocks-builder";
    (QuizBuilderView) ET par l'éditeur EMBARQUÉ dans la page Générer
    du dashboard (`view` y est un simple objet, sans leaf).
    ════════════════════════════════════════════════════════ */
-function attachQuizEditorCore(view, host, app, plugin) {
+export function attachQuizEditorCore(view: EditorHostView, host: HTMLElement, app: App, plugin: Plugin): EditorHostView {
 	view.app = view.app || app;
 	view.plugin = plugin;
-	// Les handlers (ui.js…) lisent view.contentEl : pour la vue onglet c'est
+	// Les handlers (ui.ts…) lisent view.contentEl : pour la vue onglet c'est
 	// le contentEl de l'ItemView, pour l'embed c'est le host fourni.
 	view.contentEl = view.contentEl || host;
 	view.questions = [Object.assign(makeDefault("single"), { title: "Question 1" })];
@@ -51,7 +59,11 @@ function attachQuizEditorCore(view, host, app, plugin) {
 	view._minPanelWidth = 50;
 	view._hideThreshold = 10;
 
-	// Créer le contexte partagé (ctx) pour injection de dépendances
+	// Créer le contexte partagé (ctx) pour injection de dépendances.
+	// Cast unique documenté : à ce point les 6 slots de sous-modules (ui,
+	// resize, sidebar, editorForm, preview, hint) ne sont pas encore greffés
+	// (ils le seront via Object.assign ci-dessous, une fois les handlers
+	// construits) — `as EditorCtx` scelle la forme finale attendue.
 	const ctx = {
 		view,
 		app: view.app,
@@ -68,8 +80,8 @@ function attachQuizEditorCore(view, host, app, plugin) {
 		_hideThreshold: view._hideThreshold,
 		_previewDebounce: view._previewDebounce,
 
-		get activeQuestion() { return ctx.questions[ctx.activeIdx]; },
-		set activeQuestion(v) { ctx.questions[ctx.activeIdx] = v; },
+		get activeQuestion(): DraftQuestion { return ctx.questions[ctx.activeIdx]; },
+		set activeQuestion(v: DraftQuestion) { ctx.questions[ctx.activeIdx] = v; },
 
 		Q_TYPES,
 		loadReact,
@@ -89,7 +101,7 @@ function attachQuizEditorCore(view, host, app, plugin) {
 		QuizFileSuggestModal,
 		ImportFromNoteModal,
 		VIEW_TYPE
-	};
+	} as EditorCtx;
 
 	// Initialiser les handlers
 	const ui = createEditorUIHandlers(ctx);
@@ -147,16 +159,16 @@ function attachQuizEditorCore(view, host, app, plugin) {
 
 	// ── Méthodes partagées (vue onglet + éditeur embarqué) ──
 
-	view.importQuizSource = async function (source, fileName = null, opts = {}) {
+	view.importQuizSource = async function (source: string, fileName: string | null = null, opts: { silent?: boolean } = {}): Promise<void> {
 		try {
-			const parsed = parseQuizSource(source);
+			const parsed = parseQuizSource(source) as ParsedQuizItem[];
 			if (!Array.isArray(parsed) || parsed.length === 0) {
-				new obsidian.Notice("Aucune question trouvée");
+				new Notice("Aucune question trouvée");
 				return;
 			}
 
-			const questions = [];
-			let examOptions = null;
+			const questions: DraftQuestion[] = [];
+			let examOptions: EditorExamOptions | null = null;
 
 			for (const q of parsed) {
 				if (q.examMode) {
@@ -174,7 +186,7 @@ function attachQuizEditorCore(view, host, app, plugin) {
 			}
 
 			if (questions.length === 0) {
-				new obsidian.Notice("Aucune question valide trouvée");
+				new Notice("Aucune question valide trouvée");
 				return;
 			}
 
@@ -201,11 +213,13 @@ function attachQuizEditorCore(view, host, app, plugin) {
 			// Rafraîchir le titre de l'onglet
 			if (view.leaf && view.sourceFile) {
 				// Mettre à jour getDisplayText pour retourner le nom du fichier
-				view.getDisplayText = () => view.sourceFile.basename;
+				view.getDisplayText = () => view.sourceFile!.basename;
 
-				// Forcer le rafraîchissement via updateHeader (méthode interne)
-				if (view.leaf.updateHeader) {
-					view.leaf.updateHeader();
+				// Forcer le rafraîchissement via updateHeader (méthode interne
+				// non typée dans l'API publique d'Obsidian).
+				const leafWithHeader = view.leaf as WorkspaceLeaf & { updateHeader?(): void };
+				if (leafWithHeader.updateHeader) {
+					leafWithHeader.updateHeader();
 				}
 
 				// Déclencher un événement pour forcer le rafraîchissement
@@ -214,21 +228,21 @@ function attachQuizEditorCore(view, host, app, plugin) {
 
 			view.render();
 			if (!opts.silent) {
-				new obsidian.Notice(`${questions.length} question(s) importée(s)${fileName ? " depuis " + fileName : ""}`);
+				new Notice(`${questions.length} question(s) importée(s)${fileName ? " depuis " + fileName : ""}`);
 			}
 		} catch (err) {
 			console.error("Import error:", err);
-			new obsidian.Notice("Erreur lors de l'import: " + err.message);
+			new Notice("Erreur lors de l'import: " + (err as Error).message);
 		}
 	};
 
-	view.openQuizFile = async function (file, source) {
+	view.openQuizFile = async function (file: TFile, source: string): Promise<void> {
 		// Stocker le fichier source pour sauvegarde automatique
 		view.sourceFile = file;
 		await view.importQuizSource(source, file.name);
 	};
 
-	view.saveToSourceFile = async function () {
+	view.saveToSourceFile = async function (): Promise<void> {
 		if (!view.sourceFile) return;
 
 		try {
@@ -236,16 +250,14 @@ function attachQuizEditorCore(view, host, app, plugin) {
 			const content = await view.app.vault.read(view.sourceFile);
 
 			// Générer le nouveau contenu du quiz (SANS les fences)
-			const { exportAll } = require("./editor/export");
 			const newQuizJson = exportAll(view.questions, view.examOptions);
 
 			// Valider que le JSON5 généré est correct avant de sauvegarder
 			try {
-				const { parseQuizSource } = require("./quiz-utils");
 				parseQuizSource(newQuizJson);
 			} catch (parseErr) {
 				console.error("[Quiz Blocks] JSON5 invalide généré:", parseErr);
-				new obsidian.Notice("Erreur: le quiz généré n'est pas valide.");
+				new Notice("Erreur: le quiz généré n'est pas valide.");
 				return;
 			}
 
@@ -256,7 +268,7 @@ function attachQuizEditorCore(view, host, app, plugin) {
 			const quizBlockRegex = /```quiz-blocks[\s\S]*?```/;
 			if (!quizBlockRegex.test(content)) {
 				console.error("[Quiz Blocks] Aucun bloc quiz-blocks trouvé dans le fichier");
-				new obsidian.Notice("Erreur: bloc quiz-blocks introuvable");
+				new Notice("Erreur: bloc quiz-blocks introuvable");
 				return;
 			}
 
@@ -269,20 +281,20 @@ function attachQuizEditorCore(view, host, app, plugin) {
 			}
 		} catch (err) {
 			console.error("[Quiz Blocks] Save error:", err);
-			new obsidian.Notice("Erreur lors de la sauvegarde: " + err.message);
+			new Notice("Erreur lors de la sauvegarde: " + (err as Error).message);
 		}
 	};
 
-	view.scheduleSave = function () {
+	view.scheduleSave = function (): void {
 		if (!view.sourceFile) return;
 		if (view._saveDebounce) clearTimeout(view._saveDebounce);
-		view._saveDebounce = setTimeout(() => view.saveToSourceFile(), 1000);
+		view._saveDebounce = window.setTimeout(() => view.saveToSourceFile?.(), 1000);
 		// Mettre à jour l'indicateur de sauvegarde
 		view.updateSaveIndicator?.(false);
 	};
 
-	view.convertParsedToInternal = function (q) {
-		let type = "single";
+	view.convertParsedToInternal = function (q: ParsedQuizItem): DraftQuestion {
+		let type: QuestionTypeKey = "single";
 		if (q.ordering) type = "ordering";
 		else if (q.matching) type = "matching";
 		else if (q.multiSelect) type = "multi";
@@ -344,7 +356,7 @@ function attachQuizEditorCore(view, host, app, plugin) {
 		}
 
 		if (["text", "cmd", "powershell", "bash"].includes(type)) {
-			question.acceptedAnswers = (q.acceptedAnswers || q.acceptableAnswers || [""]).slice();
+			let accepted = (q.acceptedAnswers || q.acceptableAnswers || [""]).slice();
 			// `answer`/`correctText` : formats émis par la génération IA et
 			// UNIONNÉS aux acceptedAnswers par le moteur (terminal.js:166-170)
 			// — les fusionner pareil ici, sinon le round-trip éditeur→export
@@ -355,12 +367,13 @@ function attachQuizEditorCore(view, host, app, plugin) {
 				if (extra == null) continue;
 				if (typeof extra !== "string" && typeof extra !== "number") continue;
 				const v = String(extra);
-				if (question.acceptedAnswers.length === 1 && question.acceptedAnswers[0] === "") {
-					question.acceptedAnswers = [v];
-				} else if (!question.acceptedAnswers.includes(v)) {
-					question.acceptedAnswers.push(v);
+				if (accepted.length === 1 && accepted[0] === "") {
+					accepted = [v];
+				} else if (!accepted.includes(v)) {
+					accepted.push(v);
 				}
 			}
+			question.acceptedAnswers = accepted;
 			question.caseSensitive = q.caseSensitive || false;
 			question.placeholder = q.placeholder || "";
 			if (type === "cmd" || type === "powershell") {
@@ -369,10 +382,11 @@ function attachQuizEditorCore(view, host, app, plugin) {
 		}
 
 		const knownKeys = new Set(['id','title','prompt','promptHtml','options','correctIndex','multiSelect','correctIndices','ordering','slots','possibilities','correctOrder','matching','rows','choices','correctMap','type','terminalVariant','textVariant','commandPrefix','placeholder','caseSensitive','acceptedAnswers','acceptableAnswers','correctText','answer','hint','explain','explainHtml','resourceButton','examMode','examDurationMinutes','examAutoSubmit','examShowTimer']);
-		question._extraFields = {};
+		const extraFields: Record<string, unknown> = {};
 		for (const key of Object.keys(q)) {
-			if (!knownKeys.has(key)) question._extraFields[key] = q[key];
+			if (!knownKeys.has(key)) extraFields[key] = q[key];
 		}
+		question._extraFields = extraFields;
 
 		return question;
 	};
@@ -383,31 +397,42 @@ function attachQuizEditorCore(view, host, app, plugin) {
 /* ════════════════════════════════════════════════════════
    QUIZ BUILDER VIEW
    ════════════════════════════════════════════════════════ */
-class QuizBuilderView extends obsidian.ItemView {
-	constructor(leaf, plugin) {
+export class QuizBuilderView extends ItemView {
+	// Membres greffés par attachQuizEditorCore et lus dans les méthodes de la
+	// classe (déclarations de type pures : `declare` n'émet aucun code, la
+	// valeur réelle est assignée au runtime par attachQuizEditorCore).
+	declare sourceFile: EditorHostView["sourceFile"];
+	declare buildUI: EditorHostView["buildUI"];
+	declare render: EditorHostView["render"];
+	declare _closeHint: EditorHostView["_closeHint"];
+	declare _removeHintEscHandler: EditorHostView["_removeHintEscHandler"];
+
+	constructor(leaf: WorkspaceLeaf, plugin: Plugin) {
 		super(leaf);
 		// Tout l'assemblage (état, ctx, handlers, méthodes) est partagé avec
-		// l'éditeur embarqué du dashboard via attachQuizEditorCore.
-		attachQuizEditorCore(this, this.contentEl, this.app, plugin);
+		// l'éditeur embarqué du dashboard via attachQuizEditorCore. `this` est
+		// une ItemView vierge que attachQuizEditorCore MUTE en EditorHostView :
+		// le cast reflète cette transformation runtime.
+		attachQuizEditorCore(this as unknown as EditorHostView, this.contentEl, this.app, plugin);
 	}
 
-	getViewType() { return VIEW_TYPE; }
-	getDisplayText() {
+	getViewType(): string { return VIEW_TYPE; }
+	getDisplayText(): string {
 		if (this.sourceFile) {
 			return this.sourceFile.basename || "Quiz Editor";
 		}
 		return "Quiz Editor";
 	}
-	getIcon() { return "graduation-cap"; }
+	getIcon(): string { return "graduation-cap"; }
 
-	async onOpen() {
+	async onOpen(): Promise<void> {
 		this.contentEl.empty();
 		this.contentEl.addClass("qb-root");
 		this.buildUI();
 		this.render();
 	}
 
-	onClose() {
+	async onClose(): Promise<void> {
 		this._closeHint();
 		this._removeHintEscHandler();
 		const overlay = document.getElementById("qb-hint-overlay");
@@ -417,7 +442,6 @@ class QuizBuilderView extends obsidian.ItemView {
 		resizeOverlays.forEach(el => el.remove());
 		this.contentEl.empty();
 	}
-
 }
 
-module.exports = { QuizBuilderView, VIEW_TYPE, QuizFileSuggestModal, attachQuizEditorCore };
+export { QuizFileSuggestModal };
