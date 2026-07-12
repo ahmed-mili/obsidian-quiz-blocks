@@ -1,0 +1,282 @@
+/**
+ * Types de données métier du moteur de quiz (quiz-blocks).
+ *
+ * Dérivés de la forme RÉELLE des données lues/écrites par le moteur JS
+ * (aucun de ces types n'est encore consommé par du code — fichier isolé,
+ * base pour les lots suivants de la conversion TypeScript). Sources :
+ *   - src/quiz-utils.js       parseQuizSource (JSON5) + extractExamOptions
+ *   - src/engine/sanitizer.js rendu HTML des questions (révèle *Html, resourceButton)
+ *   - src/engine/questions.js helpers de forme ordering/matching (fallback chains)
+ *   - src/engine/state.js     discrimination des variantes, isCorrect/isComplete
+ *   - src/engine/text-only.js mode entraînement texte libre (textOnly*, RATINGS)
+ *   - src/engine/exam.js      options d'examen (ctx.examOptions)
+ *   - src/engine.js           prédicats isOrderingQuestion/isMatchingQuestion/
+ *                             isTextQuestion, littéral quizState complet, buildShuffleMap
+ *
+ * Note de conception : src/engine/sanitizer.js ne normalise PAS les champs de
+ * données des questions (c'est un module d'échappement/rendu HTML pur). La
+ * seule normalisation de données observée est ponctuelle dans engine.js
+ * (compat `correctIndexes` → `correctIndices`, engine.js:48-55). Les champs
+ * ci-dessous sont donc dérivés directement des accès `q.xxx` dans le moteur,
+ * pas d'une étape de sanitization centralisée.
+ */
+
+/** Bouton de ressource optionnel affiché sur une question (sanitizer.js resourceButtonHtml, engine/cards.js). */
+export interface ResourceButton {
+	label: string;
+	fileName: string;
+}
+
+/**
+ * Champs communs à toutes les variantes de question. La plupart sont
+ * optionnels : le moteur les lit avec `||`/`??`/`?.` et tolère leur absence
+ * (engine/cards.js explanationHtml, renderQuizPromptHtml, questionCardHtml).
+ */
+export interface QuestionBase {
+	/** Identifiant stable optionnel ; sert d'ancre de section si non vide (engine/cards.js questionCardHtml). */
+	id?: string;
+	title?: string;
+	/** Énoncé texte brut, rendu via sanitize.renderTextWithEmbeds (engine/cards.js renderQuizPromptHtml). */
+	prompt?: string;
+	/** Énoncé HTML pré-rendu, prioritaire sur `prompt` (engine/cards.js: q.promptHtml || q._promptHtml). */
+	promptHtml?: string;
+	/** Variante interne équivalente à promptHtml (fallback lu au même endroit). */
+	_promptHtml?: string;
+	/** Texte de l'indice, affiche le bouton "Indice" si non vide (engine/cards.js questionCardHtml). */
+	hint?: string;
+	/** Explication texte brut affichée après verrouillage (engine/cards.js explanationHtml). */
+	explain?: string;
+	/** Explication HTML pré-rendue, prioritaire sur `explain`. */
+	explainHtml?: string;
+	_explainHtml?: string;
+	/** Contenu "Leçon" affiché en mode learn (engine/cards.js learnSection, engine/text-only.js learningHtml). */
+	learn?: string;
+	learnHtml?: string;
+	_learnHtml?: string;
+	resourceButton?: ResourceButton | null;
+}
+
+/** Question à choix unique (engine.js: multiSelect absent/false ⇒ q.correctIndex). */
+export interface QcmQuestion extends QuestionBase {
+	options: string[];
+	/** HTML pré-rendu par option, prioritaire sur options[oi] (engine/cards.js optionContentHtml). */
+	optionHtml?: string[];
+	correctIndex: number;
+	multiSelect?: false;
+}
+
+/** Question à choix multiples (engine.js: q.multiSelect === true ⇒ q.correctIndices). */
+export interface MultiSelectQuestion extends QuestionBase {
+	options: string[];
+	optionHtml?: string[];
+	correctIndices: number[];
+	multiSelect: true;
+}
+
+/**
+ * Question texte libre, y compris ses sous-formes terminal/commande (cmd,
+ * powershell, bash…) et math (éditeur d'équations MathLive) : ce sont des
+ * TextQuestion avec des champs optionnels supplémentaires, pas des variantes
+ * séparées — engine/editor/export.js exporte toujours `type: 'text'` pour
+ * ces sous-formes (cmd/powershell/bash/text).
+ */
+export interface TextQuestion extends QuestionBase {
+	type: "text";
+	placeholder?: string;
+	caseSensitive?: boolean;
+	/** Réponses acceptées — engine/terminal.js getTextAcceptedAnswers agrège ces 5 champs. */
+	acceptedAnswers?: string[];
+	acceptableAnswers?: string[];
+	correctAnswers?: string[];
+	correctText?: string;
+	answer?: string;
+	/** Question "math" : réponse saisie dans un éditeur d'équations MathLive (engine/math-input.js isMathQuestion). */
+	mathInput?: boolean;
+	/** Gabarit guidé optionnel de l'éditeur math, ex. "x = ▯" (engine/terminal.js bindMathQuestion). */
+	answerTemplate?: string;
+	/** Variante terminal (engine/terminal.js getTerminalTextVariant, normalizeTerminalVariantName). */
+	terminalVariant?: string;
+	textVariant?: string;
+	/** Marqueur legacy : force la variante "cmd" (engine/terminal.js getTerminalTextVariant). */
+	command?: boolean;
+	commandPrefix?: string;
+	terminalPrefix?: string;
+	promptPrefix?: string;
+	maxLength?: number;
+	textMaxLength?: number;
+	commandMaxLength?: number;
+	terminalMaxLength?: number;
+	spellcheck?: boolean;
+}
+
+/** Forme imbriquée alternative de `ordering`, lue en fallback (engine/questions.js: q?.ordering?.items/correctOrder/slotLabels). */
+export interface OrderingConfig {
+	items?: string[];
+	correctOrder?: number[];
+	slotLabels?: string[];
+}
+
+/**
+ * Question de classement (glisser-déposer). L'éditeur/export n'écrit que la
+ * forme plate `ordering: true` + `slots`/`possibilities`/`correctOrder`
+ * (editor/export.js:34-39) ; la forme imbriquée `ordering: { items, ... }`
+ * est un fallback supporté par le moteur (engine/questions.js) pour des
+ * quiz écrits à la main.
+ */
+export interface OrderingQuestion extends QuestionBase {
+	ordering: true | OrderingConfig;
+	/** Éléments à ordonner (forme plate). */
+	possibilities?: string[];
+	orderingItems?: string[];
+	/** Fallback historique : `options` peut aussi servir de source d'items (engine/questions.js getOrderingItems). */
+	options?: string[];
+	/** Ordre correct, indices dans `possibilities` (forme plate). */
+	correctOrder?: number[];
+	/** Libellés des emplacements (forme plate). */
+	slots?: string[];
+	slotLabels?: string[];
+}
+
+/** Forme imbriquée alternative de `matching`, lue en fallback (engine/questions.js: q?.matching?.rows/choices/correctMap). */
+export interface MatchingConfig {
+	rows?: string[];
+	choices?: string[];
+	correctMap?: number[];
+}
+
+/**
+ * Question d'association (glisser-déposer). Même relation forme plate vs
+ * imbriquée qu'OrderingQuestion (editor/export.js:40-45 n'écrit que la forme
+ * plate `matching: true` + `rows`/`choices`/`correctMap`).
+ */
+export interface MatchingQuestion extends QuestionBase {
+	matching: true | MatchingConfig;
+	rows?: string[];
+	choices?: string[];
+	correctMap?: number[];
+}
+
+/**
+ * Union discriminée des variantes de question. Le moteur ne discrimine pas
+ * par un tag commun mais par présence de champs / prédicats dédiés
+ * (engine.js:85-87) :
+ *   - isOrderingQuestion(q) = q.ordering === true || typeof q.ordering === "object"
+ *   - isMatchingQuestion(q) = q.matching === true || typeof q.matching === "object"
+ *   - isTextQuestion(q)     = q.type === "text" (seule forme réellement produite)
+ *   - sinon : QCM, discriminé par `multiSelect` (true ⇒ MultiSelectQuestion).
+ */
+export type QuizQuestion =
+	| QcmQuestion
+	| MultiSelectQuestion
+	| TextQuestion
+	| OrderingQuestion
+	| MatchingQuestion;
+
+/** Mode d'entraînement courant (engine/state.js setPracticeMode). */
+export type PracticeMode = "qcm" | "text";
+
+/** Auto-évaluation en mode entraînement texte libre (engine/text-only.js RATINGS). */
+export type TextOnlyRating = "understood" | "partial" | "review";
+
+/**
+ * Sélection courante pour une question, selon sa variante
+ * (engine.js initSelections) :
+ *   - TextQuestion            → string (réponse libre saisie, "" au départ)
+ *   - OrderingQuestion/
+ *     MatchingQuestion        → Array<number | null> (slot → index original, ou vide)
+ *   - MultiSelectQuestion     → Set<number> (indices sélectionnés)
+ *   - QcmQuestion             → number | null (index sélectionné, ou aucune réponse)
+ */
+export type QuestionSelection =
+	| string
+	| Array<number | null>
+	| Set<number>
+	| number
+	| null;
+
+/**
+ * Ordre d'affichage mélangé pour une question (engine.js buildShuffleMap) :
+ *   - TextQuestion                          → null (rien à mélanger)
+ *   - QcmQuestion/MultiSelectQuestion/
+ *     OrderingQuestion                      → number[] (indices mélangés)
+ *   - MatchingQuestion                      → { rows: number[]; choices: number[] }
+ */
+export type QuestionShuffleEntry =
+	| number[]
+	| { rows: number[]; choices: number[] }
+	| null;
+
+/**
+ * État runtime complet d'une instance de quiz (engine.js: littéral `quizState`,
+ * lignes 275-292, plus mutations dans engine/state.js resetQuiz et
+ * engine/interactions.js pour orderingPick/matchPick).
+ */
+export interface QuizState {
+	practiceMode: PracticeMode;
+	selections: QuestionSelection[];
+	/** Réponses libres saisies en mode entraînement texte (engine/text-only.js hasAnyAnswer). */
+	textOnlyAnswers: string[];
+	/** Question validée ("Vérifier" cliqué) en mode entraînement texte (engine/text-only.js isChecked). */
+	textOnlyChecked: boolean[];
+	/** Auto-évaluation par question en mode entraînement texte (engine/text-only.js isRated/computeResults). */
+	textOnlyRatings: Array<TextOnlyRating | null>;
+	current: number;
+	prevCurrent: number;
+	lastQuestionIndex: number;
+	locked: boolean;
+	pendingResultsLock: boolean;
+	savedResultsPath: string | null;
+	shuffleMap: QuestionShuffleEntry[];
+	/** Élément en cours de sélection pour glisser-déposer, question de classement (engine/interactions.js). */
+	orderingPick: Array<number | null>;
+	/** Élément en cours de sélection pour glisser-déposer, question d'association (engine/interactions.js). */
+	matchPick: Array<number | null>;
+	isSliding: boolean;
+	slideToken: number;
+}
+
+/**
+ * Entrée de la carte des slides (engine.js buildSlideMap) : une slide par
+ * question, puis une slide "submit" et une slide "results". Discriminée par
+ * `type`, seul `questionIndex` est propre à la variante "question"
+ * (engine.js isQuestionSlideIndex/isSubmitSlideIndex/isResultsSlideIndex
+ * narrowent sur `slideMap[i]?.type`).
+ */
+export type SlideMapEntry =
+	| { type: "question"; questionIndex: number }
+	| { type: "submit" }
+	| { type: "results" };
+
+/**
+ * Options d'examen actives (ctx.examOptions), construites par
+ * quiz-utils.js extractExamOptions/buildExamOpts et lues dans engine/exam.js
+ * (examTimerHtml, handleExamTimeUp).
+ */
+export interface ExamOptions {
+	/** Durée en minutes, bornée [1, 180] au parsing (quiz-utils.js buildExamOpts). */
+	durationMinutes: number;
+	/** Soumission automatique à l'échéance du chrono (par défaut true — engine/exam.js handleExamTimeUp). */
+	autoSubmit: boolean;
+	/** Afficher le chrono à l'écran (engine/exam.js examTimerHtml). */
+	showTimer: boolean;
+}
+
+/**
+ * Score courant du quiz (engine/state.js computeScorePercent — forme exacte
+ * du littéral retourné, `{ pct, correct, total }`).
+ */
+export interface QuizResult {
+	pct: number;
+	correct: number;
+	total: number;
+}
+
+/**
+ * Enregistrement de stats persisté par quiz (engine/state.js goToResults,
+ * appel à statsStore.updateRecord avec exactement ces trois champs).
+ */
+export interface StatsRecord {
+	bestScore: number;
+	questionsDone: number;
+	totalQuestions: number;
+}
