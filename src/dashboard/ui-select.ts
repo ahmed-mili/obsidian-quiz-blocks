@@ -1,4 +1,7 @@
-'use strict';
+import { setIcon } from "obsidian";
+import type { TFile } from "obsidian";
+import { createEffortTrackFx } from "./effort-canvas";
+import type { EffortTrackFx } from "./effort-canvas";
 
 /* ══════════════════════════════════════════════════════════
    UI SELECT — Dropdown custom réutilisable
@@ -7,11 +10,52 @@
    (position fixed), fermeture clic-dehors / Escape / scroll.
 ══════════════════════════════════════════════════════════ */
 
-const openMenus = new Set();
+/** Fonction de fermeture d'un menu/popover portalé (identité dans openMenus). */
+type CloseFn = () => void;
+
+const openMenus = new Set<CloseFn>();
 
 /* Ferme tous les menus ouverts (appelé à chaque re-render). */
-function closeAllSelects() {
+export function closeAllSelects(): void {
 	for (const close of Array.from(openMenus)) close();
+}
+
+/** Poignée commune de tous les menus/popovers portalés ci-dessous. */
+export interface MenuHandle {
+	close(): void;
+}
+
+/* ── createSelect ─────────────────────────────────────────── */
+
+/** Option minimale d'un createSelect. Les appelants peuvent en attacher
+ *  d'autres champs (ex. `logo`, `sub`) lus par leurs propres
+ *  renderTrigger/renderOption — d'où la généricité `T`. */
+export interface SelectOption {
+	value: string;
+	label: string;
+	hint?: string;
+}
+
+export interface SelectOptions<T extends SelectOption = SelectOption> {
+	value?: string;
+	options?: T[];
+	onChange?: (value: string) => void;
+	/** Appelé à chaque ouverture du menu (rafraîchissements async). */
+	onOpen?: () => void;
+	disabled?: boolean;
+	placeholder?: string;
+	renderTrigger?: (labelEl: HTMLElement, current: T | null) => void;
+	renderOption?: (optBtn: HTMLElement, option: T) => void;
+}
+
+export interface SelectHandle<T extends SelectOption = SelectOption> {
+	el: HTMLButtonElement;
+	setValue(v: string): void;
+	setOptions(next: T[] | undefined, nextValue?: string): void;
+	setDisabled(d: boolean): void;
+	/** Redessine les options du menu s'il est ouvert (les données lues par
+	 *  renderOption ont pu changer entre-temps). */
+	refreshMenu(): void;
 }
 
 /*
@@ -23,8 +67,8 @@ function closeAllSelects() {
  * refreshMenu : redessine les options du menu s'il est ouvert (les données
  * lues par renderOption ont pu changer entre-temps).
  */
-function createSelect(parent, opts) {
-	let options = opts.options || [];
+export function createSelect<T extends SelectOption = SelectOption>(parent: HTMLElement, opts: SelectOptions<T>): SelectHandle<T> {
+	let options: T[] = opts.options || [];
 	let value = opts.value;
 	let disabled = !!opts.disabled;
 	const placeholder = opts.placeholder || "Sélectionner…";
@@ -33,15 +77,15 @@ function createSelect(parent, opts) {
 	trigger.type = "button";
 	const labelEl = trigger.createSpan({ cls: "qbd-select-label" });
 	const chevron = trigger.createSpan({ cls: "qbd-select-chevron" });
-	obsidian.setIcon(chevron, "chevron-down");
+	setIcon(chevron, "chevron-down");
 
-	let menuEl = null;
+	let menuEl: HTMLDivElement | null = null;
 
-	function currentOption() {
+	function currentOption(): T | undefined {
 		return options.find(o => o.value === value);
 	}
 
-	function refreshLabel() {
+	function refreshLabel(): void {
 		const cur = currentOption();
 		if (opts.renderTrigger) {
 			labelEl.empty();
@@ -54,7 +98,7 @@ function createSelect(parent, opts) {
 		trigger.classList.toggle("qbd-select--disabled", disabled);
 	}
 
-	function closeMenu() {
+	function closeMenu(): void {
 		if (!menuEl) return;
 		menuEl.remove();
 		menuEl = null;
@@ -66,24 +110,26 @@ function createSelect(parent, opts) {
 		window.removeEventListener("resize", closeMenu);
 	}
 
-	function onDocDown(e) {
-		if (trigger.contains(e.target) || (menuEl && menuEl.contains(e.target))) return;
+	function onDocDown(e: MouseEvent): void {
+		const t = e.target as Node | null;
+		if ((t && trigger.contains(t)) || (menuEl && t && menuEl.contains(t))) return;
 		closeMenu();
 	}
 
-	function onKeyDown(e) {
+	function onKeyDown(e: KeyboardEvent): void {
 		if (e.key === "Escape") closeMenu();
 	}
 
-	function onScroll(e) {
-		if (menuEl && menuEl.contains(e.target)) return;
+	function onScroll(e: Event): void {
+		const t = e.target as Node | null;
+		if (menuEl && t && menuEl.contains(t)) return;
 		closeMenu();
 	}
 
 	/* (Re)construit les options du menu ouvert. Séparé d'openMenu pour que
 	   refreshMenu puisse redessiner en place quand un statut async arrive
 	   pendant que le menu est ouvert (ex. version d'un CLI re-détectée). */
-	function renderMenuOptions() {
+	function renderMenuOptions(): void {
 		if (!menuEl) return;
 		menuEl.empty();
 		for (const o of options) {
@@ -94,7 +140,7 @@ function createSelect(parent, opts) {
 			optBtn.setAttribute("role", "option");
 			optBtn.setAttribute("aria-selected", o.value === value ? "true" : "false");
 			const check = optBtn.createSpan({ cls: "qbd-select-check" });
-			if (o.value === value) obsidian.setIcon(check, "check");
+			if (o.value === value) setIcon(check, "check");
 			if (opts.renderOption) {
 				opts.renderOption(optBtn, o);
 			} else {
@@ -111,7 +157,7 @@ function createSelect(parent, opts) {
 		}
 	}
 
-	function openMenu() {
+	function openMenu(): void {
 		if (disabled || options.length === 0 || !trigger.isConnected) return;
 		closeAllSelects();
 		if (opts.onOpen) opts.onOpen();
@@ -162,15 +208,27 @@ function createSelect(parent, opts) {
 
 	return {
 		el: trigger,
-		setValue(v) { value = v; refreshLabel(); },
-		setOptions(next, nextValue) {
+		setValue(v: string) { value = v; refreshLabel(); },
+		setOptions(next: T[] | undefined, nextValue?: string) {
 			options = next || [];
 			if (nextValue !== undefined) value = nextValue;
 			refreshLabel();
 		},
-		setDisabled(d) { disabled = !!d; refreshLabel(); },
+		setDisabled(d: boolean) { disabled = !!d; refreshLabel(); },
 		refreshMenu: renderMenuOptions
 	};
+}
+
+/* ── openActionMenu ───────────────────────────────────────── */
+
+export interface ActionMenuItem {
+	icon?: string;
+	label: string;
+	/** 2 lignes (compat) — plus utilisé par les appelants actuels. */
+	sub?: string;
+	hint?: string;
+	disabled?: boolean;
+	onClick?: () => void;
 }
 
 /*
@@ -178,7 +236,7 @@ function createSelect(parent, opts) {
  * (même surface visuelle que le dropdown). items :
  * [{ icon, label, sub?, disabled?, onClick }]
  */
-function openActionMenu(anchorEl, items) {
+export function openActionMenu(anchorEl: HTMLElement, items: ActionMenuItem[]): MenuHandle {
 	closeAllSelects();
 
 	const rect = anchorEl.getBoundingClientRect();
@@ -193,7 +251,7 @@ function openActionMenu(anchorEl, items) {
 		btn.setAttribute("role", "menuitem");
 		if (item.disabled) btn.disabled = true;
 		const iconEl = btn.createSpan({ cls: "qbd-select-check qbd-action-menu-icon" });
-		if (item.icon) obsidian.setIcon(iconEl, item.icon);
+		if (item.icon) setIcon(iconEl, item.icon);
 		// Ligne simple façon claude.ai (icône + label + accessoire à droite).
 		// `sub` reste supporté (2 lignes) pour compat, mais n'est plus utilisé ici.
 		if (item.sub) {
@@ -223,7 +281,7 @@ function openActionMenu(anchorEl, items) {
 	}
 	menuEl.style.visibility = "";
 
-	function closeMenu() {
+	function closeMenu(): void {
 		menuEl.remove();
 		openMenus.delete(closeMenu);
 		document.removeEventListener("mousedown", onDocDown, true);
@@ -232,17 +290,19 @@ function openActionMenu(anchorEl, items) {
 		window.removeEventListener("resize", closeMenu);
 	}
 
-	function onDocDown(e) {
-		if (anchorEl.contains(e.target) || menuEl.contains(e.target)) return;
+	function onDocDown(e: MouseEvent): void {
+		const t = e.target as Node | null;
+		if ((t && anchorEl.contains(t)) || (t && menuEl.contains(t))) return;
 		closeMenu();
 	}
 
-	function onKeyDown(e) {
+	function onKeyDown(e: KeyboardEvent): void {
 		if (e.key === "Escape") closeMenu();
 	}
 
-	function onScroll(e) {
-		if (menuEl.contains(e.target)) return;
+	function onScroll(e: Event): void {
+		const t = e.target as Node | null;
+		if (t && menuEl.contains(t)) return;
 		closeMenu();
 	}
 
@@ -253,6 +313,41 @@ function openActionMenu(anchorEl, items) {
 	window.addEventListener("resize", closeMenu);
 
 	return { close: closeMenu };
+}
+
+/* ── openModelMenu ────────────────────────────────────────── */
+
+export interface EffortOption {
+	value: string;
+	label: string;
+	sub?: string;
+	isDefault?: boolean;
+	/** Niveau accent (ultracode/ultra) — carte violette. */
+	accent?: boolean;
+}
+
+export interface ModelOption {
+	value: string;
+	label: string;
+	desc?: string;
+	badge?: string;
+	/** Icône Lucide calée à droite (Ollama : cloud / download / rien). */
+	icon?: string | null;
+}
+
+export interface OpenModelMenuOptions {
+	models: ModelOption[];
+	/** Mutable : réassigné en interne au clic (cf. appendModelOption). */
+	currentModel: string;
+	efforts?: EffortOption[];
+	/** Mutable : réassigné en interne au clic dans le flyout Effort. */
+	currentEffort?: string;
+	moreModels?: ModelOption[];
+	/** Liste scrollable + champ "Find model…" (façon app Ollama). */
+	searchable?: boolean;
+	onPickModel?: (value: string) => void;
+	onPickEffort?: (value: string) => void;
+	onMore?: () => void;
 }
 
 /*
@@ -266,23 +361,23 @@ function openActionMenu(anchorEl, items) {
  * (label + description + badge), séparateur, ligne « Effort » qui
  * ouvre un drill-in dans le même menu, puis « Plus de modèles ».
  */
-function openModelMenu(anchorEl, opts) {
+export function openModelMenu(anchorEl: HTMLElement, opts: OpenModelMenuOptions): MenuHandle {
 	closeAllSelects();
 
 	const menuEl = document.body.createDiv({ cls: "qbd-select-menu qbd-model-menu" });
 	menuEl.setAttribute("role", "menu");
-	let effortFlyout = null;
-	let effortCloseTimer = null;
-	let moreFlyout = null;
-	let moreCloseTimer = null;
+	let effortFlyout: HTMLDivElement | null = null;
+	let effortCloseTimer = 0;
+	let moreFlyout: HTMLDivElement | null = null;
+	let moreCloseTimer = 0;
 
-	function effortLabelOf(v) {
+	function effortLabelOf(v: string | undefined): string {
 		const efs = opts.efforts || [];
 		const e = efs.find(x => x.value === v);
 		return e ? e.label : (efs[0] ? efs[0].label : "");
 	}
 
-	function reposition() {
+	function reposition(): void {
 		const rect = anchorEl.getBoundingClientRect();
 		menuEl.style.left = rect.left + "px";
 		menuEl.style.visibility = "hidden";
@@ -301,14 +396,14 @@ function openModelMenu(anchorEl, opts) {
 
 	// Construit un bouton d'option modèle (liste principale ET flyout « Plus de
 	// modèles »). Ferme le menu et notifie onPickModel au clic.
-	function appendModelOption(parent, m) {
+	function appendModelOption(parent: HTMLElement, m: ModelOption): HTMLButtonElement {
 		const active = m.value === opts.currentModel;
 		const btn = parent.createEl("button", { cls: "qbd-select-option" + (active ? " is-active" : "") });
 		btn.type = "button";
 		btn.setAttribute("role", "menuitemradio");
 		btn.setAttribute("aria-checked", active ? "true" : "false");
 		const check = btn.createSpan({ cls: "qbd-select-check" });
-		if (active) obsidian.setIcon(check, "check");
+		if (active) setIcon(check, "check");
 		const body = btn.createDiv({ cls: "qbd-model-option-body" });
 		const top = body.createDiv({ cls: "qbd-model-option-top" });
 		top.createSpan({ cls: "qbd-select-option-label", text: m.label });
@@ -318,7 +413,7 @@ function openModelMenu(anchorEl, opts) {
 		// installé, rien = local installé), calée à droite comme l'app Ollama.
 		if (m.icon) {
 			const ic = btn.createSpan({ cls: "qbd-model-option-icon" });
-			obsidian.setIcon(ic, m.icon);
+			setIcon(ic, m.icon);
 		}
 		btn.addEventListener("click", () => {
 			const changed = m.value !== opts.currentModel;
@@ -329,7 +424,7 @@ function openModelMenu(anchorEl, opts) {
 		return btn;
 	}
 
-	function renderMain() {
+	function renderMain(): void {
 		menuEl.empty();
 
 		// Recherche « Find model… » + liste scrollable (façon app Ollama) quand
@@ -343,7 +438,7 @@ function openModelMenu(anchorEl, opts) {
 				attr: { type: "text", placeholder: "Find model…", spellcheck: "false" }
 			});
 			const listEl = menuEl.createDiv({ cls: "qbd-model-menu-list" });
-			const paint = (filter) => {
+			const paint = (filter: string) => {
 				listEl.empty();
 				const f = (filter || "").trim().toLowerCase();
 				const shown = opts.models.filter(m => !f
@@ -379,7 +474,7 @@ function openModelMenu(anchorEl, opts) {
 			effortRow.createSpan({ cls: "qbd-select-option-label", text: "Effort" });
 			effortRow.createSpan({ cls: "qbd-model-menu-row-value", text: effortLabelOf(opts.currentEffort) });
 			const effortChev = effortRow.createSpan({ cls: "qbd-model-menu-row-chevron" });
-			obsidian.setIcon(effortChev, "chevron-right");
+			setIcon(effortChev, "chevron-right");
 
 			effortRow.addEventListener("mouseenter", () => { cancelMoreClose(); closeMoreFlyout(); cancelEffortClose(); openEffortFlyout(effortRow); });
 			effortRow.addEventListener("mouseleave", scheduleEffortClose);
@@ -394,7 +489,7 @@ function openModelMenu(anchorEl, opts) {
 			moreRow.createSpan({ cls: "qbd-select-check" });
 			moreRow.createSpan({ cls: "qbd-select-option-label", text: "Plus de modèles" });
 			const moreChev = moreRow.createSpan({ cls: "qbd-model-menu-row-chevron" });
-			obsidian.setIcon(moreChev, "chevron-right");
+			setIcon(moreChev, "chevron-right");
 
 			moreRow.addEventListener("mouseenter", () => { cancelEffortClose(); closeEffortFlyout(); cancelMoreClose(); openMoreFlyout(moreRow); });
 			moreRow.addEventListener("mouseleave", scheduleMoreClose);
@@ -406,23 +501,23 @@ function openModelMenu(anchorEl, opts) {
 	// overflow → un enfant absolu serait rogné). Délai de fermeture court =
 	// hover-intent (le temps d'atteindre le flyout à travers le petit espace),
 	// pas un contournement de bug : annulé dès qu'on entre dans le flyout.
-	function cancelEffortClose() {
-		if (effortCloseTimer) { clearTimeout(effortCloseTimer); effortCloseTimer = null; }
+	function cancelEffortClose(): void {
+		if (effortCloseTimer) { clearTimeout(effortCloseTimer); effortCloseTimer = 0; }
 	}
 
-	function scheduleEffortClose() {
+	function scheduleEffortClose(): void {
 		cancelEffortClose();
-		effortCloseTimer = setTimeout(closeEffortFlyout, 140);
+		effortCloseTimer = window.setTimeout(closeEffortFlyout, 140);
 	}
 
-	function closeEffortFlyout() {
+	function closeEffortFlyout(): void {
 		cancelEffortClose();
 		if (effortFlyout) { effortFlyout.remove(); effortFlyout = null; }
 		const row = menuEl.querySelector(".qbd-effort-row");
 		if (row) row.classList.remove("is-open");
 	}
 
-	function openEffortFlyout(row) {
+	function openEffortFlyout(row: HTMLElement): void {
 		if (effortFlyout) return;
 		row.classList.add("is-open");
 		const fly = document.body.createDiv({ cls: "qbd-select-menu qbd-effort-flyout" });
@@ -444,7 +539,7 @@ function openModelMenu(anchorEl, opts) {
 			b.setAttribute("role", "menuitemradio");
 			b.setAttribute("aria-checked", active ? "true" : "false");
 			const check = b.createSpan({ cls: "qbd-select-check" });
-			if (active) obsidian.setIcon(check, "check");
+			if (active) setIcon(check, "check");
 			const body = b.createDiv({ cls: "qbd-effort-option-body" });
 			const top = body.createDiv({ cls: "qbd-effort-option-top" });
 			top.createSpan({ cls: "qbd-select-option-label", text: ef.label });
@@ -483,29 +578,29 @@ function openModelMenu(anchorEl, opts) {
 	// ── Flyout « Plus de modèles » (façon claude.ai) ──
 	// Ouvert au survol de la ligne, portalé au <body>. Contient le reste des
 	// modèles (opts.moreModels), chacun sélectionnable comme dans la liste.
-	function cancelMoreClose() {
-		if (moreCloseTimer) { clearTimeout(moreCloseTimer); moreCloseTimer = null; }
+	function cancelMoreClose(): void {
+		if (moreCloseTimer) { clearTimeout(moreCloseTimer); moreCloseTimer = 0; }
 	}
 
-	function scheduleMoreClose() {
+	function scheduleMoreClose(): void {
 		cancelMoreClose();
-		moreCloseTimer = setTimeout(closeMoreFlyout, 140);
+		moreCloseTimer = window.setTimeout(closeMoreFlyout, 140);
 	}
 
-	function closeMoreFlyout() {
+	function closeMoreFlyout(): void {
 		cancelMoreClose();
 		if (moreFlyout) { moreFlyout.remove(); moreFlyout = null; }
 		const row = menuEl.querySelector(".qbd-more-row");
 		if (row) row.classList.remove("is-open");
 	}
 
-	function openMoreFlyout(row) {
+	function openMoreFlyout(row: HTMLElement): void {
 		if (moreFlyout) return;
 		row.classList.add("is-open");
 		const fly = document.body.createDiv({ cls: "qbd-select-menu qbd-more-flyout" });
 		moreFlyout = fly;
 		fly.setAttribute("role", "menu");
-		for (const m of opts.moreModels) appendModelOption(fly, m);
+		for (const m of (opts.moreModels || [])) appendModelOption(fly, m);
 
 		// Position : à droite du menu (flip à gauche si pas de place). Haut du
 		// flyout aligné sur le haut de la ligne (la liste descend depuis la ligne).
@@ -527,7 +622,7 @@ function openModelMenu(anchorEl, opts) {
 		fly.addEventListener("mouseleave", scheduleMoreClose);
 	}
 
-	function closeMenu() {
+	function closeMenu(): void {
 		closeEffortFlyout();
 		closeMoreFlyout();
 		menuEl.remove();
@@ -538,23 +633,27 @@ function openModelMenu(anchorEl, opts) {
 		window.removeEventListener("resize", closeMenu);
 	}
 
-	function onDocDown(e) {
-		if (anchorEl.contains(e.target) || menuEl.contains(e.target)
-			|| (effortFlyout && effortFlyout.contains(e.target))
-			|| (moreFlyout && moreFlyout.contains(e.target))) return;
+	function onDocDown(e: MouseEvent): void {
+		const t = e.target as Node | null;
+		if (!t) return;
+		if (anchorEl.contains(t) || menuEl.contains(t)
+			|| (effortFlyout && effortFlyout.contains(t))
+			|| (moreFlyout && moreFlyout.contains(t))) return;
 		closeMenu();
 	}
 
-	function onKeyDown(e) {
+	function onKeyDown(e: KeyboardEvent): void {
 		if (e.key !== "Escape") return;
 		if (effortFlyout) closeEffortFlyout();
 		else if (moreFlyout) closeMoreFlyout();
 		else closeMenu();
 	}
 
-	function onScroll(e) {
-		if (menuEl.contains(e.target) || (effortFlyout && effortFlyout.contains(e.target))
-			|| (moreFlyout && moreFlyout.contains(e.target))) return;
+	function onScroll(e: Event): void {
+		const t = e.target as Node | null;
+		if (!t) return;
+		if (menuEl.contains(t) || (effortFlyout && effortFlyout.contains(t))
+			|| (moreFlyout && moreFlyout.contains(t))) return;
 		closeMenu();
 	}
 
@@ -568,6 +667,22 @@ function openModelMenu(anchorEl, opts) {
 	window.addEventListener("resize", closeMenu);
 
 	return { close: closeMenu };
+}
+
+/* ── openEffortSlider ─────────────────────────────────────── */
+
+export interface EffortSliderFast {
+	on: boolean;
+	onToggle?: (on: boolean) => void;
+}
+
+export interface OpenEffortSliderOptions {
+	variant?: "claude" | "codex";
+	efforts?: EffortOption[];
+	/** Mutable : réassigné en interne à chaque niveau retenu (cf. commit()). */
+	currentEffort?: string;
+	fast?: EffortSliderFast | null;
+	onPickEffort?: (value: string) => void;
 }
 
 /*
@@ -587,7 +702,7 @@ function openModelMenu(anchorEl, opts) {
  * Le popover reste ouvert pendant l'ajustement (comme les originaux) ;
  * onPickEffort est notifié à chaque niveau retenu (relâchement/clavier).
  */
-function openEffortSlider(anchorEl, opts) {
+export function openEffortSlider(anchorEl: HTMLElement, opts: OpenEffortSliderOptions): MenuHandle | null {
 	closeAllSelects();
 
 	const efforts = opts.efforts || [];
@@ -606,9 +721,9 @@ function openEffortSlider(anchorEl, opts) {
 	// Portalés au <body> ; suivis dans `tips` pour être retirés à la fermeture
 	// du popover (l'ancre disparaît sans mouseleave). pointer-events: none →
 	// jamais cliquables, conformes à la référence (« juste on le survole »).
-	const tips = new Set();
-	function attachTip(anchor, build, shouldShow) {
-		let tip = null;
+	const tips = new Set<HTMLDivElement>();
+	function attachTip(anchor: HTMLElement, build: (tip: HTMLDivElement) => void, shouldShow?: () => boolean): () => void {
+		let tip: HTMLDivElement | null = null;
 		const hide = () => { if (tip) { tip.remove(); tips.delete(tip); tip = null; } };
 		anchor.addEventListener("mouseenter", () => {
 			if (tip || (shouldShow && !shouldShow())) return;
@@ -632,7 +747,7 @@ function openEffortSlider(anchorEl, opts) {
 
 	// ── En-tête + échelle (claude uniquement — codex a sa propre rangée
 	// d'en-tête réduite à l'éclair Fast, sans titre « Advanced ») ──
-	let valueEl = null;
+	let valueEl: HTMLSpanElement | null = null;
 	if (variant === "claude") {
 		const head = menuEl.createDiv({ cls: "qbd-effort-pop-head" });
 		const title = head.createSpan({ cls: "qbd-effort-pop-title" });
@@ -674,7 +789,7 @@ function openEffortSlider(anchorEl, opts) {
 	// progressivement du bleu au violet, comme la source ChatGPT.
 	if (variant === "codex") fill.createDiv({ cls: "qbd-effort-fill-ultra" });
 	const rail = track.createDiv({ cls: "qbd-effort-rail" });
-	const dots = [];
+	const dots: HTMLDivElement[] = [];
 	for (let i = 0; i < n; i++) {
 		// Le point du niveau accent (ultracode) est TOUJOURS violet dans la
 		// carte Claude Code (notchUltracode), même au repos.
@@ -690,7 +805,7 @@ function openEffortSlider(anchorEl, opts) {
 	const thumb = (variant === "claude" ? track : rail).createDiv({ cls: "qbd-effort-thumb" });
 	// Piste claude : mosaïque de pixels animés en canvas (handoff validé
 	// « design_handoff_effort_slider ») — visible au niveau ultracode.
-	const trackFx = variant === "claude"
+	const trackFx: EffortTrackFx | null = variant === "claude"
 		? createEffortTrackFx(track, thumb, {
 			accent: "#a78bfa", // accent validé du handoff
 			speed: 0.3,        // vitesse validée
@@ -701,12 +816,16 @@ function openEffortSlider(anchorEl, opts) {
 	// ── Éclair Fast (codex) : VRAI toggle du service tier « priority »
 	// (1.5x speed, more usage), persisté via opts.fast.onToggle. Le tooltip
 	// reste au survol ; absent si le modèle n'expose pas le tier Fast. ──
-	let stopDrift = null;
-	if (zapRow) {
+	let stopDrift: (() => void) | null = null;
+	if (zapRow && opts.fast) {
+		// Alias local : narrowing stable dans les closures ci-dessous
+		// (TS ne retient pas `opts.fast` non-null à travers des fonctions
+		// imbriquées définies ici mais appelées plus tard).
+		const fast = opts.fast;
 		const zap = zapRow.createEl("button", { cls: "qbd-effort-fast qbd-effort-pop-zap" });
 		zap.type = "button";
 		zap.setAttribute("aria-label", "Fast (1.5x speed)");
-		obsidian.setIcon(zap, "zap");
+		setIcon(zap, "zap");
 		// Drift des étoiles Fast piloté en rAF via --qbd-drift : des keyframes
 		// CSS ne savent ni décélérer ni accélérer. Ici la VITESSE tend vers sa
 		// cible par lissage exponentiel (~0.45s) pendant que l'opacité fond en
@@ -718,13 +837,13 @@ function openEffortSlider(anchorEl, opts) {
 		const DRIFT_WRAP = 1120; // 20 tuiles de 56px ; 0.65x retombe sur 728
 		const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 		let driftX = 0;
-		let driftV = opts.fast.on ? DRIFT_SPEED : 0; // ouverture : déjà en croisière
+		let driftV = fast.on ? DRIFT_SPEED : 0; // ouverture : déjà en croisière
 		let driftRaf = 0;
 		let driftLast = 0;
-		const driftStep = (ts) => {
+		const driftStep = (ts: number) => {
 			const dt = Math.min(0.05, Math.max(0, (ts - driftLast) / 1000));
 			driftLast = ts;
-			const target = opts.fast.on ? DRIFT_SPEED : 0;
+			const target = fast.on ? DRIFT_SPEED : 0;
 			driftV += (target - driftV) * (1 - Math.exp(-dt / DRIFT_TAU));
 			driftX = (driftX - driftV * dt) % DRIFT_WRAP;
 			fill.style.setProperty("--qbd-drift", driftX.toFixed(2) + "px");
@@ -739,18 +858,18 @@ function openEffortSlider(anchorEl, opts) {
 		};
 		stopDrift = () => cancelAnimationFrame(driftRaf);
 		const refreshZap = () => {
-			zap.classList.toggle("is-on", !!opts.fast.on);
-			zap.setAttribute("aria-pressed", opts.fast.on ? "true" : "false");
+			zap.classList.toggle("is-on", !!fast.on);
+			zap.setAttribute("aria-pressed", fast.on ? "true" : "false");
 			// Fast ON → étoiles animées sur le fill bleu (référence ChatGPT).
-			menuEl.classList.toggle("is-fast", !!opts.fast.on);
+			menuEl.classList.toggle("is-fast", !!fast.on);
 		};
 		refreshZap();
-		if (opts.fast.on) driftWake();
+		if (fast.on) driftWake();
 		zap.addEventListener("click", () => {
-			opts.fast.on = !opts.fast.on;
+			fast.on = !fast.on;
 			refreshZap();
 			driftWake();
-			if (opts.fast.onToggle) opts.fast.onToggle(opts.fast.on);
+			if (fast.onToggle) fast.onToggle(fast.on);
 		});
 		attachTip(zap, (tip) => {
 			tip.createDiv({ cls: "qbd-hover-tip-title", text: "1.5x speed" });
@@ -766,11 +885,11 @@ function openEffortSlider(anchorEl, opts) {
 		}, () => idx >= n - 1 || ["max", "ultra"].includes(efforts[idx].value));
 	}
 
-	const capitalize = (s) => s ? s.charAt(0).toUpperCase() + s.slice(1) : s;
+	const capitalize = (s: string): string => s ? s.charAt(0).toUpperCase() + s.slice(1) : s;
 
 	// En-tête de la carte Claude Code : niveaux en ANGLAIS (demande
 	// explicite). Un niveau inconnu retombe sur son label capitalisé.
-	const CLAUDE_EFFORT_EN = {
+	const CLAUDE_EFFORT_EN: Record<string, string> = {
 		low: "Low", medium: "Medium", high: "High",
 		xhigh: "Extra", max: "Max", ultracode: "Ultracode"
 	};
@@ -779,8 +898,9 @@ function openEffortSlider(anchorEl, opts) {
 	// en fondant, le nouveau monte depuis le BAS. Le sortant passe en
 	// absolute pour ne pas fausser la largeur ; nettoyage par animationend
 	// + minuterie de secours (reduced-motion ne déclenche pas animationend).
-	function rollValue(label) {
-		const cur = valueEl.querySelector(".qbd-effort-pop-value-text:not(.is-out)");
+	function rollValue(label: string): void {
+		if (!valueEl) return; // uniquement appelée quand variant === "claude"
+		const cur = valueEl.querySelector<HTMLElement>(".qbd-effort-pop-value-text:not(.is-out)");
 		if (cur && cur.textContent === label) return;
 		if (cur) {
 			// Changements rapides : un seul sortant à la fois (les précédents
@@ -801,14 +921,14 @@ function openEffortSlider(anchorEl, opts) {
 	// Squish du pouce à chaque changement de niveau (source ChatGPT :
 	// scale [1,.93,1,1], times [0,.1309,.6354,1], .3s linear) — la classe
 	// est retirée puis reposée pour rejouer l'animation CSS.
-	let lastIdx = null;
-	function squishThumb() {
+	let lastIdx: number | null = null;
+	function squishThumb(): void {
 		thumb.classList.remove("is-squish");
 		void thumb.offsetWidth; // reflow → l'animation peut se rejouer
 		thumb.classList.add("is-squish");
 	}
 
-	function update() {
+	function update(): void {
 		const ef = efforts[idx];
 		// Squish : signature ChatGPT (codex) uniquement — le handoff claude
 		// n'en a pas, et son pouce est piloté en transform (conflit).
@@ -834,7 +954,7 @@ function openEffortSlider(anchorEl, opts) {
 		}
 	}
 
-	function commit() {
+	function commit(): void {
 		const v = efforts[idx].value;
 		if (v === committed) return;
 		committed = v;
@@ -842,7 +962,7 @@ function openEffortSlider(anchorEl, opts) {
 		if (opts.onPickEffort) opts.onPickEffort(v);
 	}
 
-	function idxFromPointer(e) {
+	function idxFromPointer(e: PointerEvent): number {
 		const r = rail.getBoundingClientRect();
 		const p = Math.min(Math.max((e.clientX - r.left) / r.width, 0), 1);
 		return Math.round(p * (n - 1));
@@ -927,7 +1047,7 @@ function openEffortSlider(anchorEl, opts) {
 	menuEl.style.top = top + "px";
 	menuEl.style.visibility = "";
 
-	function closeMenu() {
+	function closeMenu(): void {
 		if (trackFx) trackFx.destroy(); // stoppe la boucle rAF du canvas
 		if (stopDrift) stopDrift();     // stoppe la boucle rAF du drift Fast
 		for (const t of tips) t.remove();
@@ -940,17 +1060,19 @@ function openEffortSlider(anchorEl, opts) {
 		window.removeEventListener("resize", closeMenu);
 	}
 
-	function onDocDown(e) {
-		if (anchorEl.contains(e.target) || menuEl.contains(e.target)) return;
+	function onDocDown(e: MouseEvent): void {
+		const t = e.target as Node | null;
+		if ((t && anchorEl.contains(t)) || (t && menuEl.contains(t))) return;
 		closeMenu();
 	}
 
-	function onKeyDown(e) {
+	function onKeyDown(e: KeyboardEvent): void {
 		if (e.key === "Escape") closeMenu();
 	}
 
-	function onScroll(e) {
-		if (menuEl.contains(e.target)) return;
+	function onScroll(e: Event): void {
+		const t = e.target as Node | null;
+		if (t && menuEl.contains(t)) return;
 		closeMenu();
 	}
 
@@ -962,6 +1084,16 @@ function openEffortSlider(anchorEl, opts) {
 	setTimeout(() => slider.focus(), 0);
 
 	return { close: closeMenu };
+}
+
+/* ── openOptionsMenu ──────────────────────────────────────── */
+
+export interface OpenOptionsMenuOptions {
+	count: number;
+	type: string;
+	types: string[];
+	onCount?: (n: number) => void;
+	onType?: (t: string) => void;
 }
 
 /*
@@ -976,7 +1108,7 @@ function openEffortSlider(anchorEl, opts) {
  * imbriqué : l'ouverture d'un createSelect appelle closeAllSelects(),
  * qui fermerait ce popover.
  */
-function openOptionsMenu(anchorEl, opts) {
+export function openOptionsMenu(anchorEl: HTMLElement, opts: OpenOptionsMenuOptions): MenuHandle {
 	closeAllSelects();
 
 	const menuEl = document.body.createDiv({ cls: "qbd-select-menu qbd-options-pop" });
@@ -998,14 +1130,14 @@ function openOptionsMenu(anchorEl, opts) {
 	trigger.type = "button";
 	const trigLabel = trigger.createSpan({ cls: "qbd-opts-dd-label" });
 	const trigChev = trigger.createSpan({ cls: "qbd-select-chevron" });
-	obsidian.setIcon(trigChev, "chevron-down");
+	setIcon(trigChev, "chevron-down");
 	const ddMenu = ddWrap.createDiv({ cls: "qbd-opts-dd-menu is-hidden" });
 	const field = countRow.createEl("input", {
 		type: "number", cls: "qbd-opts-count",
 		attr: { min: "1", max: "100", inputmode: "numeric" }
 	});
 
-	const commitCount = (n) => {
+	const commitCount = (n: unknown) => {
 		count = Math.min(100, Math.max(1, Math.round(Number(n) || count)));
 		field.value = String(count);
 		if (opts.onCount) opts.onCount(count);
@@ -1015,14 +1147,15 @@ function openOptionsMenu(anchorEl, opts) {
 		trigLabel.setText(isCustom ? "Personnalisé" : count + " questions");
 		field.classList.toggle("is-hidden", !isCustom);
 		trigger.setAttribute("aria-expanded", ddMenu.classList.contains("is-hidden") ? "false" : "true");
-		for (const b of ddMenu.querySelectorAll(".qbd-opts-dd-item")) {
+		for (const b of Array.from(ddMenu.querySelectorAll<HTMLButtonElement>(".qbd-opts-dd-item"))) {
 			const active = b.dataset.preset === "custom"
 				? isCustom
 				: (!isCustom && Number(b.dataset.preset) === count);
 			b.classList.toggle("is-active", active);
 			const check = b.querySelector(".qbd-select-check");
+			if (!check) continue;
 			check.empty();
-			if (active) obsidian.setIcon(check, "check");
+			if (active) setIcon(check as HTMLElement, "check");
 		}
 	};
 
@@ -1072,15 +1205,15 @@ function openOptionsMenu(anchorEl, opts) {
 
 	// ── Type : items à coche (même anatomie que les options de select) ──
 	menuEl.createDiv({ cls: "qbd-options-pop-title", text: "Type" });
-	const items = [];
+	const items: Array<{ t: string; btn: HTMLButtonElement; check: HTMLElement }> = [];
 	let current = opts.type;
-	function refreshItems() {
+	function refreshItems(): void {
 		for (const it of items) {
 			const active = it.t === current;
 			it.btn.classList.toggle("is-active", active);
 			it.btn.setAttribute("aria-checked", active ? "true" : "false");
 			it.check.empty();
-			if (active) obsidian.setIcon(it.check, "check");
+			if (active) setIcon(it.check, "check");
 		}
 	}
 	for (const t of opts.types) {
@@ -1112,7 +1245,7 @@ function openOptionsMenu(anchorEl, opts) {
 	menuEl.style.top = top + "px";
 	menuEl.style.visibility = "";
 
-	function closeMenu() {
+	function closeMenu(): void {
 		menuEl.remove();
 		openMenus.delete(closeMenu);
 		document.removeEventListener("mousedown", onDocDown, true);
@@ -1121,17 +1254,19 @@ function openOptionsMenu(anchorEl, opts) {
 		window.removeEventListener("resize", closeMenu);
 	}
 
-	function onDocDown(e) {
-		if (anchorEl.contains(e.target) || menuEl.contains(e.target)) return;
+	function onDocDown(e: MouseEvent): void {
+		const t = e.target as Node | null;
+		if ((t && anchorEl.contains(t)) || (t && menuEl.contains(t))) return;
 		closeMenu();
 	}
 
-	function onKeyDown(e) {
+	function onKeyDown(e: KeyboardEvent): void {
 		if (e.key === "Escape") closeMenu();
 	}
 
-	function onScroll(e) {
-		if (menuEl.contains(e.target)) return;
+	function onScroll(e: Event): void {
+		const t = e.target as Node | null;
+		if (t && menuEl.contains(t)) return;
 		closeMenu();
 	}
 
@@ -1144,6 +1279,16 @@ function openOptionsMenu(anchorEl, opts) {
 	return { close: closeMenu };
 }
 
+/* ── openNotePicker ───────────────────────────────────────── */
+
+export interface OpenNotePickerOptions {
+	/** Notes actuellement ouvertes (ordre des onglets). */
+	openFiles?: TFile[];
+	/** Toutes les notes du vault (pour la recherche). */
+	allFiles?: TFile[];
+	onPick?: (file: TFile) => void;
+}
+
 /*
  * openNotePicker(anchorEl, {
  *   openFiles: TFile[],   // notes actuellement ouvertes (ordre des onglets)
@@ -1153,7 +1298,7 @@ function openOptionsMenu(anchorEl, opts) {
  * Sélecteur de note (« Insérer dans une note ») : les notes OUVERTES en
  * tête, et une recherche qui fouille tout le vault en dessous.
  */
-function openNotePicker(anchorEl, opts) {
+export function openNotePicker(anchorEl: HTMLElement, opts: OpenNotePickerOptions): MenuHandle {
 	closeAllSelects();
 
 	const menuEl = document.body.createDiv({
@@ -1168,12 +1313,12 @@ function openNotePicker(anchorEl, opts) {
 	});
 	const listEl = menuEl.createDiv({ cls: "qbd-model-menu-list" });
 
-	function addFile(file) {
+	function addFile(file: TFile): void {
 		const b = listEl.createEl("button", { cls: "qbd-select-option qbd-note-picker-item" });
 		b.type = "button";
 		b.setAttribute("role", "option");
 		const ic = b.createSpan({ cls: "qbd-action-menu-icon" });
-		obsidian.setIcon(ic, "file-text");
+		setIcon(ic, "file-text");
 		const body = b.createDiv({ cls: "qbd-action-menu-body" });
 		body.createSpan({ cls: "qbd-select-option-label", text: file.basename });
 		const folder = file.parent && file.parent.path && file.parent.path !== "/" ? file.parent.path : "";
@@ -1184,17 +1329,17 @@ function openNotePicker(anchorEl, opts) {
 		});
 	}
 
-	function paint(query) {
+	function paint(query: string): void {
 		listEl.empty();
 		const f = (query || "").trim().toLowerCase();
-		const match = (file) => !f
+		const match = (file: TFile) => !f
 			|| file.basename.toLowerCase().includes(f)
 			|| file.path.toLowerCase().includes(f);
 		const open = (opts.openFiles || []).filter(match);
 		// La recherche fouille TOUT le vault ; sans requête, seules les
 		// notes ouvertes sont proposées (référence : « uniquement celles
 		// ouvertes, et on peut surtout chercher »).
-		let rest = [];
+		let rest: TFile[] = [];
 		if (f) {
 			const openPaths = new Set(open.map(x => x.path));
 			rest = (opts.allFiles || []).filter(x => !openPaths.has(x.path) && match(x)).slice(0, 30);
@@ -1240,7 +1385,7 @@ function openNotePicker(anchorEl, opts) {
 	menuEl.style.top = top + "px";
 	menuEl.style.visibility = "";
 
-	function closeMenu() {
+	function closeMenu(): void {
 		menuEl.remove();
 		openMenus.delete(closeMenu);
 		document.removeEventListener("mousedown", onDocDown, true);
@@ -1249,17 +1394,19 @@ function openNotePicker(anchorEl, opts) {
 		window.removeEventListener("resize", closeMenu);
 	}
 
-	function onDocDown(e) {
-		if (anchorEl.contains(e.target) || menuEl.contains(e.target)) return;
+	function onDocDown(e: MouseEvent): void {
+		const t = e.target as Node | null;
+		if ((t && anchorEl.contains(t)) || (t && menuEl.contains(t))) return;
 		closeMenu();
 	}
 
-	function onKeyDown(e) {
+	function onKeyDown(e: KeyboardEvent): void {
 		if (e.key === "Escape") closeMenu();
 	}
 
-	function onScroll(e) {
-		if (menuEl.contains(e.target)) return;
+	function onScroll(e: Event): void {
+		const t = e.target as Node | null;
+		if (t && menuEl.contains(t)) return;
 		closeMenu();
 	}
 
@@ -1271,7 +1418,3 @@ function openNotePicker(anchorEl, opts) {
 
 	return { close: closeMenu };
 }
-
-const obsidian = require("obsidian");
-const { createEffortTrackFx } = require("./effort-canvas");
-module.exports = { createSelect, closeAllSelects, openActionMenu, openModelMenu, openEffortSlider, openOptionsMenu, openNotePicker };

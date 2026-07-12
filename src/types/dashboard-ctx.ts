@@ -29,6 +29,7 @@ import type { NavHandlers } from "../dashboard/nav";
 import type { QuizzesHandlers } from "../dashboard/quizzes";
 import type { HomeHandlers } from "../dashboard/home";
 import type { DetailHandlers } from "../dashboard/detail";
+import type { VoiceSettings } from "../dashboard/voice-install";
 
 export type { Scanner, StatsStore };
 
@@ -109,7 +110,15 @@ export interface DashboardCtx {
 	/** Référence à la vue hôte — même objet que `this` dans QuizDashboardView (dashboard.js:55). */
 	view: DashboardView;
 	app: App;
-	plugin: Plugin;
+	/**
+	 * `plugin.settings` : uniquement le sous-ensemble "dictée" (`VoiceSettings`,
+	 * lu par `voice-input.ts` via `ctx.plugin.settings`) est honnêtement typé à
+	 * ce stade (Task 8b) — la forme complète (aiProvider, aiModel, quizStats…)
+	 * sera étoffée par la conversion du lot IA (Task 8c) et de `plugin.js`
+	 * lui-même (encore `.js`). Les champs non listés existent bel et bien au
+	 * runtime, simplement pas encore déclarés ici.
+	 */
+	plugin: Plugin & { settings: VoiceSettings };
 	/** Copie de `view.scanner` au moment de la construction du ctx (dashboard.js:58). */
 	scanner: Scanner;
 	/** Copie de `view.statsStore` au moment de la construction du ctx (dashboard.js:59). */

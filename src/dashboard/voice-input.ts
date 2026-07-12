@@ -1,4 +1,7 @@
-'use strict';
+import { Notice } from "obsidian";
+import type { ChildProcess } from "child_process";
+import { getStatus } from "./voice-install";
+import type { DashboardCtx } from "../types/dashboard-ctx";
 
 /* ══════════════════════════════════════════════════════════
    VOICE INPUT — Dictée push-to-talk (composer IA)
@@ -8,16 +11,18 @@
    docs/superpowers/specs/2026-07-10-voice-input-design.md
 ══════════════════════════════════════════════════════════ */
 
-const obsidian = require("obsidian");
-const voiceInstall = require("./voice-install");
-
 const HOLD_MS = 400;           // seuil appui long (spec)
 const MAX_RECORD_MS = 120000;  // garde-fou durée (spec)
 const WHISPER_TIMEOUT_MS = 60000;
 
+/** État retourné par attach(ctx, textarea). */
+export interface VoiceInputHandle {
+	detach(): void;
+}
+
 /* WAV PCM16 mono : header RIFF 44 octets + échantillons clampés.
    16 kHz mono = l'entrée native de whisper.cpp — aucune conversion. */
-function encodeWav(chunks, sampleRate) {
+export function encodeWav(chunks: Float32Array[], sampleRate: number): Buffer {
 	let n = 0;
 	for (const c of chunks) n += c.length;
 	const buf = Buffer.alloc(44 + n * 2);
@@ -47,7 +52,7 @@ function encodeWav(chunks, sampleRate) {
 /* Espaces intelligents : la dictée se colle proprement au voisinage —
    espace avant si le curseur suit un caractère plein, espace après si
    un caractère plein suit (sauf ponctuation fermante). */
-function padDictation(value, pos, text) {
+export function padDictation(value: string, pos: number, text: string): string {
 	const before = value.slice(0, pos);
 	const after = value.slice(pos);
 	let t = text;
@@ -56,21 +61,28 @@ function padDictation(value, pos, text) {
 	return t;
 }
 
+type VoiceInputState = "idle" | "armed" | "recording" | "transcribing";
+
 /* Machine d'états : idle → armed (Espace enfoncé < seuil) → recording
    → transcribing → idle. Tout chemin d'erreur/annulation retombe sur
    idle avec les ressources libérées. */
-function attach(ctx, textarea) {
-	let state = "idle";
+export function attach(ctx: DashboardCtx, textarea: HTMLTextAreaElement): VoiceInputHandle {
+	let state: VoiceInputState = "idle";
 	let holdTimer = 0, maxTimer = 0, pillTick = 0;
 	let armedPos = 0;
-	let stream = null, audioCtx = null, srcNode = null, procNode = null;
-	let chunks = null, startTs = 0;
-	let pill = null, child = null;
+	let stream: MediaStream | null = null;
+	let audioCtx: AudioContext | null = null;
+	let srcNode: MediaStreamAudioSourceNode | null = null;
+	let procNode: ScriptProcessorNode | null = null;
+	let chunks: Float32Array[] | null = null;
+	let startTs = 0;
+	let pill: HTMLDivElement | null = null;
+	let child: ChildProcess | null = null;
 
 	const settings = () => ctx.plugin.settings;
 
 	// ── Pill d'état (fixed au-dessus du composer, même verre que les tips) ──
-	function showPill(busy) {
+	function showPill(busy: boolean): void {
 		hidePillOnly();
 		pill = document.body.createDiv({ cls: "qbd-voice-pill" + (busy ? " is-busy" : "") });
 		pill.createDiv({ cls: "qbd-voice-pill-dot" });
@@ -92,22 +104,22 @@ function attach(ctx, textarea) {
 			}, 500);
 		}
 	}
-	function hidePillOnly() {
+	function hidePillOnly(): void {
 		if (pillTick) { clearInterval(pillTick); pillTick = 0; }
 		if (pill) { pill.remove(); pill = null; }
 	}
 
 	// ── Capture ──
-	async function startRecording() {
+	async function startRecording(): Promise<void> {
 		state = "recording";
-		let s;
+		let s: MediaStream;
 		try {
 			s = await navigator.mediaDevices.getUserMedia({
 				audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true },
 			});
 		} catch (e) {
 			state = "idle";
-			new obsidian.Notice(e && e.name === "NotAllowedError"
+			new Notice(e instanceof DOMException && e.name === "NotAllowedError"
 				? "Dictée : permission micro refusée."
 				: "Dictée : aucun micro accessible.");
 			return;
@@ -122,6 +134,7 @@ function attach(ctx, textarea) {
 		procNode = audioCtx.createScriptProcessor(4096, 1, 1);
 		chunks = [];
 		procNode.onaudioprocess = (e) => {
+			if (!chunks) return;
 			chunks.push(new Float32Array(e.inputBuffer.getChannelData(0)));
 		};
 		srcNode.connect(procNode);
@@ -131,7 +144,7 @@ function attach(ctx, textarea) {
 		maxTimer = window.setTimeout(() => stopRecording(true), MAX_RECORD_MS);
 	}
 
-	function releaseMedia() {
+	function releaseMedia(): void {
 		if (maxTimer) { clearTimeout(maxTimer); maxTimer = 0; }
 		if (procNode) {
 			try { procNode.disconnect(); } catch (e) { /* déjà */ }
@@ -143,14 +156,14 @@ function attach(ctx, textarea) {
 		if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; }
 	}
 
-	function cancelRecording() {
+	function cancelRecording(): void {
 		releaseMedia();
 		hidePillOnly();
 		chunks = null;
 		state = "idle";
 	}
 
-	function stopRecording(transcribeIt) {
+	function stopRecording(transcribeIt: boolean): void {
 		if (state !== "recording") return;
 		const data = chunks;
 		releaseMedia();
@@ -160,31 +173,31 @@ function attach(ctx, textarea) {
 	}
 
 	// ── Transcription ──
-	function runTranscription(data) {
-		const st = voiceInstall.getStatus(settings());
-		if (!st.ready) {
+	function runTranscription(data: Float32Array[]): void {
+		const st = getStatus(settings());
+		if (!st.ready || !st.cliPath || !st.modelFile) {
 			// Installation disparue ENTRE l'armement et le relâchement
 			// (modèle supprimé…) : prévenir plutôt qu'avaler la dictée.
 			hidePillOnly();
 			state = "idle";
-			new obsidian.Notice("Dictée : binaire ou modèle manquant, voir les réglages de Quiz Blocks.");
+			new Notice("Dictée : binaire ou modèle manquant, voir les réglages de Quiz Blocks.");
 			return;
 		}
 		state = "transcribing";
 		showPill(true);
-		const fs = require("fs");
-		const os = require("os");
-		const pathMod = require("path");
+		const fs = require("fs") as typeof import("fs");
+		const os = require("os") as typeof import("os");
+		const pathMod = require("path") as typeof import("path");
 		const wavPath = pathMod.join(os.tmpdir(), "qbd-voice-" + Date.now() + ".wav");
 		try {
 			fs.writeFileSync(wavPath, encodeWav(data, 16000));
 		} catch (e) {
 			hidePillOnly();
 			state = "idle";
-			new obsidian.Notice("Dictée : écriture du fichier audio impossible.");
+			new Notice("Dictée : écriture du fichier audio impossible.");
 			return;
 		}
-		const cp = require("child_process");
+		const cp = require("child_process") as typeof import("child_process");
 		child = cp.execFile(st.cliPath,
 			["-m", st.modelFile, "-f", wavPath, "-l", settings().voiceLang || "fr", "-nt", "-np"],
 			{ windowsHide: true, timeout: WHISPER_TIMEOUT_MS, maxBuffer: 8 * 1024 * 1024 },
@@ -195,38 +208,38 @@ function attach(ctx, textarea) {
 				state = "idle";
 				if (err) {
 					console.error("[quiz-blocks] whisper:", err);
-					new obsidian.Notice("Dictée : transcription échouée (voir console).");
+					new Notice("Dictée : transcription échouée (voir console).");
 					return;
 				}
 				const text = String(stdout || "").trim();
-				if (!text) { new obsidian.Notice("Dictée : aucun texte reconnu."); return; }
+				if (!text) { new Notice("Dictée : aucun texte reconnu."); return; }
 				if (!textarea.isConnected) return;
 				insertAtCursor(text);
 			});
 	}
 
-	function insertAtCursor(text) {
-		const pos = textarea.selectionStart;
+	function insertAtCursor(text: string): void {
+		const pos = textarea.selectionStart ?? 0;
 		const t = padDictation(textarea.value, pos, text);
-		textarea.setRangeText(t, pos, textarea.selectionEnd, "end");
+		textarea.setRangeText(t, pos, textarea.selectionEnd ?? pos, "end");
 		textarea.dispatchEvent(new Event("input", { bubbles: true }));
 		textarea.focus();
 	}
 
 	// ── Hold Espace ──
-	function disarm() {
+	function disarm(): void {
 		if (holdTimer) { clearTimeout(holdTimer); holdTimer = 0; }
 		if (state === "armed") state = "idle";
 	}
 
-	function beginHold() {
+	function beginHold(): void {
 		holdTimer = 0;
 		if (state !== "armed") return;
-		const st = voiceInstall.getStatus(settings());
+		const st = getStatus(settings());
 		if (!st.supported) { state = "idle"; return; }
 		if (!st.ready) {
 			state = "idle";
-			new obsidian.Notice("Dictée : binaire ou modèle manquant, voir les réglages de Quiz Blocks.");
+			new Notice("Dictée : binaire ou modèle manquant, voir les réglages de Quiz Blocks.");
 			return;
 		}
 		// Retire l'espace inséré à l'armement : le hold n'est pas une frappe.
@@ -237,7 +250,7 @@ function attach(ctx, textarea) {
 		startRecording();
 	}
 
-	function onKeyDown(e) {
+	function onKeyDown(e: KeyboardEvent): void {
 		if (e.key === "Escape" && (state === "recording" || state === "transcribing")) {
 			if (state === "recording") cancelRecording();
 			return;
@@ -253,17 +266,17 @@ function attach(ctx, textarea) {
 		if (state === "recording") { e.preventDefault(); return; }
 		if (state === "transcribing") return; // espace normal ; pas de nouveau hold
 		state = "armed";
-		armedPos = textarea.selectionStart; // l'espace de CE keydown s'insérera ici
+		armedPos = textarea.selectionStart ?? 0; // l'espace de CE keydown s'insérera ici
 		holdTimer = window.setTimeout(beginHold, HOLD_MS);
 	}
 
-	function onKeyUp(e) {
+	function onKeyUp(e: KeyboardEvent): void {
 		if (e.code !== "Space") return;
 		if (state === "armed") { disarm(); return; }    // appui bref = espace normal
 		if (state === "recording") stopRecording(true); // relâcher = transcrire
 	}
 
-	function onBlur() {
+	function onBlur(): void {
 		if (state === "armed") disarm();
 		else if (state === "recording") cancelRecording();
 	}
@@ -283,5 +296,3 @@ function attach(ctx, textarea) {
 		},
 	};
 }
-
-module.exports = { attach, encodeWav, padDictation, HOLD_MS, MAX_RECORD_MS };
