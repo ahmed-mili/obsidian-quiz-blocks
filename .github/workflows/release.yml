@@ -38,46 +38,20 @@ jobs:
             console.log('Manifest version updated to:', m.version);
           "
 
-      - name: Build main.js
-        run: |
-          node -e "
-            const esbuild = require('esbuild');
-            esbuild.buildSync({
-              entryPoints: ['src/main.ts'],
-              outfile: 'release/main.js',
-              bundle: true,
-              format: 'cjs',
-              platform: 'node',
-              target: 'es2020',
-              sourcemap: false,
-              external: ['obsidian', 'electron'],
-            });
-            console.log('main.js built successfully');
-          "
-        env:
-          NODE_ENV: production
+      - name: Type check
+        run: npm run check
 
-      - name: Bundle CSS
+      # Le build passe par esbuild.config.mjs : une config esbuild dupliquée ici
+      # diverge en silence (les loaders de fontes MathLive y ont manqué).
+      # Hors Windows, aucun vault n'est détecté : la sortie reste dans dist/.
+      - name: Build
+        run: npm run build
+
+      - name: Collect release files
         run: |
           mkdir -p release
-          node -e "
-            const esbuild = require('esbuild');
-            const fs = require('fs');
-            esbuild.buildSync({
-              entryPoints: ['src/assets/css/index.css'],
-              outfile: 'release/styles.css',
-              bundle: true,
-              minify: false,
-            });
-            // Remove esbuild entry point comment
-            let css = fs.readFileSync('release/styles.css', 'utf8');
-            css = css.replace(/\n\/\* src\/assets\/css\/index\.css \*\/\s*$/, '');
-            fs.writeFileSync('release/styles.css', css);
-            console.log('styles.css bundled successfully');
-          "
-
-      - name: Copy manifest
-        run: cp src/assets/manifest.json release/manifest.json
+          cp dist/main.js dist/styles.css release/
+          cp src/assets/manifest.json release/manifest.json
 
       - name: List release files
         run: ls -lh release/
