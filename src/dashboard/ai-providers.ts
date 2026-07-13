@@ -124,7 +124,7 @@ export function getProvider(id: string): Provider {
 /* Mêmes noms que le sélecteur /model de Claude Code ; les values
    sont les alias CLI stables (suivent les derniers modèles du compte). */
 export const CLAUDE_CODE_MODELS: ModelDef[] = [
-	{ value: "fable", label: "Fable 5", hint: "le plus puissant", desc: "Pour vos défis les plus difficiles", badge: "Inclus jusqu'au 19 juillet" },
+	{ value: "fable", label: "Fable 5", hint: "le plus puissant", desc: "Pour vos défis les plus difficiles", badge: "Inclus" },
 	{ value: "opus", label: "Opus 4.8", hint: "recommandé", desc: "Pour les tâches complexes" },
 	{ value: "sonnet", label: "Sonnet 5", hint: "efficace au quotidien", desc: "Le plus efficace pour les tâches quotidiennes" },
 	{ value: "haiku", label: "Haiku 4.5", hint: "le plus rapide", desc: "Le plus rapide pour des réponses rapides" }
@@ -331,29 +331,58 @@ export function getEffortLabel(value: string | undefined, providerId: string): s
 	return def.label;
 }
 
-/* ── Fable 5 : accès promo PROLONGÉ jusqu'au 19 juillet 2026 ──
-   Source officielle : support.claude.com/en/articles/15424964-claude-fable-5-promotional-access
-   (fin exacte : 19 juillet 2026 23:59:59 PT ; après, Fable sort du quota hebdo).
-   À partir du 20 juillet (date locale), Fable disparaît de la liste et tout
-   réglage pointant dessus retombe sur le modèle par défaut. Le jour+1 à minuit
-   local couvre tout le 19 juillet (approx. fuseau, comme l'échéance précédente).
-   `now` est injectable pour les tests. (mois 0-indexé → 6 = juillet) */
-const FABLE_CUTOFF = new Date(2026, 6, 20, 0, 0, 0, 0);
+/* ── Fable 5 : détection DYNAMIQUE via le cache du CLI Claude Code ──
+   Le CLI publie le modèle promo courant dans ~/.claude.json, clé
+   `additionalModelOptionsCache` (ex. { value: "claude-fable-5[1m]", label:
+   "Fable", … }). On lit cette clé plutôt qu'une date en dur : si le CLI propose
+   Fable (promo active), on l'affiche ; sinon on le masque. Auto-suit les
+   prolongations ET la fin de promo, sans maintenance ni date à mettre à jour.
+   Même esprit que les modèles Codex dynamiques (~/.codex/models_cache.json).
+   Lecture desktop-only (fs), mise en cache TTL pour ne pas relire ~/.claude.json
+   à chaque ouverture de menu. Fallback prudent si illisible/absent = Fable masqué. */
+let fableOfferedCache: { at: number; value: boolean } | null = null;
+const FABLE_CACHE_TTL = 60000;
 
-export function isFableAvailable(now?: Date): boolean {
-	return (now || new Date()) < FABLE_CUTOFF;
+/* Une entrée `additionalModelOptionsCache` désigne-t-elle Fable ? */
+function cacheEntryIsFable(entry: unknown): boolean {
+	if (!entry || typeof entry !== "object") return false;
+	const value = (entry as { value?: unknown }).value;
+	return typeof value === "string" && value.toLowerCase().includes("fable");
 }
 
-/* Liste des modèles Claude visibles à la date donnée. */
-export function getClaudeModels(now?: Date): ModelDef[] {
-	if (isFableAvailable(now)) return CLAUDE_CODE_MODELS;
+/* Fable est-il actuellement proposé par le CLI Claude Code ? (cache TTL, desktop) */
+export function isFableOffered(): boolean {
+	if (!Platform.isDesktopApp) return false;
+	if (fableOfferedCache && Date.now() - fableOfferedCache.at < FABLE_CACHE_TTL) {
+		return fableOfferedCache.value;
+	}
+	let offered = false;
+	try {
+		const fs = require("fs") as typeof import("fs");
+		const os = require("os") as typeof import("os");
+		const path = require("path") as typeof import("path");
+		const file = path.join(os.homedir(), ".claude.json");
+		const cfg = JSON.parse(fs.readFileSync(file, "utf8")) as { additionalModelOptionsCache?: unknown };
+		const cache = cfg.additionalModelOptionsCache;
+		offered = Array.isArray(cache) ? cache.some(cacheEntryIsFable) : cacheEntryIsFable(cache);
+	} catch {
+		offered = false; // ~/.claude.json absent/illisible → masquer par prudence
+	}
+	fableOfferedCache = { at: Date.now(), value: offered };
+	return offered;
+}
+
+/* Liste des modèles Claude visibles maintenant : Fable inclus seulement s'il
+   est effectivement proposé par le CLI. */
+export function getClaudeModels(): ModelDef[] {
+	if (isFableOffered()) return CLAUDE_CODE_MODELS;
 	return CLAUDE_CODE_MODELS.filter(m => m.value !== "fable");
 }
 
 /* Modèle Claude effectif : si le modèle choisi n'est plus visible
-   (ex. Fable après le 19 juillet), retombe sur le modèle par défaut. */
-export function resolveClaudeModel(value?: string, now?: Date): string {
-	const models = getClaudeModels(now);
+   (ex. Fable une fois la promo terminée), retombe sur le modèle par défaut. */
+export function resolveClaudeModel(value?: string): string {
+	const models = getClaudeModels();
 	if (models.some(m => m.value === value)) return value as string;
 	return getProvider("claude-code").defaultModel;
 }

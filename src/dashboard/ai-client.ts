@@ -96,7 +96,7 @@ export function createAiClient(plugin: AiPlugin): AiClient {
 		const { count = 5, type = "Mixte", source = "topic", images = [] } = options;
 		const provider = plugin.settings.aiProvider || "claude-code";
 		let model = plugin.settings.aiModel || DEFAULT_MODELS[provider];
-		// Fable 5 masqué après le 19 juillet → retombe sur le défaut Claude
+		// Fable 5 masqué si la promo n'est plus proposée → retombe sur le défaut Claude
 		if (provider === "claude-code") {
 			model = resolveClaudeModel(model);
 		}
