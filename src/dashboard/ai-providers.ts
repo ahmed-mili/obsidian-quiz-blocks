@@ -331,17 +331,26 @@ export function getEffortLabel(value: string | undefined, providerId: string): s
 	return def.label;
 }
 
-/* ── Fable 5 : détection DYNAMIQUE via le cache du CLI Claude Code ──
-   Le CLI publie le modèle promo courant dans ~/.claude.json, clé
-   `additionalModelOptionsCache` (ex. { value: "claude-fable-5[1m]", label:
-   "Fable", … }). On lit cette clé plutôt qu'une date en dur : si le CLI propose
-   Fable (promo active), on l'affiche ; sinon on le masque. Auto-suit les
-   prolongations ET la fin de promo, sans maintenance ni date à mettre à jour.
-   Même esprit que les modèles Codex dynamiques (~/.codex/models_cache.json).
-   Lecture desktop-only (fs), mise en cache TTL pour ne pas relire ~/.claude.json
-   à chaque ouverture de menu. Fallback prudent si illisible/absent = Fable masqué. */
-let fableOfferedCache: { at: number; value: boolean } | null = null;
+/* ── Fable 5 : détection + badge DYNAMIQUES via les caches du CLI Claude Code ──
+   Le CLI publie dans ~/.claude.json : (1) le modèle promo courant sous
+   `additionalModelOptionsCache` (ex. { value: "claude-fable-5[1m]", … }) → sert
+   à savoir si Fable est proposé ; (2) l'annonce de promo sous
+   `cachedGrowthBookFeatures.tengu_startup_announcements` (title « Extended
+   through July 19 ») → sert à dater le badge. On lit ces caches plutôt qu'une
+   date en dur : dispo ET date suivent automatiquement les prolongations/fin de
+   promo, sans maintenance. Même esprit que les modèles Codex dynamiques
+   (~/.codex/models_cache.json). Lecture desktop-only (fs), cache TTL pour ne pas
+   relire ~/.claude.json à chaque ouverture de menu. Fallback prudent si
+   illisible/absent : Fable masqué. Si la date est introuvable : badge « Inclus ». */
+type FableInfo = { offered: boolean; badge: string };
+let fableInfoCache: { at: number; info: FableInfo } | null = null;
 const FABLE_CACHE_TTL = 60000;
+
+const MONTHS_EN_FR: Record<string, string> = {
+	January: "janvier", February: "février", March: "mars", April: "avril",
+	May: "mai", June: "juin", July: "juillet", August: "août",
+	September: "septembre", October: "octobre", November: "novembre", December: "décembre"
+};
 
 /* Une entrée `additionalModelOptionsCache` désigne-t-elle Fable ? */
 function cacheEntryIsFable(entry: unknown): boolean {
@@ -350,33 +359,60 @@ function cacheEntryIsFable(entry: unknown): boolean {
 	return typeof value === "string" && value.toLowerCase().includes("fable");
 }
 
-/* Fable est-il actuellement proposé par le CLI Claude Code ? (cache TTL, desktop) */
-export function isFableOffered(): boolean {
-	if (!Platform.isDesktopApp) return false;
-	if (fableOfferedCache && Date.now() - fableOfferedCache.at < FABLE_CACHE_TTL) {
-		return fableOfferedCache.value;
+/* Badge daté depuis l'annonce promo Fable (« Extended through July 19 » →
+   « Inclus jusqu'au 19 juillet »). Retombe sur « Inclus » si non trouvée/parsée. */
+function fableBadgeFromAnnouncements(anns: unknown): string {
+	if (!Array.isArray(anns)) return "Inclus";
+	const fable = anns.find(
+		(a): a is { title?: string; text?: string } =>
+			!!a && typeof (a as { id?: unknown }).id === "string" &&
+			(a as { id: string }).id.toLowerCase().includes("fable")
+	);
+	if (!fable) return "Inclus";
+	const m = `${fable.title ?? ""} ${fable.text ?? ""}`.match(/through\s+([A-Za-z]+)\s+(\d{1,2})/);
+	const month = m ? MONTHS_EN_FR[m[1]] : undefined;
+	return m && month ? `Inclus jusqu'au ${m[2]} ${month}` : "Inclus";
+}
+
+/* Lit ~/.claude.json (cache TTL, desktop) : Fable proposé ? + libellé de badge daté. */
+function readFableInfo(): FableInfo {
+	if (!Platform.isDesktopApp) return { offered: false, badge: "Inclus" };
+	if (fableInfoCache && Date.now() - fableInfoCache.at < FABLE_CACHE_TTL) {
+		return fableInfoCache.info;
 	}
-	let offered = false;
+	let info: FableInfo = { offered: false, badge: "Inclus" };
 	try {
 		const fs = require("fs") as typeof import("fs");
 		const os = require("os") as typeof import("os");
 		const path = require("path") as typeof import("path");
-		const file = path.join(os.homedir(), ".claude.json");
-		const cfg = JSON.parse(fs.readFileSync(file, "utf8")) as { additionalModelOptionsCache?: unknown };
+		const cfg = JSON.parse(fs.readFileSync(path.join(os.homedir(), ".claude.json"), "utf8")) as {
+			additionalModelOptionsCache?: unknown;
+			cachedGrowthBookFeatures?: { tengu_startup_announcements?: unknown };
+		};
 		const cache = cfg.additionalModelOptionsCache;
-		offered = Array.isArray(cache) ? cache.some(cacheEntryIsFable) : cacheEntryIsFable(cache);
+		const offered = Array.isArray(cache) ? cache.some(cacheEntryIsFable) : cacheEntryIsFable(cache);
+		info = {
+			offered,
+			badge: offered ? fableBadgeFromAnnouncements(cfg.cachedGrowthBookFeatures?.tengu_startup_announcements) : "Inclus"
+		};
 	} catch {
-		offered = false; // ~/.claude.json absent/illisible → masquer par prudence
+		info = { offered: false, badge: "Inclus" }; // ~/.claude.json absent/illisible → masquer
 	}
-	fableOfferedCache = { at: Date.now(), value: offered };
-	return offered;
+	fableInfoCache = { at: Date.now(), info };
+	return info;
 }
 
-/* Liste des modèles Claude visibles maintenant : Fable inclus seulement s'il
-   est effectivement proposé par le CLI. */
+/* Fable est-il actuellement proposé par le CLI Claude Code ? */
+export function isFableOffered(): boolean {
+	return readFableInfo().offered;
+}
+
+/* Liste des modèles Claude visibles maintenant : Fable inclus seulement s'il est
+   proposé par le CLI, avec son badge daté (« Inclus jusqu'au <date> »). */
 export function getClaudeModels(): ModelDef[] {
-	if (isFableOffered()) return CLAUDE_CODE_MODELS;
-	return CLAUDE_CODE_MODELS.filter(m => m.value !== "fable");
+	const info = readFableInfo();
+	if (!info.offered) return CLAUDE_CODE_MODELS.filter(m => m.value !== "fable");
+	return CLAUDE_CODE_MODELS.map(m => m.value === "fable" ? { ...m, badge: info.badge } : m);
 }
 
 /* Modèle Claude effectif : si le modèle choisi n'est plus visible
