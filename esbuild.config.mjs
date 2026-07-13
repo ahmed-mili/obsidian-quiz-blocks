@@ -24,12 +24,18 @@ function getVaultPluginDirs() {
 	} catch (error) {
 		console.error("Erreur détection vaults :", error);
 	}
-	return dirs.length ? dirs : ["."];
+	// Aucun vault détecté : on ne déploie nulle part (le build reste dans dist/).
+	// Surtout PAS de fallback ["."] qui écrirait les artefacts dans le repo.
+	return dirs;
 }
 
 const VAULT_PLUGIN_DIRS = getVaultPluginDirs();
+if (VAULT_PLUGIN_DIRS.length === 0) {
+	console.log(`Aucun vault quiz-blocks détecté sous ${VAULTS_BASE} : build dans dist/ uniquement (pas de déploiement).`);
+}
 
 function deployFileToVaults(sourceFile) {
+	if (VAULT_PLUGIN_DIRS.length === 0) return;
 	for (const dir of VAULT_PLUGIN_DIRS) {
 		fs.mkdirSync(dir, { recursive: true });
 		fs.copyFileSync(path.resolve(sourceFile), path.join(dir, path.basename(sourceFile)));
@@ -44,7 +50,7 @@ function copyManifest() {
 async function bundleCSS() {
 	await esbuild.build({
 		entryPoints: ["src/assets/css/index.css"],
-		outfile: "styles.css",
+		outfile: "dist/styles.css",
 		bundle: true,
 		minify: false,		// Désactivé pour avoir du CSS lisible
 		logLevel: "info",
@@ -54,10 +60,10 @@ async function bundleCSS() {
 	});
 
 	// Supprimer le commentaire d'entry point laissé par esbuild
-	let css = fs.readFileSync("styles.css", "utf8");
+	let css = fs.readFileSync("dist/styles.css", "utf8");
 	css = css.replace(/\n\/\* src\/assets\/css\/index\.css \*\/\s*$/, "");
-	fs.writeFileSync("styles.css", css);
-	deployFileToVaults("styles.css");
+	fs.writeFileSync("dist/styles.css", css);
+	deployFileToVaults("dist/styles.css");
 	console.log("styles.css bundlé (tous les @import inlinés).");
 	if (!production) {
 		console.log("Mode dev: CSS non minifié pour faciliter le debug.");
@@ -66,7 +72,7 @@ async function bundleCSS() {
 
 const ctx = await esbuild.context({
 	entryPoints: ["src/main.ts"],
-	outfile: "main.js",
+	outfile: "dist/main.js",
 	bundle: true,
 	format: "cjs",
 	platform: "node",
@@ -112,7 +118,7 @@ if (watch) {
 	console.log("Build en mode watch démarré.");
 } else {
 	await ctx.rebuild();
-	deployFileToVaults("main.js");
+	deployFileToVaults("dist/main.js");
 	copyManifest();
 	await bundleCSS();
 	await ctx.dispose();

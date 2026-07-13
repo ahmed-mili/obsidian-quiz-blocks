@@ -35,11 +35,9 @@ desktop.ini
 # Local temp files
 temp/
 
-# Artefacts de build/déploiement à la racine (la release GitHub Actions
-# rebuilde tout depuis src/ ; le build local les copie dans les vaults)
-/main.js
-/styles.css
-/manifest.json
+# Settings runtime d'Obsidian (data.json) s'il traîne à la racine.
+# NB : la sortie du build (main.js, styles.css) va dans dist/ (ignoré plus haut),
+# puis est copiée dans les vaults ; la release GitHub Actions rebuilde vers release/.
 /data.json
 
 # Sessions Playwright MCP

@@ -43,7 +43,7 @@ jobs:
           node -e "
             const esbuild = require('esbuild');
             esbuild.buildSync({
-              entryPoints: ['src/main.js'],
+              entryPoints: ['src/main.ts'],
               outfile: 'release/main.js',
               bundle: true,
               format: 'cjs',
