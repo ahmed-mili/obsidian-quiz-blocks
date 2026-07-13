@@ -1,0 +1,38 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - '**'
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Type check
+        run: npm run check
+
+      # Mêmes étapes que release.yml, sans publication : une casse de build
+      # (loader manquant, import cassé) se voit au push, pas au moment du tag.
+      - name: Build
+        run: npm run build
+
+      - name: Check release artifacts
+        run: |
+          test -f dist/main.js
+          test -f dist/styles.css
+          ls -lh dist/
