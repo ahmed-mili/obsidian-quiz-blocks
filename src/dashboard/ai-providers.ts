@@ -124,7 +124,7 @@ export function getProvider(id: string): Provider {
 /* Mêmes noms que le sélecteur /model de Claude Code ; les values
    sont les alias CLI stables (suivent les derniers modèles du compte). */
 export const CLAUDE_CODE_MODELS: ModelDef[] = [
-	{ value: "fable", label: "Fable 5", hint: "le plus puissant", desc: "Pour vos défis les plus difficiles", badge: "Inclus jusqu'au 12 juillet" },
+	{ value: "fable", label: "Fable 5", hint: "le plus puissant", desc: "Pour vos défis les plus difficiles", badge: "Inclus jusqu'au 19 juillet" },
 	{ value: "opus", label: "Opus 4.8", hint: "recommandé", desc: "Pour les tâches complexes" },
 	{ value: "sonnet", label: "Sonnet 5", hint: "efficace au quotidien", desc: "Le plus efficace pour les tâches quotidiennes" },
 	{ value: "haiku", label: "Haiku 4.5", hint: "le plus rapide", desc: "Le plus rapide pour des réponses rapides" }
@@ -331,11 +331,14 @@ export function getEffortLabel(value: string | undefined, providerId: string): s
 	return def.label;
 }
 
-/* ── Fable 5 : inclus jusqu'au 12 juillet 2026 ──
-   À partir du 13 juillet (date locale), Fable disparaît de la liste
-   et tout réglage pointant dessus retombe sur le modèle par défaut.
+/* ── Fable 5 : accès promo PROLONGÉ jusqu'au 19 juillet 2026 ──
+   Source officielle : support.claude.com/en/articles/15424964-claude-fable-5-promotional-access
+   (fin exacte : 19 juillet 2026 23:59:59 PT ; après, Fable sort du quota hebdo).
+   À partir du 20 juillet (date locale), Fable disparaît de la liste et tout
+   réglage pointant dessus retombe sur le modèle par défaut. Le jour+1 à minuit
+   local couvre tout le 19 juillet (approx. fuseau, comme l'échéance précédente).
    `now` est injectable pour les tests. (mois 0-indexé → 6 = juillet) */
-const FABLE_CUTOFF = new Date(2026, 6, 13, 0, 0, 0, 0);
+const FABLE_CUTOFF = new Date(2026, 6, 20, 0, 0, 0, 0);
 
 export function isFableAvailable(now?: Date): boolean {
 	return (now || new Date()) < FABLE_CUTOFF;
@@ -348,7 +351,7 @@ export function getClaudeModels(now?: Date): ModelDef[] {
 }
 
 /* Modèle Claude effectif : si le modèle choisi n'est plus visible
-   (ex. Fable après le 12 juillet), retombe sur le modèle par défaut. */
+   (ex. Fable après le 19 juillet), retombe sur le modèle par défaut. */
 export function resolveClaudeModel(value?: string, now?: Date): string {
 	const models = getClaudeModels(now);
 	if (models.some(m => m.value === value)) return value as string;
