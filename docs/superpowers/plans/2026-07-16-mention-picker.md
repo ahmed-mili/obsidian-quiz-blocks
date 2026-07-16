@@ -585,10 +585,7 @@ Puis, juste après `requestAnimationFrame(autoGrow);` (`ai.ts:594`) :
 
 ```ts
 		mentions = attachMentionPicker(ctx.app, composerInput, composer, {
-			onPickVaultFile: (path) => {
-				const f = ctx.app.vault.getAbstractFileByPath(path);
-				if (f instanceof TFile) void attachNoteVaultFile(f);
-			},
+			onPickVaultFile: (path) => { void attachVaultPath(path); },
 			onTextReplaced: (value) => {
 				composerText = value;
 				autoGrow();
@@ -612,6 +609,53 @@ de dépendre de l'ordre d'attachement :
 Imports à ajouter en tête d'`ai.ts` : `attachMentionPicker`, `MentionPickerHandle` depuis
 `./mention-picker`. Vérifier que `TFile` est déjà importé depuis `obsidian` (il l'est :
 `attachNoteVaultFile(file: TFile)`).
+
+- [ ] **Step 4 bis: Router la sélection du vault selon le type de fichier**
+
+**Ne PAS envoyer tout le vault dans `attachNoteVaultFile`** : celle-ci fait `vault.read()`,
+donc une **lecture texte**. Un `.png` ou un `.pdf` du vault y deviendrait du binaire
+illisible injecté dans le prompt. Le picker propose ces formats (`isAttachable` les
+autorise), il faut donc les router comme le fait `addComposerFiles` pour un drop.
+
+Ajouter dans `ai.ts`, à côté d'`attachNoteVaultFile` :
+
+```ts
+	/* MIME d'après l'extension. Nécessaire quand on fabrique un File depuis
+	   le disque ou le vault : addComposerFiles teste file.type EN PREMIER
+	   pour les images, et un File sans type finirait en chip texte. */
+	function mimeForName(name: string): string {
+		const ext = name.slice(name.lastIndexOf(".") + 1).toLowerCase();
+		if (ext === "pdf") return "application/pdf";
+		if (["png", "jpg", "jpeg", "gif", "webp", "bmp", "avif"].includes(ext)) {
+			return "image/" + (ext === "jpg" ? "jpeg" : ext);
+		}
+		return "text/plain";
+	}
+
+	/* Attache un fichier du VAULT choisi via « @ ». Les notes passent par
+	   attachNoteVaultFile (qui dédoublonne par path et garde le lien vers la
+	   note) ; les PDF et images passent par addComposerFiles, seule à savoir
+	   extraire un PDF et router une image vers la vision. */
+	async function attachVaultPath(path: string): Promise<void> {
+		const f = ctx.app.vault.getAbstractFileByPath(path);
+		if (!(f instanceof TFile)) return;
+		const ext = f.extension.toLowerCase();
+		if (ext === "md" || ext === "txt") { await attachNoteVaultFile(f); return; }
+		try {
+			const buf = await ctx.app.vault.readBinary(f);
+			const file = new File([new Uint8Array(buf)], f.name, { type: mimeForName(f.name) });
+			await addComposerFiles([file]);
+		} catch (e) {
+			new Notice(t("ai.notice.noteReadFailed", { name: f.name }));
+		}
+	}
+```
+
+Note sur les extensions : `file-sources.ts` liste aussi `.csv`, `.json`, `.yaml`, etc.
+Elles sont bien attachables par cette route (MIME `text/plain` → branche `text/*`
+d'`addComposerFiles`), alors qu'un envoi direct à `attachNoteVaultFile` les aurait lues
+sans dédoublonnage cohérent. Le routage ci-dessus est donc ce qui rend la promesse
+d'`isAttachable` (« ne jamais proposer ce qu'on refusera ») réellement tenable.
 
 - [ ] **Step 5: Clés i18n**
 
@@ -680,7 +724,8 @@ dashboard, page « Générer », puis vérifier **chaque** ligne :
 | `@Cours/` | Descend : `Java/`, `Reseaux/` |
 | `@Cours/ja` puis `TD3` | Trouve `Cours/Java/TD3 avec espaces.md` (recherche globale) |
 | `@TD3 avec` (avec espace) | Trouve la note, **et le micro ne se déclenche pas** |
-| Entrée sur un fichier | Chip ajoutée, `@…` retiré du texte, **prompt non envoyé** |
+| Entrée sur un fichier `.md` | Chip ajoutée, `@…` retiré du texte, **prompt non envoyé** |
+| Attacher `schema.png` (image DU VAULT) | **Vignette d'image**, pas une chip texte : la preuve que `attachVaultPath` route par type au lieu de faire un `vault.read()` binaire |
 | Entrée sans menu ouvert | Le prompt part (comportement d'origine intact) |
 | Échap | Ferme le menu, le texte reste |
 | Clic sur une entrée | Attache sans que le composer perde le focus |
@@ -1167,7 +1212,10 @@ existante **sans la dupliquer** (elle gère déjà images / PDF / texte) :
 		try {
 			const fs = require("fs") as typeof import("fs");
 			const buf = fs.readFileSync(path);
-			const file = new File([new Uint8Array(buf)], name);
+			// mimeForName vient de la Task 2 : addComposerFiles teste file.type
+			// EN PREMIER pour les images, un File sans type finirait en chip
+			// texte au lieu d'une vignette.
+			const file = new File([new Uint8Array(buf)], name, { type: mimeForName(name) });
 			await addComposerFiles([file]);
 		} catch (e) {
 			new Notice(t("ai.notice.noteReadFailed", { name }));
@@ -1175,18 +1223,8 @@ existante **sans la dupliquer** (elle gère déjà images / PDF / texte) :
 	}
 ```
 
-Attention : `addComposerFiles` teste `file.type`, vide pour un `File` fabriqué ainsi. Ses
-branches PDF et texte testent d'abord l'extension (`/\.pdf$/i`, `/\.(md|txt)$/i`) donc
-passent ; **la branche image teste `file.type.startsWith("image/")` en premier et
-échouerait**. Passer le type explicitement au constructeur :
-
-```ts
-			const ext = name.slice(name.lastIndexOf(".") + 1).toLowerCase();
-			const mime = ext === "pdf" ? "application/pdf"
-				: ["png", "jpg", "jpeg", "gif", "webp", "bmp", "avif"].includes(ext) ? "image/" + (ext === "jpg" ? "jpeg" : ext)
-				: "text/plain";
-			const file = new File([new Uint8Array(buf)], name, { type: mime });
-```
+`mimeForName` est déjà défini dans `ai.ts` par la Task 2 (Step 4 bis) : le réutiliser tel
+quel, ne pas en écrire une seconde copie.
 
 Puis brancher dans l'appel à `attachMentionPicker` (Task 2, Step 4) :
 
