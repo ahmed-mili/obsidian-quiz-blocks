@@ -1564,6 +1564,17 @@
 	overflow-y: auto;
 	min-width: 320px;
 }
+/* Curseur clavier (flèches haut/bas). SANS cette règle, moveSelection()
+   bascule bien la classe mais RIEN ne bouge à l'écran : les flèches
+   paraissent mortes. Distinct de « .is-active » (ui-select.css), qui marque
+   la valeur courante d'un select — ici c'est un curseur de navigation, il
+   doit donc se lire comme un survol.
+   !important est obligatoire : .qbd-select-option force
+   « background: transparent !important » (chrome natif des <button>
+   d'Obsidian). */
+.qbd-mention-menu .qbd-select-option.is-selected {
+	background: var(--background-modifier-hover) !important;
+}
 .qbd-mention-footer {
 	padding: 6px 10px;
 	font-size: 11px;
