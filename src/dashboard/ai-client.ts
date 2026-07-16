@@ -5,6 +5,7 @@ import type { AiSettings } from "../types/dashboard-ctx";
 import {
 	resolveClaudeModel,
 	resolveCodexModel,
+	resolveKimiModel,
 	resolveEffort,
 	getCodexModels,
 	buildChildEnv,
@@ -12,9 +13,9 @@ import {
 } from "./ai-providers";
 
 /* ══════════════════════════════════════════════════════════
-   AI CLIENT — Claude Code + Ollama
-   Claude: via le CLI Claude Code (compte Pro/Max/Team/Enterprise,
-   aucune clé API). Prompt passé par stdin, sortie JSON.
+   AI CLIENT — Claude Code + Codex + Kimi Code + Ollama
+   Claude/Codex/Kimi: via le CLI de l'abonnement (aucune clé API).
+   Prompt par stdin sauf Kimi (son -p exige un argument).
    Ollama: fetch() pour lire les corps d'erreur. Multimodal pour images.
 ══════════════════════════════════════════════════════════ */
 
@@ -106,6 +107,11 @@ export function createAiClient(plugin: AiPlugin): AiClient {
 		if (provider === "codex") {
 			model = resolveCodexModel(model);
 		}
+		// Kimi : "" est LÉGITIME (aucun alias en dur, cf. ai-providers) — on
+		// omet alors -m et le CLI applique son propre default_model.
+		if (provider === "kimi-code") {
+			model = resolveKimiModel(model);
+		}
 
 		const typeInstruction = type === "Mixte"
 			? "un mélange de questions à choix unique, choix multiple et texte libre"
@@ -165,6 +171,10 @@ export function createAiClient(plugin: AiPlugin): AiClient {
 			const m = getCodexModels().find(x => x.value === model);
 			const fast = !!plugin.settings.aiCodexFast && !!(m && m.fast);
 			return callCodex(model, systemPrompt, userPrompt, images, effort, fast);
+		} else if (provider === "kimi-code") {
+			// Pas d'effort : `kimi -p` n'expose aucun flag pour le passer
+			// (cf. getEfforts dans ai-providers).
+			return callKimi(model, systemPrompt, userPrompt, images);
 		} else {
 			return callClaudeCode(model, systemPrompt, userPrompt, images);
 		}
@@ -375,6 +385,155 @@ export function createAiClient(plugin: AiPlugin): AiClient {
 		}
 		console.log("[quiz-blocks] Codex success - response length:", raw.length);
 		return parseQuizResponse(raw);
+	}
+
+	/* ── Kimi via le Kimi Code CLI (abonnement Kimi) ──
+	   Aucune clé API : réutilise la session du CLI connecté (`kimi` → /login).
+	   Deux différences assumées avec Claude/Codex, vérifiées sur le CLI 0.26.0 :
+	   1. `-p, --prompt <prompt>` exige un ARGUMENT — le CLI ne lit pas stdin
+	      (« argument missing » même avec un pipe). D'où execFile + tableau
+	      d'arguments : aucun échappement, aucun shell, un prompt plein de
+	      guillemets/dollars/retours ligne passe tel quel. Au-delà de
+	      KIMI_ARG_MAX on bascule sur un fichier (CreateProcess plafonne la
+	      ligne de commande à 32 767 caractères sous Windows).
+	   2. Sortie `--output-format stream-json` = un objet JSON par ligne, forme
+	      { role, content?, tool_calls? } — on ne garde que le texte assistant. */
+	const KIMI_ARG_MAX = 20000;
+
+	async function callKimi(model: string, systemPrompt: string, userPrompt: string, images: ImagePayload[] = []): Promise<unknown[]> {
+		if (!Platform.isDesktopApp) {
+			throw new Error("La génération via Kimi est disponible sur desktop uniquement.");
+		}
+		// L'alias Kimi contient un « / » (« kimi-code/kimi-for-coding ») —
+		// contrairement aux modèles Claude/Codex. Vide = pas de -m du tout.
+		if (model && !/^[a-zA-Z0-9._:/-]+$/.test(model)) {
+			throw new Error("Nom de modèle Kimi invalide : " + model);
+		}
+
+		const cp = require("child_process") as typeof import("child_process");
+		const os = require("os") as typeof import("os");
+		const path = require("path") as typeof import("path");
+		const fs = require("fs") as typeof import("fs");
+
+		let tmpDir: string | null = null;
+		const mkTmp = (): string => {
+			if (!tmpDir) tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "quiz-blocks-kimi-"));
+			return tmpDir;
+		};
+
+		// Images : fichiers temporaires que l'agent lit avec son outil de
+		// lecture (même approche que Claude Code — `kimi -p` n'a pas de flag
+		// d'image, et ses tool calls sont auto-approuvés en mode prompt).
+		let imageNote = "";
+		if (images.length > 0) {
+			const dir = mkTmp();
+			const paths = images.map((img, i) => {
+				const ext = ((img.mediaType || "image/png").split("/")[1] || "png").replace("jpeg", "jpg");
+				const p = path.join(dir, "image-" + (i + 1) + "." + ext);
+				fs.writeFileSync(p, Buffer.from(img.base64, "base64"));
+				return p;
+			});
+			imageNote = "\n\nLis d'abord ces images, puis base le quiz sur leur contenu :\n" +
+				paths.map(p => "- " + p).join("\n");
+		}
+
+		const fullPrompt = systemPrompt + "\n\n" + userPrompt + imageNote;
+
+		// Prompt trop long pour la ligne de commande → déporté en fichier que
+		// l'agent lit (une note entière attachée dépasse vite la limite).
+		let promptArg = fullPrompt;
+		if (fullPrompt.length > KIMI_ARG_MAX) {
+			const dir = mkTmp();
+			const promptFile = path.join(dir, "instructions.md");
+			fs.writeFileSync(promptFile, fullPrompt, "utf8");
+			promptArg = "Lis le fichier " + promptFile +
+				" et exécute exactement les instructions qu'il contient. Réponds uniquement par le résultat demandé.";
+		}
+
+		const args = ["-p", promptArg, "--output-format", "stream-json"];
+		if (model) args.push("-m", model);
+		// Les fichiers temporaires vivent hors du workspace : sans --add-dir,
+		// l'agent n'a pas le droit de les lire.
+		if (tmpDir) args.push("--add-dir", tmpDir);
+
+		let stdout: string;
+		try {
+			stdout = await new Promise<string>((resolve, reject) => {
+				const child = cp.execFile("kimi", args, {
+					cwd: os.homedir(),
+					env: buildChildEnv(),
+					timeout: 180000,
+					maxBuffer: 16 * 1024 * 1024,
+					windowsHide: true
+				}, (err, out, stderr) => {
+					if (err) {
+						const e = err as ExecError;
+						e.stderr = stderr;
+						e.stdout = out;
+						reject(e);
+					} else {
+						resolve(out);
+					}
+				});
+				abortCurrent = () => { aborted = true; killTree(child); };
+			});
+		} catch (err) {
+			const e = err as ExecError;
+			console.error("[quiz-blocks] Kimi Code error:", e.message, e.stderr || "");
+			const detail = ((e.stderr || "") + " " + (e.stdout || "") + " " + e.message).toLowerCase();
+			if (e.code === "ENOENT" || e.code === 127 || detail.includes("not recognized") || detail.includes("introuvable") || detail.includes("command not found")) {
+				throw new Error("Kimi Code n'est pas installé. Installez-le depuis kimi.com/code puis connectez-vous avec /login.");
+			}
+			if (e.killed || detail.includes("etimedout")) {
+				throw new Error("Kimi n'a pas répondu dans le délai imparti (3 min). Réessayez.");
+			}
+			// Message exact du CLI 0.26.0 sans compte connecté : « No model
+			// configured. Run `kimi` and use /login to sign in ».
+			if (detail.includes("no model configured") || detail.includes("login") || detail.includes("unauthorized") || detail.includes("api key") || detail.includes("credential") || detail.includes("authenticat")) {
+				throw new Error("Compte Kimi non connecté. Dans un terminal, lancez « kimi » puis /login avec votre abonnement Kimi Code.");
+			}
+			if (detail.includes("rate limit") || detail.includes("usage limit") || detail.includes("quota") || detail.includes("subscription")) {
+				throw new Error("Limite d'utilisation de votre abonnement Kimi atteinte. Réessayez plus tard.");
+			}
+			throw new Error("Erreur Kimi Code : " + (e.stderr || e.message).trim().slice(0, 300));
+		} finally {
+			if (tmpDir) {
+				try { fs.rmSync(tmpDir, { recursive: true, force: true }); } catch (e) { /* best effort */ }
+			}
+		}
+
+		const content = extractKimiText(stdout);
+		if (!content.trim()) {
+			throw new Error("Kimi n'a retourné aucune réponse. Réessayez ou changez de modèle.");
+		}
+		console.log("[quiz-blocks] Kimi Code success - response length:", content.length);
+		return parseQuizResponse(content);
+	}
+
+	/* stream-json : une ligne = un message { role, content?, tool_calls? }.
+	   On concatène le texte des messages assistant (les messages d'outil et les
+	   lignes illisibles sont ignorés — le raisonnement, lui, part sur stderr et
+	   n'atteint jamais stdout). */
+	function extractKimiText(stdout: string): string {
+		const parts: string[] = [];
+		for (const line of String(stdout || "").split("\n")) {
+			const trimmed = line.trim();
+			if (!trimmed.startsWith("{")) continue;
+			try {
+				const msg = JSON.parse(trimmed) as { role?: string; content?: unknown };
+				if (msg.role !== "assistant" || !msg.content) continue;
+				if (typeof msg.content === "string") {
+					parts.push(msg.content);
+				} else if (Array.isArray(msg.content)) {
+					// Forme bloc ({ type: "text", text }) — tolérée par sécurité.
+					for (const b of msg.content) {
+						const t = b && typeof b === "object" ? (b as { text?: unknown }).text : null;
+						if (typeof t === "string") parts.push(t);
+					}
+				}
+			} catch (e) { /* ligne non-JSON → ignorée */ }
+		}
+		return parts.join("");
 	}
 
 	async function callOllama(model: string, systemPrompt: string, userPrompt: string, ollamaUrl?: string, authHeaders?: Record<string, string>, images: ImagePayload[] = [], effort: string | null = null): Promise<unknown[]> {

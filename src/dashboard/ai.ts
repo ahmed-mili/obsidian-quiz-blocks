@@ -1,4 +1,4 @@
-import { setIcon, Notice, loadPdfJs, Platform } from "obsidian";
+import { setIcon, Notice, loadPdfJs, Platform, MarkdownRenderer } from "obsidian";
 import type { App, TFile, View } from "obsidian";
 import type { DashboardCtx } from "../types/dashboard-ctx";
 import type { EditorHostView } from "../types/editor-ctx";
@@ -57,6 +57,12 @@ interface OllamaCtl {
 	refreshTrigger: (() => void) | null;
 }
 
+/** État partagé du contrôle Kimi : la liste de modèles n'existe qu'après la
+    détection async (checkKimi) → le trigger doit pouvoir se redessiner. */
+interface KimiCtl {
+	refreshTrigger: (() => void) | null;
+}
+
 interface ProviderStatusEntry {
 	dot: string;
 	text: string;
@@ -70,6 +76,7 @@ interface RefreshArgs {
 	currentModel: string;
 	modelSelect: unknown;
 	ollamaCtl: OllamaCtl | null;
+	kimiCtl: KimiCtl | null;
 	buildOllamaList: (detected: aiProviders.OllamaDetectedModel[] | null) => OllamaListItem[];
 	force?: boolean;
 }
@@ -92,8 +99,11 @@ interface HintOptions {
 	icon?: string;
 	text: string;
 	code?: string;
+	/** Langage Prism du bloc code (« powershell », « bash »…). */
+	lang?: string;
 	action?: HintAction;
 }
+
 
 /** Handlers de la vue « Générer » — retour de createAiHandlers(ctx). */
 export interface AiHandlers {
@@ -223,7 +233,7 @@ export function createAiHandlers(ctx: DashboardCtx): AiHandlers {
 				// après un « claude/codex update », la version affichée se met à
 				// jour toute seule, le menu ouvert est redessiné à l'arrivée des
 				// résultats (setStatus → refreshMenu).
-				onOpen: () => refreshProviderStatuses({ providerSelect, hintZone, provider, currentModel, modelSelect, ollamaCtl, buildOllamaList, force: true })
+				onOpen: () => refreshProviderStatuses({ providerSelect, hintZone, provider, currentModel, modelSelect, ollamaCtl, kimiCtl, buildOllamaList, force: true })
 			});
 			providerSelect = sel;
 			sel.el.addClass("qbd-provider-trigger-logo");
@@ -265,6 +275,9 @@ export function createAiHandlers(ctx: DashboardCtx): AiHandlers {
 		// à CHAQUE ouverture du menu (et sur détection async) → reflète toujours la
 		// sélection courante des réglages, même éditée après le rendu de la vue.
 		let ollamaCtl: OllamaCtl | null = null;
+		// Idem pour Kimi : la liste vient du CLI (checkKimi), pas d'un fichier
+		// lisible en sync → le trigger se redessine à l'arrivée de la détection.
+		let kimiCtl: KimiCtl | null = null;
 
 		// Construit les options Ollama depuis la sélection de l'utilisateur
 		// (settings.aiOllamaModels, ordre réglable) + les locaux installés hors
@@ -386,6 +399,46 @@ export function createAiHandlers(ctx: DashboardCtx): AiHandlers {
 							ctx.plugin.settings.aiEffort = v;
 							await ctx.plugin.saveSettings();
 							refreshTriggers();
+						}
+					});
+				});
+			};
+		} else if (provider === "kimi-code") {
+			// Kimi : modèle SEUL (pas de bouton effort — `kimi -p` n'expose
+			// aucun flag d'effort, cf. getEfforts). La liste vient du CLI et
+			// n'existe qu'une fois le compte connecté : tant qu'elle est vide,
+			// le trigger affiche « Connexion requise » et n'ouvre pas de menu
+			// vide — le hint sous le composer explique quoi faire.
+			kimiCtl = { refreshTrigger: null };
+			const ctl = kimiCtl;
+			buildModelControl = (parent: HTMLElement): void => {
+				const trigger = parent.createEl("button", { cls: "qbd-select qbd-model-trigger qbd-composer-plain" });
+				trigger.type = "button";
+				const trigLabel = trigger.createSpan({ cls: "qbd-select-label" });
+				const currentMv = () => aiProviders.resolveKimiModel(ctx.plugin.settings.aiModel || currentModel);
+				const refreshTrigger = () => {
+					trigLabel.empty();
+					const models = aiProviders.getKimiModels();
+					const cur = models.find(m => m.value === currentMv()) || models[0];
+					trigLabel.createSpan({
+						cls: "qbd-model-trigger-name",
+						text: cur ? cur.label : "Connexion requise"
+					});
+					trigger.disabled = !models.length;
+				};
+				refreshTrigger();
+				ctl.refreshTrigger = refreshTrigger;
+				trigger.addEventListener("click", () => {
+					const models = aiProviders.getKimiModels();
+					if (!models.length) return;
+					openModelMenu(trigger, {
+						models,
+						currentModel: currentMv(),
+						efforts: [],
+						onPickModel: async (v) => {
+							ctx.plugin.settings.aiModel = v;
+							await ctx.plugin.saveSettings();
+							refreshTrigger();
 						}
 					});
 				});
@@ -665,7 +718,7 @@ export function createAiHandlers(ctx: DashboardCtx): AiHandlers {
 		// contrôle modèle (modelSelect existe). ollamaCtl et buildOllamaList
 		// sont locaux à render → passés en paramètres (les référencer depuis
 		// la fonction sœur lançait un ReferenceError, statut Ollama gelé).
-		refreshProviderStatuses({ providerSelect, hintZone, provider, currentModel, modelSelect, ollamaCtl, buildOllamaList });
+		refreshProviderStatuses({ providerSelect, hintZone, provider, currentModel, modelSelect, ollamaCtl, kimiCtl, buildOllamaList });
 
 		// Retour de focus fenêtre = l'utilisateur revient du terminal où il
 		// vient d'installer/connecter un CLI : re-vérifier automatiquement
@@ -679,7 +732,7 @@ export function createAiHandlers(ctx: DashboardCtx): AiHandlers {
 				return;
 			}
 			if (!hintZone.querySelector(".qbd-ai-hint--err, .qbd-ai-hint--warn")) return;
-			refreshProviderStatuses({ providerSelect, hintZone, provider, currentModel, modelSelect, ollamaCtl, buildOllamaList, force: true });
+			refreshProviderStatuses({ providerSelect, hintZone, provider, currentModel, modelSelect, ollamaCtl, kimiCtl, buildOllamaList, force: true });
 		};
 		window.addEventListener("focus", __focusRecheck);
 
@@ -713,6 +766,19 @@ export function createAiHandlers(ctx: DashboardCtx): AiHandlers {
 	   Lus par le sélecteur de fournisseur (trigger + options). */
 	const providerStatus: Record<string, ProviderStatusEntry> = {};
 
+	/* Dernier hint connu par provider (null = rien à signaler). Le sélecteur
+	   affiche déjà le statut de CHAQUE fournisseur : le hint correspondant est
+	   donc calculé pour tous, pas seulement pour l'actif, et ré-affiché
+	   instantanément au changement de fournisseur — plus d'attente de la
+	   détection avant de voir « Ollama n'est pas installé ». La détection
+	   continue de tourner derrière et corrige l'affichage si l'état a changé. */
+	const providerHint: Record<string, HintOptions | null> = {};
+
+	function setHint(id: string, zone: HTMLElement | null, active: string, opts: HintOptions | null): void {
+		providerHint[id] = opts;
+		if (id === active) renderHint(zone, opts);
+	}
+
 	function setStatus(id: string, providerSelect: SelectHandle<ProviderSelectOption> | null, dot: string, text: string): void {
 		providerStatus[id] = { dot, text };
 		// Redessine le trigger (dot de statut du fournisseur choisi) et les
@@ -723,20 +789,58 @@ export function createAiHandlers(ctx: DashboardCtx): AiHandlers {
 		}
 	}
 
+	/* Commande d'installation par fournisseur — CHAQUE fournisseur absent en
+	   propose une, dans un bloc code prêt à coller (demande Ahmed). Formes
+	   officielles vérifiées le 2026-07-14 :
+	   - Claude Code : installateur natif, « Native Install (Recommended) »
+	     (code.claude.com/docs/en/setup) ;
+	   - Codex CLI : installateur officiel de la plateforme
+	     (learn.chatgpt.com/docs/codex/cli) ;
+	   - Ollama : winget (paquet officiel Ollama.Ollama) sur Windows, le
+	     script officiel ailleurs — docs.ollama.com ne publie pas de one-liner
+	     PowerShell, l'exe d'installation étant la voie mise en avant ;
+	   - Kimi Code : installateurs officiels de code.kimi.com (scripts lus le
+	     2026-07-16 ; install.sh refuse explicitement Windows → install.ps1). */
+	function installCmd(provider: "claude-code" | "codex" | "kimi-code" | "ollama"): { code: string; lang: string } {
+		const win = Platform.isWin;
+		if (provider === "claude-code") {
+			return win
+				? { code: "irm https://claude.ai/install.ps1 | iex", lang: "powershell" }
+				: { code: "curl -fsSL https://claude.ai/install.sh | bash", lang: "bash" };
+		}
+		if (provider === "codex") {
+			return win
+				? { code: 'powershell -ExecutionPolicy ByPass -c "irm https://chatgpt.com/codex/install.ps1 | iex"', lang: "powershell" }
+				: { code: "curl -fsSL https://chatgpt.com/codex/install.sh | sh", lang: "bash" };
+		}
+		if (provider === "kimi-code") {
+			return win
+				? { code: "irm https://code.kimi.com/kimi-code/install.ps1 | iex", lang: "powershell" }
+				: { code: "curl -fsSL https://code.kimi.com/kimi-code/install.sh | bash", lang: "bash" };
+		}
+		return win
+			? { code: "winget install --id Ollama.Ollama -e", lang: "powershell" }
+			: { code: "curl -fsSL https://ollama.com/install.sh | sh", lang: "bash" };
+	}
+
 	/* Hint contextuel sous la rangée modèle : icône + texte
-	   + action optionnelle (lien externe, réglages, commande). */
+	   + action optionnelle (lien externe, réglages, commande).
+	   Grille : [icône | texte | action] et, s'il y a une commande, un
+	   bloc code sur sa PROPRE ligne (pleine largeur sous le texte et le
+	   bouton) — une commande d'installation ne doit jamais se casser en
+	   deux morceaux dans une colonne étroite. */
 	function renderHint(zone: HTMLElement | null, opts: HintOptions | null): void {
 		if (!zone || !zone.isConnected) return;
 		zone.empty();
 		if (!opts) return;
-		const hint = zone.createDiv({ cls: "qbd-ai-hint qbd-ai-hint--" + (opts.type || "info") });
+		const hint = zone.createDiv({
+			cls: "qbd-ai-hint qbd-ai-hint--" + (opts.type || "info")
+				+ (opts.code ? " qbd-ai-hint--has-code" : "")
+		});
 		const icon = hint.createSpan({ cls: "qbd-ai-hint-icon" });
 		setIcon(icon, opts.icon || (opts.type === "err" ? "alert-circle" : "info"));
 		const body = hint.createDiv({ cls: "qbd-ai-hint-body" });
 		body.createSpan({ cls: "qbd-ai-hint-text", text: opts.text });
-		if (opts.code) {
-			body.createEl("code", { cls: "qbd-ai-hint-code", text: opts.code });
-		}
 		if (opts.action) {
 			const btn = hint.createEl("button", { cls: "qbd-ai-hint-action" });
 			btn.type = "button";
@@ -747,6 +851,23 @@ export function createAiHandlers(ctx: DashboardCtx): AiHandlers {
 			btn.createSpan({ text: opts.action.label });
 			btn.addEventListener("click", opts.action.onClick);
 		}
+		if (opts.code) renderHintCode(hint, opts.code, opts.lang || "bash");
+	}
+
+	/* Bloc commande = VRAI bloc code Obsidian, rendu par le moteur Markdown de
+	   l'app plutôt qu'imité. On hérite ainsi de la coloration Prism, du style
+	   de bloc code de l'utilisateur (thème + snippets — d'où markdown-rendered
+	   ET markdown-preview-view, les deux racines que ces CSS ciblent) et du
+	   bouton « copier » posé par le post-processeur natif. */
+	function renderHintCode(hint: HTMLElement, code: string, lang: string): void {
+		const box = hint.createDiv({
+			cls: "qbd-ai-hint-code markdown-rendered markdown-preview-view"
+		});
+		// Component = la vue (pas le plugin) : le rendu est libéré quand
+		// l'onglet se ferme, pas seulement au déchargement du plugin.
+		void MarkdownRenderer.render(
+			ctx.app, "```" + lang + "\n" + code + "\n```", box, "", ctx.view
+		);
 	}
 
 	function openPluginSettings(): void {
@@ -758,8 +879,12 @@ export function createAiHandlers(ctx: DashboardCtx): AiHandlers {
 	/* Détections async : statut de chaque provider (trigger + menu du
 	   sélecteur), et pour le provider actif, hint contextuel + liste
 	   réelle de modèles. */
-	function refreshProviderStatuses({ providerSelect, hintZone, provider, currentModel, modelSelect, ollamaCtl, buildOllamaList, force }: RefreshArgs): void {
+	function refreshProviderStatuses({ providerSelect, hintZone, provider, currentModel, modelSelect, ollamaCtl, kimiCtl, buildOllamaList, force }: RefreshArgs): void {
 		const settings = ctx.plugin.settings;
+
+		// Affichage IMMÉDIAT du dernier hint connu pour ce fournisseur : les
+		// détections ci-dessous ne font que le confirmer ou le corriger.
+		if (provider in providerHint) renderHint(hintZone, providerHint[provider]);
 
 		aiProviders.checkClaudeCode(force).then(res => {
 			if (res.ok) {
@@ -769,18 +894,18 @@ export function createAiHandlers(ctx: DashboardCtx): AiHandlers {
 			} else {
 				setStatus("claude-code", providerSelect, "err", "Claude Code non installé");
 			}
-			if (provider !== "claude-code") return;
 			if (res.ok) {
-				renderHint(hintZone, null);
+				setHint("claude-code", hintZone, provider, null);
 			} else if (res.reason === "mobile") {
-				renderHint(hintZone, {
+				setHint("claude-code", hintZone, provider, {
 					type: "warn", icon: "monitor",
 					text: "La génération via Claude est disponible sur desktop uniquement."
 				});
 			} else {
-				renderHint(hintZone, {
+				setHint("claude-code", hintZone, provider, {
 					type: "err", icon: "download",
-					text: "Claude Code n'est pas installé. Installez-le puis connectez votre compte avec /login.",
+					text: "Claude Code n'est pas installé. Installez-le puis connectez votre compte avec « /login » :",
+					...installCmd("claude-code"),
 					action: {
 						label: "Installer Claude Code", icon: "arrow-up-right",
 						onClick: () => window.open("https://claude.com/claude-code", "_blank")
@@ -797,11 +922,10 @@ export function createAiHandlers(ctx: DashboardCtx): AiHandlers {
 			} else {
 				setStatus("codex", providerSelect, "err", "Codex CLI non installé");
 			}
-			if (provider !== "codex") return;
 			if (res.ok) {
-				renderHint(hintZone, null);
+				setHint("codex", hintZone, provider, null);
 			} else if (res.reason === "mobile") {
-				renderHint(hintZone, {
+				setHint("codex", hintZone, provider, {
 					type: "warn", icon: "monitor",
 					text: "La génération via ChatGPT (Codex CLI) est disponible sur desktop uniquement."
 				});
@@ -812,12 +936,10 @@ export function createAiHandlers(ctx: DashboardCtx): AiHandlers {
 				// de l'installateur OFFICIEL de la plateforme
 				// (learn.chatgpt.com, « la meilleure méthode » — choix
 				// Ahmed) ; npm reste détecté aussi.
-				renderHint(hintZone, {
+				setHint("codex", hintZone, provider, {
 					type: "err", icon: "download",
 					text: "Le Codex CLI n'est pas installé — c'est l'outil de terminal d'OpenAI, différent de l'application Codex. Installez-le puis connectez votre compte ChatGPT avec « codex login » :",
-					code: Platform.isWin
-						? 'powershell -ExecutionPolicy ByPass -c "irm https://chatgpt.com/codex/install.ps1 | iex"'
-						: "curl -fsSL https://chatgpt.com/codex/install.sh | sh",
+					...installCmd("codex"),
 					action: {
 						label: "Installer Codex CLI", icon: "arrow-up-right",
 						onClick: () => window.open("https://learn.chatgpt.com/docs/codex/cli#getting-started", "_blank")
@@ -826,13 +948,55 @@ export function createAiHandlers(ctx: DashboardCtx): AiHandlers {
 			}
 		});
 
-		aiProviders.checkOllama(settings.aiOllamaUrl).then(async (res) => {
+		aiProviders.checkKimi(force).then(res => {
+			if (!res.ok) {
+				setStatus("kimi-code", providerSelect, res.reason === "mobile" ? "warn" : "err",
+					res.reason === "mobile" ? "Desktop uniquement" : "Kimi Code non installé");
+				setHint("kimi-code", hintZone, provider, res.reason === "mobile"
+					? {
+						type: "warn", icon: "monitor",
+						text: "La génération via Kimi (Kimi Code CLI) est disponible sur desktop uniquement."
+					}
+					: {
+						type: "err", icon: "download",
+						text: "Le Kimi Code CLI n'est pas installé. Installez-le puis connectez votre abonnement avec « /login » :",
+						...installCmd("kimi-code"),
+						action: {
+							label: "Installer Kimi Code", icon: "arrow-up-right",
+							onClick: () => window.open("https://www.kimi.com/code", "_blank")
+						}
+					});
+				return;
+			}
+			// CLI présent mais aucun modèle : le compte n'est pas connecté (tant
+			// que /login n'a rien peuplé, `provider list` est vide). État distinct
+			// d'un CLI absent → warn + marche à suivre, pas une erreur rouge.
+			if (!res.models.length) {
+				setStatus("kimi-code", providerSelect, "warn", "Connexion requise");
+				setHint("kimi-code", hintZone, provider, {
+					type: "warn", icon: "log-in",
+					text: "Kimi Code v" + res.version + " est installé mais aucun compte n'est connecté. Dans un terminal, lancez « kimi » puis tapez /login — vos modèles apparaîtront ici.",
+					action: {
+						label: "Voir les abonnements Kimi", icon: "arrow-up-right",
+						onClick: () => window.open("https://www.kimi.com/code", "_blank")
+					}
+				});
+			} else {
+				setStatus("kimi-code", providerSelect, "ok", "Kimi Code v" + res.version);
+				setHint("kimi-code", hintZone, provider, null);
+			}
+			// Modèles arrivés (ou disparus) → le trigger du composer se redessine.
+			if (provider === "kimi-code" && kimiCtl && kimiCtl.refreshTrigger) kimiCtl.refreshTrigger();
+		});
+
+		aiProviders.checkOllama(settings.aiOllamaUrl, force).then(async (res) => {
 			if (res.ok) {
 				// Affiche la version d'Ollama installée (comme Claude/Codex), ex.
 				// « Ollama v0.31.2 ». Repli sur l'état du cache si version absente.
 				const n = res.models.length;
 				const fallback = n > 0 ? (n + " local" + (n > 1 ? "aux" : "") + " + cloud") : "Cloud prêt";
 				setStatus("ollama", providerSelect, "ok", res.version ? ("Ollama v" + res.version) : fallback);
+				setHint("ollama", hintZone, provider, null);
 				if (provider !== "ollama") return;
 				// Reconstruit les options (sélection + locaux réellement installés,
 				// avec capability thinking) et rafraîchit le libellé du contrôle.
@@ -841,7 +1005,6 @@ export function createAiHandlers(ctx: DashboardCtx): AiHandlers {
 					ollamaCtl.options = buildOllamaList(res.models);
 					if (ollamaCtl.refreshTrigger) ollamaCtl.refreshTrigger();
 				}
-				renderHint(hintZone, null);
 			} else {
 				// Le plugin DIAGNOSTIQUE lui-même (demande Ahmed : jamais
 				// de « Serveur non détecté » sec ni de « si Ollama n'est
@@ -850,14 +1013,12 @@ export function createAiHandlers(ctx: DashboardCtx): AiHandlers {
 				// installé mais arrêté → « Démarrer Ollama » (le plugin
 				// lance l'app et re-render dès que le serveur répond) ;
 				// absent → « Télécharger Ollama ».
-				const inst = await aiProviders.checkOllamaInstalled();
+				const inst = await aiProviders.checkOllamaInstalled(force);
 				setStatus("ollama", providerSelect,
 					inst.installed ? "warn" : "err",
 					inst.installed ? "Serveur arrêté" : "Non installé");
-				if (provider !== "ollama") return;
-				if (!hintZone || !hintZone.isConnected) return;
 				if (inst.installed) {
-					renderHint(hintZone, {
+					setHint("ollama", hintZone, provider, {
 						type: "warn", icon: "server-off",
 						text: "Ollama est installé mais son serveur ne tourne pas.",
 						action: {
@@ -869,7 +1030,9 @@ export function createAiHandlers(ctx: DashboardCtx): AiHandlers {
 								let tries = 0;
 								const poll = window.setInterval(() => {
 									tries++;
-									aiProviders.checkOllama(settings.aiOllamaUrl).then(r2 => {
+									// force : le serveur vient de démarrer, le cache
+									// de détection dirait encore « injoignable ».
+									aiProviders.checkOllama(settings.aiOllamaUrl, true).then(r2 => {
 										if (r2.ok || tries >= 10) {
 											window.clearInterval(poll);
 											if (r2.ok) render(containerRef);
@@ -880,9 +1043,10 @@ export function createAiHandlers(ctx: DashboardCtx): AiHandlers {
 						}
 					});
 				} else {
-					renderHint(hintZone, {
+					setHint("ollama", hintZone, provider, {
 						type: "err", icon: "download",
-						text: "Ollama n'est pas installé. Téléchargez-le, lancez-le, et le plugin le détectera automatiquement.",
+						text: "Ollama n'est pas installé. Installez-le, lancez-le, et le plugin le détectera automatiquement :",
+						...installCmd("ollama"),
 						action: {
 							label: "Télécharger Ollama", icon: "arrow-up-right",
 							onClick: () => window.open("https://ollama.com/download", "_blank")

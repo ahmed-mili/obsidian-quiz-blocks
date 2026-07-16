@@ -386,6 +386,28 @@ class QuizBlocksSettingTab extends PluginSettingTab {
 				warning: "Vos requêtes passent par votre session Codex locale et comptent dans l'usage de votre abonnement ChatGPT. Aucune clé n'est stockée dans Obsidian.",
 				docsLink: { label: "Documentation Codex CLI", url: "https://learn.chatgpt.com/docs/codex/cli" }
 			},
+			"kimi-code": {
+				title: "Comment configurer Kimi (Kimi Code CLI)",
+				sections: [
+					{
+						heading: "1. Installer le Kimi Code CLI",
+						text: "La génération utilise le Kimi Code CLI, l'outil de terminal de Moonshot AI (commande « kimi »). Installateur officiel — Windows : irm https://code.kimi.com/kimi-code/install.ps1 | iex · macOS/Linux : curl -fsSL https://code.kimi.com/kimi-code/install.sh | bash",
+						link: { label: "Découvrir Kimi Code", url: "https://www.kimi.com/code" }
+					},
+					{
+						heading: "2. Connecter votre abonnement",
+						text: "Dans un terminal, lancez « kimi » puis tapez /login. Aucune clé API : c'est votre abonnement Kimi Code qui est utilisé. Kimi Code est un service payant — sans abonnement actif, aucun modèle n'est proposé.",
+						link: { label: "Voir les abonnements", url: "https://www.kimi.com/code" }
+					},
+					{
+						heading: "3. Choisir un modèle",
+						text: "La liste de modèles ci-dessus est celle que votre CLI publie (kimi provider list) : elle suit votre compte, donc les nouveaux modèles (K3…) apparaissent d'eux-mêmes. Tant qu'aucun compte n'est connecté, elle reste vide.",
+						link: null
+					}
+				],
+				warning: "Vos requêtes passent par votre session Kimi Code locale et comptent dans l'usage de votre abonnement. Aucune clé n'est stockée dans Obsidian.",
+				docsLink: { label: "Documentation Kimi Code", url: "https://moonshotai.github.io/kimi-code/" }
+			},
 			ollama: {
 				title: "Comment configurer Ollama (local + cloud)",
 				sections: [
@@ -453,31 +475,50 @@ class QuizBlocksSettingTab extends PluginSettingTab {
 		// fournisseur n'est choisi
 		if (currentProvider) {
 			const models = currentProvider === "claude-code" ? aiProviders.getClaudeModels() : aiProviders.getDefaultModels(currentProvider);
-			const currentModel = currentProvider === "claude-code"
-				? aiProviders.resolveClaudeModel(this.plugin.settings.aiModel || models[0].value)
-				: (this.plugin.settings.aiModel || models[0].value);
 
-			new Setting(containerEl)
-				.setName("Modèle")
-				.setDesc(currentProvider === "ollama"
-					? "Modèle Ollama. Les « :cloud » tournent sur le cloud (compte connecté via ollama signin) ; les autres en local (ollama pull)."
-					: currentProvider === "codex"
-					? "Modèle Codex (ChatGPT) à utiliser pour la génération."
-					: "Modèle Claude à utiliser (mêmes noms que dans Claude Code).")
-				.addDropdown(dropdown => {
-					for (const m of models) {
-						dropdown.addOption(m.value, m.label + (m.hint ? " (" + m.hint + ")" : ""));
-					}
-					// If current model is not in the list, add it as custom
-					if (!models.find(m => m.value === currentModel)) {
-						dropdown.addOption(currentModel, currentModel + " (personnalisé)");
-					}
-					dropdown.setValue(currentModel);
-					dropdown.onChange(async (value) => {
-						this.plugin.settings.aiModel = value;
-						await this.plugin.saveSettings();
-					});
+			// Liste vide = Kimi dont le CLI n'a encore rien publié (compte non
+			// connecté, ou détection async pas revenue). Les autres fournisseurs
+			// ont toujours un repli. Pas de dropdown vide ni de models[0] sur du
+			// vide : on explique, et on redessine si des modèles arrivent (la
+			// seconde passe a une liste pleine → aucune boucle de rendu).
+			if (!models.length) {
+				new Setting(containerEl)
+					.setName("Modèle")
+					.setDesc("Aucun modèle disponible. Le Kimi Code CLI ne publie ses modèles qu'une fois votre abonnement connecté : dans un terminal, lancez « kimi » puis /login, et rouvrez ces réglages.");
+				// Le tutoriel ci-dessous (marche à suivre /login) doit rester
+				// affiché → surtout pas de return ici.
+				aiProviders.checkKimi(true).then(res => {
+					if (res.ok && res.models.length) this.display();
 				});
+			} else {
+				const currentModel = currentProvider === "claude-code"
+					? aiProviders.resolveClaudeModel(this.plugin.settings.aiModel || models[0].value)
+					: (this.plugin.settings.aiModel || models[0].value);
+
+				new Setting(containerEl)
+					.setName("Modèle")
+					.setDesc(currentProvider === "ollama"
+						? "Modèle Ollama. Les « :cloud » tournent sur le cloud (compte connecté via ollama signin) ; les autres en local (ollama pull)."
+						: currentProvider === "codex"
+						? "Modèle Codex (ChatGPT) à utiliser pour la génération."
+						: currentProvider === "kimi-code"
+						? "Modèle Kimi publié par votre CLI (kimi provider list) — la liste suit votre abonnement."
+						: "Modèle Claude à utiliser (mêmes noms que dans Claude Code).")
+					.addDropdown(dropdown => {
+						for (const m of models) {
+							dropdown.addOption(m.value, m.label + (m.hint ? " (" + m.hint + ")" : ""));
+						}
+						// If current model is not in the list, add it as custom
+						if (!models.find(m => m.value === currentModel)) {
+							dropdown.addOption(currentModel, currentModel + " (personnalisé)");
+						}
+						dropdown.setValue(currentModel);
+						dropdown.onChange(async (value) => {
+							this.plugin.settings.aiModel = value;
+							await this.plugin.saveSettings();
+						});
+					});
+			}
 		}
 
 		// Ollama URL (local only)
