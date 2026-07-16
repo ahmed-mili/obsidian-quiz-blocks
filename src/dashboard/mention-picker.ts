@@ -118,6 +118,26 @@ export function attachMentionPicker(
 
 	function onInput(): void { refresh(); }
 
+	/* Touches qui déplacent le caret SANS produire d'« input » : le token
+	   sous le curseur change alors qu'aucun texte n'a bougé. */
+	const CARET_KEYS = new Set([
+		"ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Home", "End", "PageUp", "PageDown",
+	]);
+
+	function onKeyUp(e: KeyboardEvent): void {
+		// Menu ouvert : Haut/Bas lui appartiennent (navigation). Un refresh
+		// ici rerendrait la liste et remettrait la sélection à zéro — les
+		// flèches paraîtraient bloquées sur la première entrée.
+		if (menu && (e.key === "ArrowUp" || e.key === "ArrowDown")) return;
+		if (!CARET_KEYS.has(e.key)) return;
+		refresh();
+	}
+
+	/* Un clic déplace le caret sans déclencher « input ». Sans ça, cliquer
+	   juste à droite d'un « @ » déjà tapé ne rouvrait pas le menu : il
+	   fallait effacer le « @ » et le retaper. */
+	function onClick(): void { refresh(); }
+
 	function onKeyDown(e: KeyboardEvent): void {
 		if (!menu) return;
 		if (e.key === "ArrowDown") { e.preventDefault(); menu.moveSelection(1); return; }
@@ -134,8 +154,15 @@ export function attachMentionPicker(
 	function onBlur(): void { close(); }
 
 	textarea.addEventListener("input", onInput);
-	// capture: true → passe AVANT le handler Entrée d'ai.ts et celui de la
-	// dictée, tous deux attachés en bubble sur le même textarea.
+	// keyup/click : rouvrent le menu quand le caret revient dans un « @ »
+	// existant (aucun « input » n'est émis dans ces cas-là).
+	textarea.addEventListener("keyup", onKeyUp);
+	textarea.addEventListener("click", onClick);
+	// NB : sur l'élément CIBLE, capture ne passe pas avant bubble (les deux
+	// s'exécutent à AT_TARGET dans l'ordre d'attachement). Ce qui protège
+	// réellement Entrée et la dictée, ce sont leurs gardes explicites
+	// (« mentions.isOpen() » dans ai.ts, « isBlocked » dans voice-input.ts),
+	// pas cette phase.
 	textarea.addEventListener("keydown", onKeyDown, true);
 	textarea.addEventListener("blur", onBlur);
 
@@ -143,6 +170,8 @@ export function attachMentionPicker(
 		isOpen: () => menu !== null,
 		detach() {
 			textarea.removeEventListener("input", onInput);
+			textarea.removeEventListener("keyup", onKeyUp);
+			textarea.removeEventListener("click", onClick);
 			textarea.removeEventListener("keydown", onKeyDown, true);
 			textarea.removeEventListener("blur", onBlur);
 			close();

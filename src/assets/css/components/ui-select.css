@@ -336,6 +336,9 @@
 	   conteneur, elle a donc besoin de sa règle, la barre du menu parent ne
 	   la couvre pas. */
 	scrollbar-color: var(--scrollbar-thumb-bg) transparent;
+	/* Respiration entre les options et la barre : sans ça le fond de
+	   l'option survolée/sélectionnée vient toucher le pouce. */
+	padding-right: 6px;
 }
 
 .qbd-model-menu-empty {
