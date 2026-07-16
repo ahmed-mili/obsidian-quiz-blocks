@@ -112,9 +112,9 @@
 }
 
 .qbd-ai-title {
-	/* Palatino retenu sur banc comparatif (2026-07-16) — Book Antiqua est
-	   son jumeau Monotype (repli macOS/Linux). */
-	font-family: "Palatino Linotype", "Book Antiqua", Palatino, Georgia, serif;
+	/* Constantia retenue sur banc comparatif (2026-07-16) — replis serif
+	   old-style pour macOS/mobile où elle est absente. */
+	font-family: Constantia, "Iowan Old Style", "Palatino Linotype", Georgia, serif;
 	font-size: 46px;
 	font-weight: 400;
 	color: var(--text-normal);

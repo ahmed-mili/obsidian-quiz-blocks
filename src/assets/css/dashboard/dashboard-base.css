@@ -28,10 +28,9 @@
 .qbd-sidebar {
 	width: 88px;
 	min-width: 88px;
-	/* Transparent : laisse traverser le fond du thème (wallpaper) —
-	   un pavé opaque jure sur les thèmes à image (demande 2026-07-16). */
+	/* Transparent, SANS bordure droite : le rail se fond dans le fond du
+	   thème (wallpaper) — un pavé opaque ou une ligne jurent (2026-07-16). */
 	background: transparent;
-	border-right: 1px solid var(--background-modifier-border);
 	display: flex;
 	flex-direction: column;
 	flex-shrink: 0;
