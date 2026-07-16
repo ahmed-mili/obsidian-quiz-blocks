@@ -1,4 +1,6 @@
 import { setIcon } from "obsidian";
+import { t } from "../i18n";
+import type { TransKey } from "../i18n";
 import type { DashboardCtx, DashboardViewName } from "../types/dashboard-ctx";
 
 /* ══════════════════════════════════════════════════════════
@@ -6,9 +8,13 @@ import type { DashboardCtx, DashboardViewName } from "../types/dashboard-ctx";
    Sidebar avec brand et nav items stylisés.
 ══════════════════════════════════════════════════════════ */
 
+/* NAV_ITEMS porte une CLÉ de traduction, pas un libellé : la liste est
+   construite une seule fois (à l'ouverture de la vue), alors que le libellé
+   doit suivre la langue courante à CHAQUE rendu — un `label: string` figé ici
+   resterait dans la langue du démarrage après un changement de réglage. */
 interface NavItem {
 	key: Exclude<DashboardViewName, "detail">;
-	label: string;
+	labelKey: TransKey;
 	icon: string;
 }
 
@@ -21,9 +27,9 @@ export function createNavHandlers(ctx: DashboardCtx): NavHandlers {
 	let activeNav: DashboardViewName = "home";
 
 	const NAV_ITEMS: NavItem[] = [
-		{ key: "home", label: "Accueil", icon: "home" },
-		{ key: "quizzes", label: "Mes quiz", icon: "layers" },
-		{ key: "ai", label: "Générer", icon: "sparkles" }
+		{ key: "home", labelKey: "dashboard.nav.home", icon: "home" },
+		{ key: "quizzes", labelKey: "dashboard.nav.quizzes", icon: "layers" },
+		{ key: "ai", labelKey: "dashboard.nav.generate", icon: "sparkles" }
 	];
 
 	function render(container: HTMLElement): void {
@@ -51,7 +57,7 @@ export function createNavHandlers(ctx: DashboardCtx): NavHandlers {
 			const iconWrap = btn.createSpan({ cls: "qbd-nav-icon" });
 			setIcon(iconWrap, item.icon);
 
-			btn.createSpan({ cls: "qbd-nav-label", text: item.label });
+			btn.createSpan({ cls: "qbd-nav-label", text: t(item.labelKey) });
 
 			if (item.key === "quizzes" && quizzes.length > 0) {
 				btn.createSpan({ cls: "qbd-nav-badge", text: String(quizzes.length) });

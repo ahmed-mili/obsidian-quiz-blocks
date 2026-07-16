@@ -11,6 +11,7 @@ import {
 	buildChildEnv,
 	isOllamaCloudModel,
 } from "./ai-providers";
+import { t } from "../i18n";
 
 /* ══════════════════════════════════════════════════════════
    AI CLIENT — Claude Code + Codex + Kimi Code + Ollama
@@ -49,6 +50,21 @@ type ExecError = Error & {
 	stdout?: string;
 	killed?: boolean;
 };
+
+/** Erreur DÉJÀ formulée pour l'utilisateur (message traduit, affiché tel quel
+    par l'écran d'erreur de la vue « Générer »). */
+type UserFacingError = Error & { userFacing?: boolean };
+
+/* Le drapeau remplace les tests sur le TEXTE du message (« Le modèle… »,
+   « Mémoire insuffisante… ») que faisait callOllama pour distinguer ses
+   propres erreurs des pannes réseau : une fois les messages traduits, ces
+   préfixes ne correspondent plus dans une autre langue, et l'erreur précise
+   serait écrasée par « Impossible de contacter Ollama ». */
+function userError(message: string): UserFacingError {
+	const e = new Error(message) as UserFacingError;
+	e.userFacing = true;
+	return e;
+}
 
 export function createAiClient(plugin: AiPlugin): AiClient {
 	const DEFAULT_MODELS: Record<string, string> = {
@@ -113,43 +129,52 @@ export function createAiClient(plugin: AiPlugin): AiClient {
 			model = resolveKimiModel(model);
 		}
 
+		// ── Prompts : ANGLAIS, et INDÉPENDANTS de la langue de l'UI ──
+		// Le prompt ne dicte PAS la langue du quiz : il impose au modèle de
+		// suivre celle de la DEMANDE (règle LANGUAGE ci-dessous). Un prompt
+		// français produisait des quiz français même pour un sujet demandé en
+		// anglais ou en arabe. Les libellés du composer (« Mixte »…) ne sont pas
+		// traduits ici non plus : `type` est la VALEUR canonique (cf. TYPE_VALUES
+		// dans ai.ts), pas le libellé affiché.
 		const typeInstruction = type === "Mixte"
-			? "un mélange de questions à choix unique, choix multiple et texte libre"
+			? "a mix of single-choice, multiple-choice and free-text questions"
 			: type === "Choix unique"
-			? "des questions à choix unique (une seule bonne réponse)"
+			? "single-choice questions (exactly one correct answer)"
 			: type === "Choix multiple"
-			? "des questions à choix multiple (plusieurs bonnes réponses)"
-			: "des questions à réponse texte libre";
+			? "multiple-choice questions (several correct answers)"
+			: "free-text questions";
 
-		const systemPrompt = `Tu es un générateur de quiz. Génère exactement ${count} questions de quiz sous forme de tableau JSON5. Chaque question doit avoir :
-	- title: titre court de la question
-	- prompt: énoncé complet de la question
-	- options: tableau des options (pour choix unique/multiple, 3-5 options)
-	- correctIndex: index de la bonne réponse (pour choix unique)
-	- correctIndices: tableau des index des bonnes réponses (pour choix multiple)
-	- multiSelect: true si choix multiple
-	- type: "text" pour texte libre, absent sinon
-	- answer: réponse attendue (pour texte libre)
-	- mathInput: true pour une question texte dont la réponse est une expression mathématique (l'élève répondra dans un ÉDITEUR D'ÉQUATIONS visuel)
-	- answerTemplate: gabarit LaTeX pré-écrit dans le champ de réponse d'une question mathInput, avec \\\\placeholder{} pour chaque trou à remplir (ex: 'x = \\\\placeholder{}' ; deux solutions : 'x_1 = \\\\placeholder{},\\\\; x_2 = \\\\placeholder{}'). RÈGLES pour mathInput : l'énoncé ne donne JAMAIS d'instructions de format de réponse (pas de « sous forme de fraction », « séparées par une virgule », « ex: 1/2 ») — l'éditeur d'équations rend tout cela inutile ; préfère un answerTemplate qui guide ; les acceptedAnswers sont le contenu COMPLET du champ une fois le gabarit rempli, en LaTeX (ex: 'x_1 = \\\\frac{1}{2},\\\\; x_2 = 3'), et ajoute si pertinent des variantes (ordre inversé des solutions)
-	- learn: un paragraphe de leçon explicative qui enseigne le concept avant la question (optionnel mais recommandé pour les quiz éducatifs)
+		const systemPrompt = `You are a quiz generator. Generate exactly ${count} quiz questions as a JSON5 array. Each question must have:
+	- title: short question title
+	- prompt: full question text
+	- options: array of options (for single/multiple choice, 3-5 options)
+	- correctIndex: index of the correct answer (single choice)
+	- correctIndices: array of indices of the correct answers (multiple choice)
+	- multiSelect: true for multiple choice
+	- type: "text" for free text, omitted otherwise
+	- answer: expected answer (free text)
+	- mathInput: true for a text question whose answer is a mathematical expression (the learner answers in a visual EQUATION EDITOR)
+	- answerTemplate: a LaTeX template pre-filled in the answer field of a mathInput question, with \\\\placeholder{} for each blank to fill (e.g. 'x = \\\\placeholder{}' ; two solutions: 'x_1 = \\\\placeholder{},\\\\; x_2 = \\\\placeholder{}'). RULES for mathInput: the question text NEVER gives answer-format instructions (no "as a fraction", "comma-separated", "e.g. 1/2") — the equation editor makes all of that pointless; prefer an answerTemplate that guides instead; acceptedAnswers are the COMPLETE content of the field once the template is filled, in LaTeX (e.g. 'x_1 = \\\\frac{1}{2},\\\\; x_2 = 3'), and add variants where relevant (solutions in reverse order)
+	- learn: a short lesson paragraph teaching the concept before the question (optional but recommended for educational quizzes)
 
-	MATHÉMATIQUES : toute expression mathématique (formule, fonction, équation, intégrale, fraction, exposant, symbole grec…) s'écrit OBLIGATOIREMENT en LaTeX délimité par des dollars, comme dans Obsidian : $f(x) = x^3$ en ligne, $$\\int_0^2 2x\\,dx$$ pour une formule isolée. Jamais de pseudo-notation type f(x) = x^3 ou ∫ de 0 à 2 hors des dollars. Cela vaut pour title, prompt, options, answer, learn et explain. IMPORTANT : dans les chaînes JSON5, DOUBLE chaque backslash — LaTeX (écris '$\\\\frac{a}{b}$' pour obtenir \\frac) comme chemins Windows (écris 'C:\\\\Users\\\\dev') — un backslash simple serait détruit par le parseur.
+	LANGUAGE — THIS IS A HARD RULE: write ALL the content you produce (title, prompt, options, answer, learn, explain) in THE SAME LANGUAGE AS THE USER REQUEST BELOW. If the request is in French, write the quiz in French; in Arabic, in Arabic; in English, in English. When the request provides source material (a text, a note, images), follow the language of that material. NEVER translate the content into English just because these instructions are in English. The FIELD NAMES (title, prompt, options…) and the JSON5 structure always stay exactly as specified above, in English.
 
-	Le dernier élément du tableau peut être un objet de configuration de mode (sans champ prompt) :
-	  - { mode: "exam", examDurationMinutes: 10, examAutoSubmit: true, examShowTimer: true } pour un mode examen chronométré
-	  - { mode: "learn", examDurationMinutes: 10, examAutoSubmit: true, examShowTimer: true } pour un mode apprentissage avec transition vers examen
-	  - { mode: "learn" } pour un mode apprentissage sans examen
-	  - { learnMode: true } comme raccourci pour mode: "learn"
-	  - { examMode: true } comme raccourci pour mode: "exam"
+	MATHEMATICS: every mathematical expression (formula, function, equation, integral, fraction, exponent, Greek letter…) MUST be written in LaTeX delimited by dollar signs, as in Obsidian: $f(x) = x^3$ inline, $$\\int_0^2 2x\\,dx$$ for a display formula. Never pseudo-notation such as f(x) = x^3 or ∫ from 0 to 2 outside the dollars. This applies to title, prompt, options, answer, learn and explain. IMPORTANT: inside JSON5 strings, DOUBLE every backslash — for LaTeX (write '$\\\\frac{a}{b}$' to get \\frac) as well as Windows paths (write 'C:\\\\Users\\\\dev') — a single backslash would be destroyed by the parser.
 
-	Génère ${typeInstruction}. Réponds UNIQUEMENT avec le tableau JSON5, sans explication ni formatage.`;
+	The last element of the array may be a mode configuration object (with no prompt field):
+	  - { mode: "exam", examDurationMinutes: 10, examAutoSubmit: true, examShowTimer: true } for a timed exam mode
+	  - { mode: "learn", examDurationMinutes: 10, examAutoSubmit: true, examShowTimer: true } for a learn mode leading into an exam
+	  - { mode: "learn" } for a learn mode without exam
+	  - { learnMode: true } as a shorthand for mode: "learn"
+	  - { examMode: true } as a shorthand for mode: "exam"
+
+	Generate ${typeInstruction}. Reply ONLY with the JSON5 array, with no explanation and no formatting.`;
 
 		const userPrompt = source === "topic"
-			? `Génère un quiz sur le sujet : ${prompt}`
+			? `Generate a quiz about the following topic (keep the quiz in the language of this topic):\n\n${prompt}`
 			: source === "text"
-			? `Génère un quiz basé sur ce texte :\n\n${prompt}`
-			: `Génère un quiz basé sur les images fournies : ${prompt}`;
+			? `Generate a quiz based on the following text (keep the quiz in the language of this text):\n\n${prompt}`
+			: `Generate a quiz based on the provided images (keep the quiz in the language of the images and of this request): ${prompt}`;
 
 		if (provider === "ollama") {
 			// Un seul endpoint local : sert les modèles locaux ET cloud (:cloud).
@@ -186,10 +211,10 @@ export function createAiClient(plugin: AiPlugin): AiClient {
 	   (aucun échappement d'argument), sortie --output-format json. */
 	async function callClaudeCode(model: string, systemPrompt: string, userPrompt: string, images: ImagePayload[] = []): Promise<unknown[]> {
 		if (!Platform.isDesktopApp) {
-			throw new Error("La génération via Claude est disponible sur desktop uniquement.");
+			throw new Error(t("ai.hint.claudeDesktopOnly"));
 		}
 		if (!/^[a-zA-Z0-9._:-]+$/.test(model)) {
-			throw new Error("Nom de modèle Claude invalide : " + model);
+			throw new Error(t("ai.err.invalidModelClaude", { model }));
 		}
 
 		const cp = require("child_process") as typeof import("child_process");
@@ -211,7 +236,9 @@ export function createAiClient(plugin: AiPlugin): AiClient {
 				return p;
 			});
 			tools = '"Read"';
-			imageNote = "\n\nLis d'abord ces images avec le tool Read, puis base le quiz sur leur contenu :\n" +
+			// Instruction au MODÈLE (pas de l'UI) → anglais, comme le prompt
+			// système ; la langue du quiz reste celle de la demande.
+			imageNote = "\n\nFirst read these images with the Read tool, then base the quiz on their content:\n" +
 				paths.map(p => "- " + p).join("\n");
 		}
 
@@ -247,15 +274,15 @@ export function createAiClient(plugin: AiPlugin): AiClient {
 			console.error("[quiz-blocks] Claude Code error:", e.message, e.stderr || "");
 			const detail = ((e.stderr || "") + " " + (e.stdout || "") + " " + e.message).toLowerCase();
 			if (e.code === "ENOENT" || e.code === 127 || detail.includes("not recognized") || detail.includes("introuvable") || detail.includes("command not found")) {
-				throw new Error("Claude Code n'est pas installé. Installez-le depuis claude.com/claude-code puis connectez-vous avec /login.");
+				throw new Error(t("ai.err.claudeNotInstalled"));
 			}
 			if (e.killed || detail.includes("etimedout")) {
-				throw new Error("Claude n'a pas répondu dans le délai imparti (3 min). Réessayez.");
+				throw new Error(t("ai.err.claudeTimeout"));
 			}
 			if (detail.includes("login") || detail.includes("api key") || detail.includes("authentication") || detail.includes("credential")) {
-				throw new Error("Compte Claude non connecté. Dans un terminal, lancez \"claude\" puis /login avec votre compte Pro/Max/Team/Enterprise.");
+				throw new Error(t("ai.err.claudeNotLoggedIn"));
 			}
-			throw new Error("Erreur Claude Code : " + (e.stderr || e.message).trim().slice(0, 300));
+			throw new Error(t("ai.err.claudeCode", { detail: (e.stderr || e.message).trim().slice(0, 300) }));
 		} finally {
 			if (tmpDir) {
 				try { fs.rmSync(tmpDir, { recursive: true, force: true }); } catch (e) { /* best effort */ }
@@ -266,24 +293,24 @@ export function createAiClient(plugin: AiPlugin): AiClient {
 		try {
 			data = JSON.parse(stdout);
 		} catch (e) {
-			throw new Error("Réponse Claude Code illisible. Réessayez.");
+			throw new Error(t("ai.err.claudeUnreadable"));
 		}
 
 		if (data.is_error) {
-			const msg = String(data.result || "Erreur inconnue");
+			const msg = String(data.result || t("ai.err.unknown"));
 			const msgLower = msg.toLowerCase();
 			if (msgLower.includes("login") || msgLower.includes("api key") || msgLower.includes("credential")) {
-				throw new Error("Compte Claude non connecté. Dans un terminal, lancez \"claude\" puis /login avec votre compte Pro/Max/Team/Enterprise.");
+				throw new Error(t("ai.err.claudeNotLoggedIn"));
 			}
 			if (msgLower.includes("rate limit") || msgLower.includes("usage limit")) {
-				throw new Error("Limite d'utilisation de votre abonnement Claude atteinte. Réessayez plus tard.");
+				throw new Error(t("ai.err.claudeRateLimit"));
 			}
-			throw new Error("Erreur Claude : " + msg.slice(0, 300));
+			throw new Error(t("ai.err.claude", { detail: msg.slice(0, 300) }));
 		}
 
 		const content = data.result || "";
 		if (!content.trim()) {
-			throw new Error("Claude n'a retourné aucune réponse. Réessayez ou changez de modèle.");
+			throw new Error(t("ai.err.claudeEmpty"));
 		}
 
 		console.log("[quiz-blocks] Claude Code success - response length:", content.length);
@@ -297,10 +324,11 @@ export function createAiClient(plugin: AiPlugin): AiClient {
 	   --ignore-user-config isolent la génération (pas de MCP/hooks perso). */
 	async function callCodex(model: string, systemPrompt: string, userPrompt: string, images: ImagePayload[] = [], effort = "medium", fast = false): Promise<unknown[]> {
 		if (!Platform.isDesktopApp) {
-			throw new Error("La génération via ChatGPT (Codex) est disponible sur desktop uniquement.");
+			// Même libellé que le hint du composer (« Codex CLI » explicite).
+			throw new Error(t("ai.hint.codexDesktopOnly"));
 		}
 		if (!/^[a-zA-Z0-9._:-]+$/.test(model)) {
-			throw new Error("Nom de modèle Codex invalide : " + model);
+			throw new Error(t("ai.err.invalidModelCodex", { model }));
 		}
 		const effortVal = /^[a-z]+$/.test(effort) ? effort : "medium";
 
@@ -364,24 +392,24 @@ export function createAiClient(plugin: AiPlugin): AiClient {
 			console.error("[quiz-blocks] Codex error:", e.message, e.stderr || "");
 			const detail = ((e.stderr || "") + " " + (e.stdout || "") + " " + e.message).toLowerCase();
 			if (e.code === "ENOENT" || e.code === 127 || detail.includes("not recognized") || detail.includes("introuvable") || detail.includes("command not found")) {
-				throw new Error("Codex n'est pas installé. Installez-le (npm i -g @openai/codex) puis connectez-vous avec « codex login ».");
+				throw new Error(t("ai.err.codexNotInstalled"));
 			}
 			if (e.killed || detail.includes("etimedout")) {
-				throw new Error("ChatGPT (Codex) n'a pas répondu dans le délai imparti (3 min). Réessayez.");
+				throw new Error(t("ai.err.codexTimeout"));
 			}
 			if (detail.includes("not logged in") || detail.includes("login") || detail.includes("unauthorized") || detail.includes("401") || detail.includes("credential") || detail.includes("authenticat")) {
-				throw new Error("Compte ChatGPT non connecté. Dans un terminal, lancez « codex login ».");
+				throw new Error(t("ai.err.codexNotLoggedIn"));
 			}
 			if (detail.includes("usage limit") || detail.includes("rate limit") || detail.includes("quota")) {
-				throw new Error("Limite d'utilisation de votre abonnement ChatGPT atteinte. Réessayez plus tard.");
+				throw new Error(t("ai.err.codexRateLimit"));
 			}
-			throw new Error("Erreur Codex : " + (e.stderr || e.message).trim().slice(0, 300));
+			throw new Error(t("ai.err.codex", { detail: (e.stderr || e.message).trim().slice(0, 300) }));
 		} finally {
 			try { fs.rmSync(tmpDir, { recursive: true, force: true }); } catch (e) { /* best effort */ }
 		}
 
 		if (!raw || !raw.trim()) {
-			throw new Error("ChatGPT (Codex) n'a retourné aucune réponse. Réessayez ou changez de modèle.");
+			throw new Error(t("ai.err.codexEmpty"));
 		}
 		console.log("[quiz-blocks] Codex success - response length:", raw.length);
 		return parseQuizResponse(raw);
@@ -402,12 +430,12 @@ export function createAiClient(plugin: AiPlugin): AiClient {
 
 	async function callKimi(model: string, systemPrompt: string, userPrompt: string, images: ImagePayload[] = []): Promise<unknown[]> {
 		if (!Platform.isDesktopApp) {
-			throw new Error("La génération via Kimi est disponible sur desktop uniquement.");
+			throw new Error(t("ai.hint.kimiDesktopOnly"));
 		}
 		// L'alias Kimi contient un « / » (« kimi-code/kimi-for-coding ») —
 		// contrairement aux modèles Claude/Codex. Vide = pas de -m du tout.
 		if (model && !/^[a-zA-Z0-9._:/-]+$/.test(model)) {
-			throw new Error("Nom de modèle Kimi invalide : " + model);
+			throw new Error(t("ai.err.invalidModelKimi", { model }));
 		}
 
 		const cp = require("child_process") as typeof import("child_process");
@@ -433,7 +461,8 @@ export function createAiClient(plugin: AiPlugin): AiClient {
 				fs.writeFileSync(p, Buffer.from(img.base64, "base64"));
 				return p;
 			});
-			imageNote = "\n\nLis d'abord ces images, puis base le quiz sur leur contenu :\n" +
+			// Instruction au MODÈLE (pas de l'UI) → anglais, comme le prompt système.
+			imageNote = "\n\nFirst read these images, then base the quiz on their content:\n" +
 				paths.map(p => "- " + p).join("\n");
 		}
 
@@ -446,8 +475,9 @@ export function createAiClient(plugin: AiPlugin): AiClient {
 			const dir = mkTmp();
 			const promptFile = path.join(dir, "instructions.md");
 			fs.writeFileSync(promptFile, fullPrompt, "utf8");
-			promptArg = "Lis le fichier " + promptFile +
-				" et exécute exactement les instructions qu'il contient. Réponds uniquement par le résultat demandé.";
+			// Instruction au MODÈLE → anglais, comme le prompt système.
+			promptArg = "Read the file " + promptFile +
+				" and follow exactly the instructions it contains. Reply only with the requested result.";
 		}
 
 		const args = ["-p", promptArg, "--output-format", "stream-json"];
@@ -482,20 +512,20 @@ export function createAiClient(plugin: AiPlugin): AiClient {
 			console.error("[quiz-blocks] Kimi Code error:", e.message, e.stderr || "");
 			const detail = ((e.stderr || "") + " " + (e.stdout || "") + " " + e.message).toLowerCase();
 			if (e.code === "ENOENT" || e.code === 127 || detail.includes("not recognized") || detail.includes("introuvable") || detail.includes("command not found")) {
-				throw new Error("Kimi Code n'est pas installé. Installez-le depuis kimi.com/code puis connectez-vous avec /login.");
+				throw new Error(t("ai.err.kimiNotInstalled"));
 			}
 			if (e.killed || detail.includes("etimedout")) {
-				throw new Error("Kimi n'a pas répondu dans le délai imparti (3 min). Réessayez.");
+				throw new Error(t("ai.err.kimiTimeout"));
 			}
 			// Message exact du CLI 0.26.0 sans compte connecté : « No model
 			// configured. Run `kimi` and use /login to sign in ».
 			if (detail.includes("no model configured") || detail.includes("login") || detail.includes("unauthorized") || detail.includes("api key") || detail.includes("credential") || detail.includes("authenticat")) {
-				throw new Error("Compte Kimi non connecté. Dans un terminal, lancez « kimi » puis /login avec votre abonnement Kimi Code.");
+				throw new Error(t("ai.err.kimiNotLoggedIn"));
 			}
 			if (detail.includes("rate limit") || detail.includes("usage limit") || detail.includes("quota") || detail.includes("subscription")) {
-				throw new Error("Limite d'utilisation de votre abonnement Kimi atteinte. Réessayez plus tard.");
+				throw new Error(t("ai.err.kimiRateLimit"));
 			}
-			throw new Error("Erreur Kimi Code : " + (e.stderr || e.message).trim().slice(0, 300));
+			throw new Error(t("ai.err.kimiCode", { detail: (e.stderr || e.message).trim().slice(0, 300) }));
 		} finally {
 			if (tmpDir) {
 				try { fs.rmSync(tmpDir, { recursive: true, force: true }); } catch (e) { /* best effort */ }
@@ -504,7 +534,7 @@ export function createAiClient(plugin: AiPlugin): AiClient {
 
 		const content = extractKimiText(stdout);
 		if (!content.trim()) {
-			throw new Error("Kimi n'a retourné aucune réponse. Réessayez ou changez de modèle.");
+			throw new Error(t("ai.err.kimiEmpty"));
 		}
 		console.log("[quiz-blocks] Kimi Code success - response length:", content.length);
 		return parseQuizResponse(content);
@@ -571,22 +601,19 @@ export function createAiClient(plugin: AiPlugin): AiClient {
 				});
 
 				if (!isInstalled) {
-					throw new Error(
-						"Le modèle \"" + model + "\" n'est pas installé.\n" +
-						"Exécutez dans un terminal : ollama pull " + model + "\n" +
-						"Modèles disponibles : " + (installedModels.length > 0 ? installedModels.join(", ") : "aucun")
-					);
+					throw userError(t("ai.err.ollamaModelMissing", {
+						model,
+						models: installedModels.length > 0 ? installedModels.join(", ") : t("ai.err.none")
+					}));
 				}
 			}
 		} catch (err) {
-			const e = err as Error;
-			if (e.message === "ollama_unreachable" || !e.message.startsWith("Le modèle")) {
-				throw new Error(
-					"Impossible de contacter Ollama sur " + ollamaUrl + ".\n" +
-					"Vérifiez que le serveur est démarré (ollama serve)."
-				);
-			}
-			throw err;
+			// Seule l'erreur « modèle absent » ci-dessus est déjà formulée pour
+			// l'utilisateur ; tout le reste (sentinelle ollama_unreachable, JSON
+			// illisible, réseau) devient le diagnostic serveur.
+			const e = err as UserFacingError;
+			if (e.userFacing) throw err;
+			throw userError(t("ai.err.ollamaUnreachable", { url: ollamaUrl }));
 		}
 
 		// Le modèle expose-t-il un raisonnement (`think`) ? Cloud → oui (le param
@@ -660,45 +687,44 @@ export function createAiClient(plugin: AiPlugin): AiClient {
 
 			if (!resp.ok) {
 				const rawErr: unknown = data?.error;
-				const errMsg: unknown = typeof rawErr === "string" ? rawErr : (rawErr || ("Erreur " + resp.status));
+				const errMsg: unknown = typeof rawErr === "string" ? rawErr : (rawErr || t("ai.err.httpStatus", { status: resp.status }));
 				console.error("[quiz-blocks] Ollama error:", resp.status, errMsg);
 
-				// Specific known errors — show clear French message
+				// Erreurs connues → message clair, déjà traduit (userError).
 				const errLower = typeof errMsg === "string" ? errMsg.toLowerCase() : "";
 				if (errLower.includes("more system memory") || errLower.includes("not enough memory") || errLower.includes("out of memory")) {
 					const memMatch = typeof errMsg === "string" ? errMsg.match(/(\d+[\.,]?\d*)\s*GiB/g) : null;
 					const detail = memMatch ? " (" + memMatch.join(" / ") + ")" : "";
-					throw new Error("Mémoire insuffisante pour ce modèle" + detail + ".\nChoisissez un modèle plus petit dans la liste.");
+					throw userError(t("ai.err.ollamaOutOfMemory", { detail }));
 				}
 				if (errLower.includes("not found") || errLower.includes("model not found")) {
-					throw new Error("Le modèle \"" + model + "\" n’est pas installé.\nExécutez : ollama pull " + model);
+					throw userError(t("ai.err.ollamaModelNotFound", { model }));
 				}
 				// Modèle cloud réservé à un abonnement (Ollama Pro/Max) : 403
 				// « requires a subscription ». Distinct d'un défaut de connexion.
 				if (errLower.includes("subscription") || errLower.includes("upgrade for access")) {
-					throw new Error("Ce modèle nécessite un abonnement Ollama : https://ollama.com/upgrade");
+					throw userError(t("ai.err.ollamaSubscription"));
 				}
 				if (isCloud && (resp.status === 401 || resp.status === 403 || errLower.includes("sign in") || errLower.includes("signin") || errLower.includes("unauthorized") || errLower.includes("authenticat") || errLower.includes("api key"))) {
-					throw new Error("Modèle cloud Ollama : le daemon n'est pas connecté à votre compte.\nDans un terminal : ollama signin");
+					throw userError(t("ai.err.ollamaSignin"));
 				}
-				throw new Error("Erreur Ollama (" + resp.status + ") : " + String(errMsg));
+				throw userError(t("ai.err.ollamaHttp", { status: resp.status, detail: String(errMsg) }));
 			}
 		} catch (err) {
-			const e = err as Error;
-			if (e.message.startsWith("Le modèle") || e.message.startsWith("Mémoire insuffisante") || e.message.startsWith("Erreur Ollama") || e.message.startsWith("Impossible de contacter") || e.message.startsWith("Modèle cloud") || e.message.startsWith("Ce modèle nécessite")) {
-				throw err;
-			}
-			throw new Error("Impossible de contacter Ollama sur " + ollamaUrl + ". Vérifiez que le serveur est démarré.");
+			// Les erreurs ci-dessus sont déjà formulées → re-jetées telles quelles.
+			const e = err as UserFacingError;
+			if (e.userFacing) throw err;
+			throw userError(t("ai.err.ollamaUnreachableShort", { url: ollamaUrl }));
 		}
 
 		if (data.error) {
 			const errMsg = typeof data.error === "string" ? data.error : JSON.stringify(data.error);
-			throw new Error("Erreur Ollama : " + errMsg);
+			throw new Error(t("ai.err.ollama", { detail: errMsg }));
 		}
 
 		const content = data?.message?.content || "";
 		if (!content.trim()) {
-			throw new Error("Ollama n'a retourné aucune réponse. Vérifiez que le modèle est installé.");
+			throw new Error(t("ai.err.ollamaEmpty"));
 		}
 
 		console.log("[quiz-blocks] Ollama response length:", content.length);
@@ -785,7 +811,7 @@ export function createAiClient(plugin: AiPlugin): AiClient {
 		const parsed: unknown = JSON5.parse(cleaned);
 
 		if (!Array.isArray(parsed)) {
-			throw new Error("La réponse IA n'est pas un tableau de questions.");
+			throw new Error(t("ai.err.notAnArray"));
 		}
 
 		return parsed;

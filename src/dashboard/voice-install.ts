@@ -1,5 +1,6 @@
 import * as path from "path";
 import * as fs from "fs";
+import { t } from "../i18n";
 
 /* ══════════════════════════════════════════════════════════
    VOICE INSTALL — Dictée locale (whisper.cpp)
@@ -61,14 +62,18 @@ export const BIN_ASSETS: Record<VoiceBackend, VoiceBinAsset> = {
 	cuda: { url: GH_BASE + "whisper-cublas-12.4.0-bin-x64.zip", size: 677.9e6 },
 };
 
+/* `label` est un GETTER : cette table est évaluée au CHARGEMENT du module, un
+   t() posé directement dedans figerait le libellé dans la langue du démarrage.
+   Le getter traduit à l'accès (donc au rendu des réglages) sans toucher aux
+   appelants — plugin.ts lit `m.label` tel quel. */
 export const MODELS: Record<VoiceModelId, VoiceModelAsset> = {
 	"small-q5_1": {
 		file: "ggml-small-q5_1.bin", size: 190.1e6,
-		label: "Rapide — small (190 Mo)",
+		get label() { return t("ai.voice.modelSmall"); },
 	},
 	"large-v3-turbo-q5_0": {
 		file: "ggml-large-v3-turbo-q5_0.bin", size: 574.0e6,
-		label: "Max — large-v3-turbo (574 Mo)",
+		get label() { return t("ai.voice.modelLarge"); },
 	},
 };
 
@@ -169,7 +174,7 @@ export function expandZip(zip: string, destDir: string): Promise<void> {
 
 export async function installBinary(backend: VoiceBackend, onProgress?: VoiceProgressCallback): Promise<string> {
 	const asset = BIN_ASSETS[backend];
-	if (!asset) throw new Error("Backend inconnu : " + backend);
+	if (!asset) throw new Error(t("ai.voice.errUnknownBackend", { backend }));
 	const dir = binDir(backend);
 	const zip = path.join(voiceDir(), "bin-" + backend + ".zip");
 	await downloadFile(asset.url, zip, onProgress);
@@ -177,17 +182,17 @@ export async function installBinary(backend: VoiceBackend, onProgress?: VoicePro
 	await expandZip(zip, dir);
 	fs.rmSync(zip, { force: true });
 	const cli = findCli(dir);
-	if (!cli) throw new Error("whisper-cli.exe introuvable après extraction");
+	if (!cli) throw new Error(t("ai.voice.errCliNotFound"));
 	return cli;
 }
 
 export async function installModel(model: VoiceModelId, onProgress?: VoiceProgressCallback): Promise<string> {
 	const m = MODELS[model];
-	if (!m) throw new Error("Modèle inconnu : " + model);
+	if (!m) throw new Error(t("ai.voice.errUnknownModel", { model }));
 	const dest = modelPath(model);
 	// dest n'est jamais null pour un VoiceModelId valide (voir modelPath) —
 	// narrowing pour TS strict, pas un nouveau chemin d'erreur runtime.
-	if (!dest) throw new Error("Modèle inconnu : " + model);
+	if (!dest) throw new Error(t("ai.voice.errUnknownModel", { model }));
 	await downloadFile(HF_BASE + m.file, dest, onProgress);
 	return dest;
 }

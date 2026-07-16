@@ -1,7 +1,8 @@
 import { ItemView, Notice } from "obsidian";
 import type { App, Plugin, TFile, WorkspaceLeaf } from "obsidian";
 import { parseQuizSource } from "./quiz-utils";
-import { Q_TYPES, loadReact, _setIcon, _iconSpan, makeDefault, md2html, escHtml, esc5 } from "./editor/utils";
+import { t } from "./i18n";
+import { Q_TYPES, loadReact, _setIcon, _iconSpan, makeDefault, defaultSlots, md2html, escHtml, esc5 } from "./editor/utils";
 import type { DraftQuestion, QuestionTypeKey } from "./editor/utils";
 import { exportQuestion, exportAll, exportAllWithFence } from "./editor/export";
 import { ConfirmModal, TypePickerModal, ImportQuizModal, QuizFileSuggestModal, ImportFromNoteModal, _htmlToText } from "./editor/modals";
@@ -163,7 +164,7 @@ export function attachQuizEditorCore(view: EditorHostView, host: HTMLElement, ap
 		try {
 			const parsed = parseQuizSource(source) as ParsedQuizItem[];
 			if (!Array.isArray(parsed) || parsed.length === 0) {
-				new Notice("Aucune question trouvée");
+				new Notice(t("editor.notice.noQuestionFound"));
 				return;
 			}
 
@@ -186,7 +187,7 @@ export function attachQuizEditorCore(view: EditorHostView, host: HTMLElement, ap
 			}
 
 			if (questions.length === 0) {
-				new Notice("Aucune question valide trouvée");
+				new Notice(t("editor.notice.noValidQuestion"));
 				return;
 			}
 
@@ -228,11 +229,13 @@ export function attachQuizEditorCore(view: EditorHostView, host: HTMLElement, ap
 
 			view.render();
 			if (!opts.silent) {
-				new Notice(`${questions.length} question(s) importée(s)${fileName ? " depuis " + fileName : ""}`);
+				new Notice(fileName
+					? t("editor.notice.importedFrom", { n: questions.length, file: fileName })
+					: t("editor.notice.imported", { n: questions.length }));
 			}
 		} catch (err) {
 			console.error("Import error:", err);
-			new Notice("Erreur lors de l'import: " + (err as Error).message);
+			new Notice(t("editor.notice.importError", { error: (err as Error).message }));
 		}
 	};
 
@@ -257,7 +260,7 @@ export function attachQuizEditorCore(view: EditorHostView, host: HTMLElement, ap
 				parseQuizSource(newQuizJson);
 			} catch (parseErr) {
 				console.error("[Quiz Blocks] JSON5 invalide généré:", parseErr);
-				new Notice("Erreur: le quiz généré n'est pas valide.");
+				new Notice(t("editor.notice.invalidGenerated"));
 				return;
 			}
 
@@ -268,7 +271,7 @@ export function attachQuizEditorCore(view: EditorHostView, host: HTMLElement, ap
 			const quizBlockRegex = /```quiz-blocks[\s\S]*?```/;
 			if (!quizBlockRegex.test(content)) {
 				console.error("[Quiz Blocks] Aucun bloc quiz-blocks trouvé dans le fichier");
-				new Notice("Erreur: bloc quiz-blocks introuvable");
+				new Notice(t("editor.notice.blockNotFound"));
 				return;
 			}
 
@@ -281,7 +284,7 @@ export function attachQuizEditorCore(view: EditorHostView, host: HTMLElement, ap
 			}
 		} catch (err) {
 			console.error("[Quiz Blocks] Save error:", err);
-			new Notice("Erreur lors de la sauvegarde: " + (err as Error).message);
+			new Notice(t("editor.notice.saveError", { error: (err as Error).message }));
 		}
 	};
 
@@ -308,6 +311,7 @@ export function attachQuizEditorCore(view: EditorHostView, host: HTMLElement, ap
 		const question = makeDefault(type);
 		question._id = q.id || Math.random().toString(36).slice(2, 10);
 		question.title = q.title || "";
+		// « Question N » non localisé : motif du titre auto écrit dans le .md.
 		question._userModifiedTitle = !/^Question \d+$/.test(question.title);
 		question.hint = q.hint || "";
 
@@ -344,7 +348,7 @@ export function attachQuizEditorCore(view: EditorHostView, host: HTMLElement, ap
 		}
 
 		if (type === "ordering") {
-			question.slots = q.slots || ["Étape 1", "Étape 2"];
+			question.slots = q.slots || defaultSlots();
 			question.possibilities = q.possibilities || ["", ""];
 			question.correctOrder = q.correctOrder || [0, 1];
 		}
@@ -418,10 +422,13 @@ export class QuizBuilderView extends ItemView {
 
 	getViewType(): string { return VIEW_TYPE; }
 	getDisplayText(): string {
+		// getViewType() reste l'identifiant technique (jamais traduit) ;
+		// getDisplayText() est le titre d'onglet, donc de l'UI. Appelé par
+		// Obsidian à chaque rafraîchissement d'en-tête → langue courante.
 		if (this.sourceFile) {
-			return this.sourceFile.basename || "Quiz Editor";
+			return this.sourceFile.basename || t("editor.view.title");
 		}
-		return "Quiz Editor";
+		return t("editor.view.title");
 	}
 	getIcon(): string { return "graduation-cap"; }
 

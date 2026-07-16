@@ -1,4 +1,5 @@
 import { setIcon } from "obsidian";
+import { t } from "../i18n";
 import type { ResourceButton } from "../types/quiz";
 
 export type QuestionTypeKey = "single" | "multi" | "ordering" | "matching" | "text" | "cmd" | "powershell" | "bash";
@@ -10,15 +11,21 @@ interface QuizTypeDef {
 	desc: string;
 }
 
+/* Q_TYPES est évalué au CHARGEMENT du module : des libellés en dur y seraient
+   figés dans la langue du démarrage et changer de langue n'aurait plus d'effet.
+   `label`/`desc` sont donc des GETTERS — t() n'est appelé qu'à la lecture, donc
+   au rendu (renderEditor, renderSidebar, renderPreview, TypePickerModal), et
+   tous les appelants restent inchangés (`ti.label`). Ne jamais copier une entrée
+   par spread/Object.assign : cela figerait le getter en valeur. */
 const Q_TYPES: QuizTypeDef[] = [
-	{ key: "single", label: "Choix unique", lucide: "circle-dot", desc: "Une seule bonne réponse" },
-	{ key: "multi", label: "Choix multiple", lucide: "check-square", desc: "Plusieurs bonnes réponses" },
-	{ key: "ordering", label: "Classement", lucide: "arrow-up-down", desc: "Ordonner les éléments" },
-	{ key: "matching", label: "Association", lucide: "link", desc: "Associer lignes et choix" },
-	{ key: "text", label: "Texte libre", lucide: "type", desc: "Textarea classique" },
-	{ key: "cmd", label: "Terminal CMD", lucide: "terminal", desc: "Invite de commandes Windows" },
-	{ key: "powershell", label: "PowerShell", lucide: "terminal-square", desc: "Terminal PowerShell" },
-	{ key: "bash", label: "Terminal Bash", lucide: "terminal", desc: "Terminal Linux/Bash" },
+	{ key: "single", lucide: "circle-dot", get label() { return t("editor.type.single.label"); }, get desc() { return t("editor.type.single.desc"); } },
+	{ key: "multi", lucide: "check-square", get label() { return t("editor.type.multi.label"); }, get desc() { return t("editor.type.multi.desc"); } },
+	{ key: "ordering", lucide: "arrow-up-down", get label() { return t("editor.type.ordering.label"); }, get desc() { return t("editor.type.ordering.desc"); } },
+	{ key: "matching", lucide: "link", get label() { return t("editor.type.matching.label"); }, get desc() { return t("editor.type.matching.desc"); } },
+	{ key: "text", lucide: "type", get label() { return t("editor.type.text.label"); }, get desc() { return t("editor.type.text.desc"); } },
+	{ key: "cmd", lucide: "terminal", get label() { return t("editor.type.cmd.label"); }, get desc() { return t("editor.type.cmd.desc"); } },
+	{ key: "powershell", lucide: "terminal-square", get label() { return t("editor.type.powershell.label"); }, get desc() { return t("editor.type.powershell.desc"); } },
+	{ key: "bash", lucide: "terminal", get label() { return t("editor.type.bash.label"); }, get desc() { return t("editor.type.bash.desc"); } },
 ];
 
 interface ReactBridge {
@@ -70,14 +77,22 @@ export interface DraftQuestion {
 	answerTemplate?: string;
 }
 
+/* Libellés de slots par défaut (« Étape 1 »…) : contenu de DÉPART écrit ensuite
+   dans le .md, mais du texte libre — le moteur ne le parse jamais. makeDefault
+   étant appelé à la création d'une question (jamais au chargement du module),
+   t() rend bien la langue courante. */
+function defaultSlots(): string[] {
+	return [t("editor.ordering.slotDefault", { n: 1 }), t("editor.ordering.slotDefault", { n: 2 })];
+}
+
 function makeDefault(type: QuestionTypeKey): DraftQuestion {
 	const b: DraftQuestion = { _type: type, _id: Math.random().toString(36).slice(2, 10), title: "", prompt: "", hint: "", explain: "", resourceButton: null, _useHtmlPrompt: false };
 	switch (type) {
 		case "single": return { ...b, options: ["", ""], correctIndex: 0 };
 		case "multi": return { ...b, options: ["", ""], correctIndices: [] };
-		case "ordering": return { ...b, slots: ["Étape 1", "Étape 2"], possibilities: ["", ""], correctOrder: [0, 1] };
+		case "ordering": return { ...b, slots: defaultSlots(), possibilities: ["", ""], correctOrder: [0, 1] };
 		case "matching": return { ...b, rows: ["", ""], choices: ["", ""], correctMap: [0, 0] };
-		case "text": return { ...b, placeholder: "Votre réponse...", acceptedAnswers: [""], caseSensitive: false };
+		case "text": return { ...b, placeholder: t("editor.text.defaultPlaceholder"), acceptedAnswers: [""], caseSensitive: false };
 		case "cmd": return { ...b, placeholder: "", acceptedAnswers: [""], caseSensitive: false, commandPrefix: "C:\\>" };
 		case "powershell": return { ...b, placeholder: "", acceptedAnswers: [""], caseSensitive: false, commandPrefix: "PS>" };
 		case "bash": return { ...b, placeholder: "", acceptedAnswers: [""], caseSensitive: false };
@@ -144,4 +159,4 @@ function esc5(s?: unknown): string {
 	// par md2html() avant d'appeler esc5().
 }
 
-export { Q_TYPES, loadReact, _setIcon, _iconSpan, makeDefault, md2html, escHtml, esc5 };
+export { Q_TYPES, loadReact, _setIcon, _iconSpan, makeDefault, defaultSlots, md2html, escHtml, esc5 };

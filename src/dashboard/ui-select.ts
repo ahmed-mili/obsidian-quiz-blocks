@@ -1,5 +1,6 @@
 import { setIcon } from "obsidian";
 import type { TFile } from "obsidian";
+import { t } from "../i18n";
 import { createEffortTrackFx } from "./effort-canvas";
 import type { EffortTrackFx } from "./effort-canvas";
 
@@ -71,7 +72,7 @@ export function createSelect<T extends SelectOption = SelectOption>(parent: HTML
 	let options: T[] = opts.options || [];
 	let value = opts.value;
 	let disabled = !!opts.disabled;
-	const placeholder = opts.placeholder || "Sélectionner…";
+	const placeholder = opts.placeholder || t("dashboard.select.placeholder");
 
 	const trigger = parent.createEl("button", { cls: "qbd-select" });
 	trigger.type = "button";
@@ -435,7 +436,8 @@ export function openModelMenu(anchorEl: HTMLElement, opts: OpenModelMenuOptions)
 			const searchWrap = menuEl.createDiv({ cls: "qbd-model-menu-search" });
 			const searchInput = searchWrap.createEl("input", {
 				cls: "qbd-model-menu-search-input",
-				attr: { type: "text", placeholder: "Find model…", spellcheck: "false" }
+				// L'anglais reprend la formule exacte de l'app Ollama (référence).
+				attr: { type: "text", placeholder: t("dashboard.select.findModel"), spellcheck: "false" }
 			});
 			const listEl = menuEl.createDiv({ cls: "qbd-model-menu-list" });
 			const paint = (filter: string) => {
@@ -444,7 +446,7 @@ export function openModelMenu(anchorEl: HTMLElement, opts: OpenModelMenuOptions)
 				const shown = opts.models.filter(m => !f
 					|| (m.label || "").toLowerCase().includes(f)
 					|| (m.value || "").toLowerCase().includes(f));
-				if (!shown.length) listEl.createDiv({ cls: "qbd-model-menu-empty", text: "Aucun modèle" });
+				if (!shown.length) listEl.createDiv({ cls: "qbd-model-menu-empty", text: t("dashboard.select.noModel") });
 				else for (const m of shown) appendModelOption(listEl, m);
 			};
 			paint("");
@@ -471,7 +473,7 @@ export function openModelMenu(anchorEl: HTMLElement, opts: OpenModelMenuOptions)
 			effortRow.type = "button";
 			effortRow.setAttribute("role", "menuitem");
 			effortRow.createSpan({ cls: "qbd-select-check" });
-			effortRow.createSpan({ cls: "qbd-select-option-label", text: "Effort" });
+			effortRow.createSpan({ cls: "qbd-select-option-label", text: t("dashboard.select.effort") });
 			effortRow.createSpan({ cls: "qbd-model-menu-row-value", text: effortLabelOf(opts.currentEffort) });
 			const effortChev = effortRow.createSpan({ cls: "qbd-model-menu-row-chevron" });
 			setIcon(effortChev, "chevron-right");
@@ -487,7 +489,7 @@ export function openModelMenu(anchorEl: HTMLElement, opts: OpenModelMenuOptions)
 			moreRow.type = "button";
 			moreRow.setAttribute("role", "menuitem");
 			moreRow.createSpan({ cls: "qbd-select-check" });
-			moreRow.createSpan({ cls: "qbd-select-option-label", text: "Plus de modèles" });
+			moreRow.createSpan({ cls: "qbd-select-option-label", text: t("dashboard.select.moreModels") });
 			const moreChev = moreRow.createSpan({ cls: "qbd-model-menu-row-chevron" });
 			setIcon(moreChev, "chevron-right");
 
@@ -525,7 +527,7 @@ export function openModelMenu(anchorEl: HTMLElement, opts: OpenModelMenuOptions)
 		fly.setAttribute("role", "menu");
 		fly.createDiv({
 			cls: "qbd-effort-flyout-head",
-			text: "Un effort plus élevé signifie des réponses plus approfondies, mais prend plus de temps et consomme vos limites plus rapidement."
+			text: t("dashboard.select.effortFlyoutHelp")
 		});
 		for (const ef of (opts.efforts || [])) {
 			const active = ef.value === opts.currentEffort;
@@ -543,7 +545,7 @@ export function openModelMenu(anchorEl: HTMLElement, opts: OpenModelMenuOptions)
 			const body = b.createDiv({ cls: "qbd-effort-option-body" });
 			const top = body.createDiv({ cls: "qbd-effort-option-top" });
 			top.createSpan({ cls: "qbd-select-option-label", text: ef.label });
-			if (ef.isDefault) top.createSpan({ cls: "qbd-effort-badge", text: "Par défaut" });
+			if (ef.isDefault) top.createSpan({ cls: "qbd-effort-badge", text: t("dashboard.select.effortDefault") });
 			if (ef.sub) body.createSpan({ cls: "qbd-effort-option-sub", text: ef.sub });
 			b.addEventListener("click", () => {
 				const changed = ef.value !== opts.currentEffort;
@@ -751,7 +753,7 @@ export function openEffortSlider(anchorEl: HTMLElement, opts: OpenEffortSliderOp
 	if (variant === "claude") {
 		const head = menuEl.createDiv({ cls: "qbd-effort-pop-head" });
 		const title = head.createSpan({ cls: "qbd-effort-pop-title" });
-		title.createSpan({ text: "Effort" }); // gap 5px via CSS (handoff)
+		title.createSpan({ text: t("dashboard.select.effort") }); // gap 5px via CSS (handoff)
 		valueEl = title.createSpan({ cls: "qbd-effort-pop-value" });
 		// Aide « ? » : cercle custom du handoff (15×15, bordure #56565c),
 		// PAS une icône Lucide — imposé par la référence validée.
@@ -760,15 +762,15 @@ export function openEffortSlider(anchorEl: HTMLElement, opts: OpenEffortSliderOp
 		help.setText("?");
 		attachTip(help, (tip) => {
 			tip.addClass("qbd-hover-tip--card");
-			tip.createDiv({ cls: "qbd-hover-tip-title", text: "Effort" });
+			tip.createDiv({ cls: "qbd-hover-tip-title", text: t("dashboard.select.effort") });
 			tip.createDiv({
 				cls: "qbd-hover-tip-body",
-				text: "Un effort plus élevé génère des réponses plus complètes, mais prend plus de temps et utilise vos limites plus rapidement."
+				text: t("dashboard.select.effortHelp")
 			});
 		});
 		const scale = menuEl.createDiv({ cls: "qbd-effort-pop-scale" });
-		scale.createSpan({ text: "Plus rapide" });
-		scale.createSpan({ text: "Plus intelligent" });
+		scale.createSpan({ text: t("dashboard.select.effortFaster") });
+		scale.createSpan({ text: t("dashboard.select.effortSmarter") });
 	}
 
 	// ── Slider discret (codex : l'éclair Fast vit dans une rangée
@@ -780,7 +782,7 @@ export function openEffortSlider(anchorEl: HTMLElement, opts: OpenEffortSliderOp
 	const slider = menuEl.createDiv({ cls: "qbd-effort-slider" });
 	slider.tabIndex = 0;
 	slider.setAttribute("role", "slider");
-	slider.setAttribute("aria-label", "Effort");
+	slider.setAttribute("aria-label", t("dashboard.select.effort"));
 	slider.setAttribute("aria-valuemin", "0");
 	slider.setAttribute("aria-valuemax", String(n - 1));
 	const track = slider.createDiv({ cls: "qbd-effort-track" });
@@ -824,7 +826,7 @@ export function openEffortSlider(anchorEl: HTMLElement, opts: OpenEffortSliderOp
 		const fast = opts.fast;
 		const zap = zapRow.createEl("button", { cls: "qbd-effort-fast qbd-effort-pop-zap" });
 		zap.type = "button";
-		zap.setAttribute("aria-label", "Fast (1.5x speed)");
+		zap.setAttribute("aria-label", t("dashboard.select.fastAria"));
 		setIcon(zap, "zap");
 		// Drift des étoiles Fast piloté en rAF via --qbd-drift : des keyframes
 		// CSS ne savent ni décélérer ni accélérer. Ici la VITESSE tend vers sa
@@ -871,9 +873,11 @@ export function openEffortSlider(anchorEl: HTMLElement, opts: OpenEffortSliderOp
 			driftWake();
 			if (fast.onToggle) fast.onToggle(fast.on);
 		});
+		// L'anglais reprend mot pour mot les libellés de la référence ChatGPT
+		// (« 1.5x speed » / « More usage ») ; le français les traduit.
 		attachTip(zap, (tip) => {
-			tip.createDiv({ cls: "qbd-hover-tip-title", text: "1.5x speed" });
-			tip.createDiv({ cls: "qbd-hover-tip-body", text: "More usage" });
+			tip.createDiv({ cls: "qbd-hover-tip-title", text: t("dashboard.select.fastSpeed") });
+			tip.createDiv({ cls: "qbd-hover-tip-body", text: t("dashboard.select.fastUsage") });
 		});
 	}
 
@@ -881,7 +885,7 @@ export function openEffortSlider(anchorEl: HTMLElement, opts: OpenEffortSliderOp
 	// de la piste (référence : tooltip au-dessus du slider en état ultra).
 	if (variant === "codex") {
 		attachTip(slider, (tip) => {
-			tip.createDiv({ cls: "qbd-hover-tip-title", text: "Consumes usage limits faster" });
+			tip.createDiv({ cls: "qbd-hover-tip-title", text: t("dashboard.select.usageWarning") });
 		}, () => idx >= n - 1 || ["max", "ultra"].includes(efforts[idx].value));
 	}
 
@@ -889,6 +893,9 @@ export function openEffortSlider(anchorEl: HTMLElement, opts: OpenEffortSliderOp
 
 	// En-tête de la carte Claude Code : niveaux en ANGLAIS (demande
 	// explicite). Un niveau inconnu retombe sur son label capitalisé.
+	// HORS i18n volontairement : ces noms restent en anglais DANS LES DEUX
+	// langues (ils reproduisent le picker /effort de Claude Code) — les passer
+	// par t() les traduirait en français, contre la demande.
 	const CLAUDE_EFFORT_EN: Record<string, string> = {
 		low: "Low", medium: "Medium", high: "High",
 		xhigh: "Extra", max: "Max", ultracode: "Ultracode"
@@ -1123,7 +1130,7 @@ export function openOptionsMenu(anchorEl: HTMLElement, opts: OpenOptionsMenuOpti
 	let count = Math.min(100, Math.max(1, Math.round(Number(opts.count) || 5)));
 	let isCustom = !PRESETS.includes(count);
 
-	menuEl.createDiv({ cls: "qbd-options-pop-title", text: "Questions" });
+	menuEl.createDiv({ cls: "qbd-options-pop-title", text: t("dashboard.select.optionsQuestions") });
 	const countRow = menuEl.createDiv({ cls: "qbd-options-pop-row" });
 	const ddWrap = countRow.createDiv({ cls: "qbd-opts-dd-wrap" });
 	const trigger = ddWrap.createEl("button", { cls: "qbd-opts-dd" });
@@ -1143,8 +1150,13 @@ export function openOptionsMenu(anchorEl: HTMLElement, opts: OpenOptionsMenuOpti
 		if (opts.onCount) opts.onCount(count);
 	};
 
+	// « N questions » : accord porté par le dictionnaire (les presets sont tous
+	// > 1, mais la règle vaut aussi pour un preset futur à 1).
+	const countLabel = (n: number): string =>
+		t(n === 1 ? "dashboard.common.questionsOne" : "dashboard.common.questionsOther", { count: n });
+
 	const refreshCountUI = () => {
-		trigLabel.setText(isCustom ? "Personnalisé" : count + " questions");
+		trigLabel.setText(isCustom ? t("dashboard.select.optionsCustom") : countLabel(count));
 		field.classList.toggle("is-hidden", !isCustom);
 		trigger.setAttribute("aria-expanded", ddMenu.classList.contains("is-hidden") ? "false" : "true");
 		for (const b of Array.from(ddMenu.querySelectorAll<HTMLButtonElement>(".qbd-opts-dd-item"))) {
@@ -1166,7 +1178,7 @@ export function openOptionsMenu(anchorEl: HTMLElement, opts: OpenOptionsMenuOpti
 		item.type = "button";
 		item.dataset.preset = p;
 		item.createSpan({ cls: "qbd-select-check" });
-		item.createSpan({ text: p === "custom" ? "Personnalisé" : p + " questions" });
+		item.createSpan({ text: p === "custom" ? t("dashboard.select.optionsCustom") : countLabel(Number(p)) });
 		item.addEventListener("click", () => {
 			if (p === "custom") {
 				isCustom = true;
@@ -1204,7 +1216,7 @@ export function openOptionsMenu(anchorEl: HTMLElement, opts: OpenOptionsMenuOpti
 	refreshCountUI();
 
 	// ── Type : items à coche (même anatomie que les options de select) ──
-	menuEl.createDiv({ cls: "qbd-options-pop-title", text: "Type" });
+	menuEl.createDiv({ cls: "qbd-options-pop-title", text: t("dashboard.select.optionsType") });
 	const items: Array<{ t: string; btn: HTMLButtonElement; check: HTMLElement }> = [];
 	let current = opts.type;
 	function refreshItems(): void {
@@ -1309,7 +1321,7 @@ export function openNotePicker(anchorEl: HTMLElement, opts: OpenNotePickerOption
 	const searchWrap = menuEl.createDiv({ cls: "qbd-model-menu-search" });
 	const input = searchWrap.createEl("input", {
 		cls: "qbd-model-menu-search-input",
-		attr: { type: "text", placeholder: "Rechercher une note…", spellcheck: "false" }
+		attr: { type: "text", placeholder: t("dashboard.select.noteSearch"), spellcheck: "false" }
 	});
 	const listEl = menuEl.createDiv({ cls: "qbd-model-menu-list" });
 
@@ -1345,17 +1357,17 @@ export function openNotePicker(anchorEl: HTMLElement, opts: OpenNotePickerOption
 			rest = (opts.allFiles || []).filter(x => !openPaths.has(x.path) && match(x)).slice(0, 30);
 		}
 		if (open.length) {
-			listEl.createDiv({ cls: "qbd-note-picker-section", text: "Notes ouvertes" });
+			listEl.createDiv({ cls: "qbd-note-picker-section", text: t("dashboard.select.noteOpen") });
 			open.forEach(addFile);
 		}
 		if (rest.length) {
-			listEl.createDiv({ cls: "qbd-note-picker-section", text: "Toutes les notes" });
+			listEl.createDiv({ cls: "qbd-note-picker-section", text: t("dashboard.select.noteAll") });
 			rest.forEach(addFile);
 		}
 		if (!open.length && !rest.length) {
 			listEl.createDiv({
 				cls: "qbd-model-menu-empty",
-				text: f ? "Aucune note trouvée" : "Aucune note ouverte — tapez pour chercher"
+				text: f ? t("dashboard.select.noteNotFound") : t("dashboard.select.noteEmpty")
 			});
 		}
 	}

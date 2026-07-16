@@ -1,4 +1,5 @@
 import { setIcon } from "obsidian";
+import { t } from "../i18n";
 import type { DashboardCtx } from "../types/dashboard-ctx";
 import type { QuizIndexEntry } from "./scanner";
 import type { QuizStatRecord } from "./stats-store";
@@ -59,14 +60,14 @@ export function createHomeHandlers(ctx: DashboardCtx): HomeHandlers {
 		// Sous-titre orientant : annonce les deux actions principales. (La note
 		// active reste dans le footer de la sidebar, et la vue Générer la relit.)
 		const subtitle = inProgress.length > 0
-			? "Reprenez un quiz en cours ou générez-en un nouveau."
-			: "Choisissez un quiz à réviser ou générez-en un nouveau.";
+			? t("dashboard.home.subtitleResume")
+			: t("dashboard.home.subtitleStart");
 		headerLeft.createEl("p", { cls: "qbd-home-subtitle", text: subtitle });
 
 		const genBtn = header.createEl("button", { cls: "qbd-btn qbd-btn--primary" });
 		const genIcon = genBtn.createSpan({ cls: "qbd-btn-icon" });
 		setIcon(genIcon, "sparkles");
-		genBtn.createSpan({ text: "Générer un quiz" });
+		genBtn.createSpan({ text: t("dashboard.home.generate") });
 		genBtn.addEventListener("click", () => ctx.navigate("ai"));
 
 		// ── Reprendre : dernier quiz en cours (action primaire du returning user) ──
@@ -90,11 +91,13 @@ export function createHomeHandlers(ctx: DashboardCtx): HomeHandlers {
 			return s && s.bestScore >= 80;
 		}).length;
 
+		// Construit DANS render : les libellés sont traduits à chaque rendu (une
+		// constante de module serait figée dans la langue du démarrage).
 		const statCards: StatCard[] = [
-			{ label: "Quiz créés", value: String(quizzes.length), sub: "dans le vault", icon: "layers" },
-			{ label: "Questions totales", value: String(totalQuestions), sub: "toutes notes", icon: "list" },
+			{ label: t("dashboard.home.statQuizzes"), value: String(quizzes.length), sub: t("dashboard.home.statQuizzesSub"), icon: "layers" },
+			{ label: t("dashboard.home.statQuestions"), value: String(totalQuestions), sub: t("dashboard.home.statQuestionsSub"), icon: "list" },
 			{
-				label: "Maîtrisés", value: `${mastered}/${quizzes.length}`, sub: "score ≥ 80%",
+				label: t("dashboard.home.statMastered"), value: `${mastered}/${quizzes.length}`, sub: t("dashboard.home.statMasteredSub"),
 				icon: "award", highlight: true,
 				meter: quizzes.length > 0 ? mastered / quizzes.length : 0
 			}
@@ -123,10 +126,10 @@ export function createHomeHandlers(ctx: DashboardCtx): HomeHandlers {
 			const todoTitle = sectionHeader.createEl("p", { cls: "qbd-home-section-title" });
 			const todoIcon = todoTitle.createSpan({ cls: "qbd-home-section-title-icon" });
 			setIcon(todoIcon, "list-todo");
-			todoTitle.createSpan({ text: "À faire" });
+			todoTitle.createSpan({ text: t("dashboard.home.todo") });
 
 			const seeAll = sectionHeader.createEl("button", { cls: "qbd-btn qbd-btn--subtle" });
-			seeAll.createSpan({ text: "Voir tout" });
+			seeAll.createSpan({ text: t("dashboard.home.seeAll") });
 			const chevron = seeAll.createSpan({ cls: "qbd-btn-icon qbd-btn-icon--sm" });
 			setIcon(chevron, "chevron-right");
 			seeAll.addEventListener("click", () => ctx.navigate("quizzes"));
@@ -143,7 +146,7 @@ export function createHomeHandlers(ctx: DashboardCtx): HomeHandlers {
 			const doneTitle = section.createEl("p", { cls: "qbd-home-section-title" });
 			const doneIcon = doneTitle.createSpan({ cls: "qbd-home-section-title-icon" });
 			setIcon(doneIcon, "circle-check");
-			doneTitle.createSpan({ text: "Complétés" });
+			doneTitle.createSpan({ text: t("dashboard.home.completed") });
 
 			const grid = section.createDiv({ cls: "qbd-home-grid" });
 			for (const quiz of completed) {
@@ -167,7 +170,7 @@ export function createHomeHandlers(ctx: DashboardCtx): HomeHandlers {
 		const label = info.createDiv({ cls: "qbd-resume-label" });
 		const labelIcon = label.createSpan({ cls: "qbd-resume-label-icon" });
 		setIcon(labelIcon, "history");
-		label.createSpan({ text: "Reprendre là où vous en étiez" });
+		label.createSpan({ text: t("dashboard.home.resumeLabel") });
 
 		info.createEl("p", { cls: "qbd-resume-title", text: quiz.title });
 
@@ -175,12 +178,15 @@ export function createHomeHandlers(ctx: DashboardCtx): HomeHandlers {
 		const bar = progress.createDiv({ cls: "qbd-resume-bar" });
 		const fill = bar.createDiv({ cls: "qbd-resume-bar-fill" });
 		fill.style.width = `${pct}%`;
-		progress.createEl("span", { cls: "qbd-resume-progress-text", text: `${done}/${total} questions · ${pct}%` });
+		// L'accord se joue sur le TOTAL (« 0/1 question », « 3/10 questions ») :
+		// le compteur formé est ensuite inséré tel quel dans la ligne de progression.
+		const questions = t(total === 1 ? "dashboard.common.questionsOfOne" : "dashboard.common.questionsOfOther", { done, total });
+		progress.createEl("span", { cls: "qbd-resume-progress-text", text: t("dashboard.home.resumeProgress", { questions, pct }) });
 
 		const btn = hero.createEl("button", { cls: "qbd-btn qbd-btn--primary qbd-resume-btn" });
 		const btnIcon = btn.createSpan({ cls: "qbd-btn-icon" });
 		setIcon(btnIcon, "play");
-		btn.createSpan({ text: "Reprendre" });
+		btn.createSpan({ text: t("dashboard.home.resumeBtn") });
 		btn.addEventListener("click", (e) => { e.stopPropagation(); open(); });
 	}
 
@@ -190,41 +196,47 @@ export function createHomeHandlers(ctx: DashboardCtx): HomeHandlers {
 		const icon = wrap.createDiv({ cls: "qbd-onboarding-icon" });
 		setIcon(icon, "graduation-cap");
 
-		wrap.createEl("h2", { cls: "qbd-onboarding-title", text: "Bienvenue dans Quiz Blocks" });
+		wrap.createEl("h2", { cls: "qbd-onboarding-title", text: t("dashboard.onboarding.title") });
 		wrap.createEl("p", {
 			cls: "qbd-onboarding-lead",
-			text: "Transformez vos notes en quiz interactifs — QCM, texte à compléter, association — pour réviser et vous auto-évaluer."
+			text: t("dashboard.onboarding.lead")
 		});
 
 		// Action primaire évidente
 		const primary = wrap.createEl("button", { cls: "qbd-btn qbd-btn--primary qbd-btn--lg" });
 		const pIcon = primary.createSpan({ cls: "qbd-btn-icon" });
 		setIcon(pIcon, "sparkles");
-		primary.createSpan({ text: "Générer mon premier quiz" });
+		primary.createSpan({ text: t("dashboard.onboarding.generate") });
 		primary.addEventListener("click", () => ctx.navigate("ai"));
 
 		// Séparateur
 		const divider = wrap.createDiv({ cls: "qbd-onboarding-divider" });
-		divider.createSpan({ text: "ou" });
+		divider.createSpan({ text: t("dashboard.onboarding.or") });
 
 		// Méthode manuelle (divulgation progressive)
 		const manual = wrap.createDiv({ cls: "qbd-onboarding-manual" });
 		const manualHead = manual.createDiv({ cls: "qbd-onboarding-manual-head" });
 		const mIcon = manualHead.createSpan({ cls: "qbd-onboarding-manual-icon" });
 		setIcon(mIcon, "code");
-		manualHead.createSpan({ text: "Créer un quiz à la main" });
+		manualHead.createSpan({ text: t("dashboard.onboarding.manualTitle") });
 
 		manual.createEl("p", {
 			cls: "qbd-onboarding-manual-desc",
-			text: "Ajoutez un bloc de code quiz-blocks dans n'importe quelle note :"
+			text: t("dashboard.onboarding.manualDesc")
 		});
 
+		// Construit au rendu (et non en constante de module) : l'exemple affiché
+		// ET copié doit être dans la langue courante. ⚠️ Les 2 valeurs traduites
+		// sont injectées entre apostrophes SIMPLES : une apostrophe dans la
+		// traduction casserait le JSON5 collé par l'utilisateur (contrainte
+		// rappelée dans les 2 dictionnaires). Les noms de villes ne se traduisent
+		// pas — ce sont les réponses de la question.
 		const CODE_SAMPLE = [
 			"```quiz-blocks",
 			"[",
 			"  {",
-			"    title: 'Ma première question',",
-			"    prompt: 'Quelle est la capitale de la France ?',",
+			`    title: '${t("dashboard.onboarding.sampleTitle")}',`,
+			`    prompt: '${t("dashboard.onboarding.samplePrompt")}',`,
 			"    options: ['Lyon', 'Paris', 'Marseille'],",
 			"    correctIndex: 1,",
 			"  }",
@@ -236,7 +248,7 @@ export function createHomeHandlers(ctx: DashboardCtx): HomeHandlers {
 		const pre = codeWrap.createEl("pre", { cls: "qbd-onboarding-code" });
 		pre.createEl("code", { text: CODE_SAMPLE });
 
-		const copyBtn = codeWrap.createEl("button", { cls: "qbd-onboarding-copy", attr: { "aria-label": "Copier le bloc" } });
+		const copyBtn = codeWrap.createEl("button", { cls: "qbd-onboarding-copy", attr: { "aria-label": t("dashboard.onboarding.copy") } });
 		const copyIcon = copyBtn.createSpan({ cls: "qbd-btn-icon qbd-btn-icon--sm" });
 		setIcon(copyIcon, "copy");
 		copyBtn.addEventListener("click", async () => {

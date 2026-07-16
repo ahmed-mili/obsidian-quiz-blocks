@@ -1,6 +1,7 @@
 import { Notice } from "obsidian";
 import { TypePickerModal, OpenQuizFromNoteModal } from "./modals";
 import { makeDefault } from "./utils";
+import { t } from "../i18n";
 import type { EditorCtx, EditorPanelsState } from "../types/editor-ctx";
 
 type PanelKey = keyof EditorPanelsState;
@@ -26,7 +27,7 @@ export function createEditorUIHandlers(ctx: EditorCtx): EditorUIHandlers {
 		const logo = brand.createDiv({ cls: "qb-logo" });
 		_setIcon(logo, "graduation-cap");
 		const brandText = brand.createDiv({ cls: "qb-title-group" });
-		brandText.createDiv({ cls: "qb-title", text: "Quiz Editor" });
+		brandText.createDiv({ cls: "qb-title", text: t("editor.view.title") });
 		view._fileNameEl = brandText.createDiv({ cls: "qb-sub qb-file-name" });
 		if (view.importedFileName) {
 			view._fileNameEl.textContent = view.importedFileName;
@@ -36,7 +37,8 @@ export function createEditorUIHandlers(ctx: EditorCtx): EditorUIHandlers {
 		}
 
 		const toggles = header.createDiv({ cls: "qb-toggles" });
-		const toggleEntries: [PanelKey, string, string][] = [["sidebar", "Questions", "list"], ["editor", "Éditeur", "pencil"], ["preview", "Aperçu", "eye"], ["code", "Code", "code"]];
+		// Construit dans buildUI (donc au rendu) : t() y rend la langue courante.
+		const toggleEntries: [PanelKey, string, string][] = [["sidebar", t("editor.panel.questions"), "list"], ["editor", t("editor.panel.editor"), "pencil"], ["preview", t("editor.panel.preview"), "eye"], ["code", t("editor.panel.code"), "code"]];
 		for (const [key, label, lucide] of toggleEntries) {
 			const btn = toggles.createEl("button", { cls: `qb-toggle ${ctx.panels[key] ? "active" : ""}` });
 			btn.dataset.panel = key;
@@ -64,9 +66,9 @@ export function createEditorUIHandlers(ctx: EditorCtx): EditorUIHandlers {
 
 		view._saveBtn = actions.createEl("button", { cls: "qb-btn qb-btn-primary qb-save-btn" });
 		view._saveBtn.disabled = true;
-		view._saveBtn.title = "Aucune modification à sauvegarder";
+		view._saveBtn.title = t("editor.save.nothingToSave");
 		_iconSpan(view._saveBtn, "save", "qb-btn-leading-icon");
-		view._saveBtn.createSpan({ text: "Sauvegarder" });
+		view._saveBtn.createSpan({ text: t("editor.action.save") });
 		view._saveBtn.addEventListener("click", () => {
 			if (!view._saveBtn.disabled) {
 				view.saveToSourceFile?.();
@@ -75,24 +77,24 @@ export function createEditorUIHandlers(ctx: EditorCtx): EditorUIHandlers {
 
 		const openBtn = actions.createEl("button", { cls: "qb-btn" });
 		_iconSpan(openBtn, "file-input", "qb-btn-leading-icon");
-		openBtn.createSpan({ text: "Ouvrir" });
+		openBtn.createSpan({ text: t("editor.action.open") });
 		openBtn.addEventListener("click", () => {
 			new OpenQuizFromNoteModal(view.app, view).open();
 		});
 
 		view._exportBtn = actions.createEl("button", { cls: "qb-btn qb-btn-accent" });
 		_iconSpan(view._exportBtn, "share", "qb-btn-leading-icon");
-		view._exportBtn.createSpan({ text: "Exporter" });
+		view._exportBtn.createSpan({ text: t("editor.action.export") });
 		view._exportBtn.addEventListener("click", () => {
 			navigator.clipboard.writeText(exportAllWithFence(ctx.questions, ctx.examOptions)).then(() => {
 				view._exportBtn.empty();
 				_iconSpan(view._exportBtn, "check", "qb-btn-leading-icon");
-				view._exportBtn.createSpan({ text: "Copié !" });
+				view._exportBtn.createSpan({ text: t("editor.action.copied") });
 				view._exportBtn.classList.add("qb-btn-ok");
 				setTimeout(() => {
 					view._exportBtn.empty();
 					_iconSpan(view._exportBtn, "share", "qb-btn-leading-icon");
-					view._exportBtn.createSpan({ text: "Exporter" });
+					view._exportBtn.createSpan({ text: t("editor.action.export") });
 					view._exportBtn.classList.remove("qb-btn-ok");
 				}, 2000);
 			});
@@ -136,7 +138,7 @@ export function createEditorUIHandlers(ctx: EditorCtx): EditorUIHandlers {
 		view._setupResizer(view.resizerCodeRight, view.codeEl, view.editorEl, 'code-right');
 
 		const sHead = view.sidebarEl.createDiv({ cls: "qb-sidebar-head" });
-		view.qCountEl = sHead.createSpan({ text: "Questions (1)" });
+		view.qCountEl = sHead.createSpan({ text: t("editor.sidebar.count", { n: ctx.questions.length }) });
 		const addBtn = sHead.createEl("button", { cls: "qb-btn-icon" });
 		_setIcon(addBtn, "plus");
 		addBtn.addEventListener("click", () => showTypeModal());
@@ -150,9 +152,9 @@ export function createEditorUIHandlers(ctx: EditorCtx): EditorUIHandlers {
 		// NB : _setIcon ne prend que (el, name) ; le 3e argument "qb-summary-icon"
 		// de l'ancien code JS était ignoré à l'exécution (aucune classe appliquée).
 		ctx._setIcon(examSummary, "graduation-cap");
-		const examSummaryText = examSummary.createSpan({ text: "Mode Examen", cls: "qb-resource-summary-text" });
+		const examSummaryText = examSummary.createSpan({ text: t("editor.exam.title"), cls: "qb-resource-summary-text" });
 
-		const examToggle = examSummary.createEl("button", { cls: "qb-resource-toggle-btn", attr: { type: "button", title: ctx.examOptions.enabled ? "Désactiver" : "Activer" } });
+		const examToggle = examSummary.createEl("button", { cls: "qb-resource-toggle-btn", attr: { type: "button", title: t(ctx.examOptions.enabled ? "editor.toggle.disable" : "editor.toggle.enable") } });
 		examToggle.createSpan({ cls: "qb-resource-toggle-dot" + (ctx.examOptions.enabled ? " is-on" : "") });
 		examToggle.addEventListener("click", (e) => {
 			e.preventDefault();
@@ -176,12 +178,12 @@ export function createEditorUIHandlers(ctx: EditorCtx): EditorUIHandlers {
 		const examOptionsContainer = examBody.createDiv({ cls: "qb-exam-options" });
 
 		function updateExamUIState(): void {
-			examToggle.title = ctx.examOptions.enabled ? "Désactiver" : "Activer";
+			examToggle.title = t(ctx.examOptions.enabled ? "editor.toggle.disable" : "editor.toggle.enable");
 			const dot = examToggle.querySelector(".qb-resource-toggle-dot");
 			if (dot) {
 				dot.className = "qb-resource-toggle-dot" + (ctx.examOptions.enabled ? " is-on" : "");
 			}
-			examSummaryText.textContent = "Mode Examen";
+			examSummaryText.textContent = t("editor.exam.title");
 			durationInput.disabled = !ctx.examOptions.enabled;
 			autoSubmitCb.disabled = !ctx.examOptions.enabled;
 			showTimerCb.disabled = !ctx.examOptions.enabled;
@@ -201,7 +203,7 @@ export function createEditorUIHandlers(ctx: EditorCtx): EditorUIHandlers {
 		view.updateExamUIState = updateExamUIState;
 
 		const durationWrap = examOptionsContainer.createDiv({ cls: "qb-field qb-field-group" });
-		durationWrap.createEl("label", { cls: "qb-field-label", text: "Durée" });
+		durationWrap.createEl("label", { cls: "qb-field-label", text: t("editor.exam.duration") });
 		const inputContainer = durationWrap.createDiv({ cls: "qb-input-group" });
 		const durationInput = inputContainer.createEl("input", {
 			cls: "qb-field-input",
@@ -211,7 +213,7 @@ export function createEditorUIHandlers(ctx: EditorCtx): EditorUIHandlers {
 			value: String(ctx.examOptions.durationMinutes),
 			disabled: !ctx.examOptions.enabled
 		} as DomElementInfo);
-		inputContainer.createSpan({ text: "min", cls: "qb-field-unit" });
+		inputContainer.createSpan({ text: t("editor.exam.minutesUnit"), cls: "qb-field-unit" });
 		durationInput.addEventListener("input", () => {
 			ctx.examOptions.durationMinutes = Math.max(1, Math.min(180, parseInt(durationInput.value) || 10));
 			view.renderCode();
@@ -225,7 +227,10 @@ export function createEditorUIHandlers(ctx: EditorCtx): EditorUIHandlers {
 			checked: ctx.examOptions.autoSubmit,
 			disabled: !ctx.examOptions.enabled
 		} as DomElementInfo);
-		autoSubmitWrap.createSpan({ text: " Soumettre auto à la fin", cls: "qb-checkbox-label" });
+		// L'espace de tête sépare la case du libellé : gardé dans le code, pas
+		// dans le dictionnaire (une espace invisible en début de traduction se
+		// perdrait au premier copier-coller).
+		autoSubmitWrap.createSpan({ text: " " + t("editor.exam.autoSubmit"), cls: "qb-checkbox-label" });
 		autoSubmitCb.addEventListener("change", () => {
 			ctx.examOptions.autoSubmit = autoSubmitCb.checked;
 			view.renderCode();
@@ -239,7 +244,7 @@ export function createEditorUIHandlers(ctx: EditorCtx): EditorUIHandlers {
 			checked: ctx.examOptions.showTimer,
 			disabled: !ctx.examOptions.enabled
 		} as DomElementInfo);
-		showTimerWrap.createSpan({ text: " Afficher le timer", cls: "qb-checkbox-label" });
+		showTimerWrap.createSpan({ text: " " + t("editor.exam.showTimer"), cls: "qb-checkbox-label" });
 		showTimerCb.addEventListener("change", () => {
 			ctx.examOptions.showTimer = showTimerCb.checked;
 			view.renderCode();
@@ -251,15 +256,15 @@ export function createEditorUIHandlers(ctx: EditorCtx): EditorUIHandlers {
 
 		const pHead = view.previewEl.createDiv({ cls: "qb-panel-head" });
 		_iconSpan(pHead, "eye", "qb-panel-head-icon");
-		view.previewTitleEl = pHead.createSpan({ text: "Aperçu" });
+		view.previewTitleEl = pHead.createSpan({ text: t("editor.panel.preview") });
 		view.previewBodyEl = view.previewEl.createDiv({ cls: "qb-preview-body" });
 
 		const cHead = view.codeEl.createDiv({ cls: "qb-panel-head" });
 		_iconSpan(cHead, "code", "qb-panel-head-icon");
-		cHead.createSpan({ text: "JSON5 généré" });
+		cHead.createSpan({ text: t("editor.code.title") });
 		const copyBtn = cHead.createEl("button", { cls: "qb-btn qb-btn-accent qb-btn-sm" });
 		_iconSpan(copyBtn, "clipboard-copy", "qb-btn-leading-icon");
-		copyBtn.createSpan({ text: "Copier" });
+		copyBtn.createSpan({ text: t("editor.action.copy") });
 		copyBtn.addEventListener("click", () => navigator.clipboard.writeText(exportAllWithFence(ctx.questions, ctx.examOptions)));
 		view.codeOutputEl = view.codeEl.createDiv({ cls: "qb-code-output" });
 
@@ -268,16 +273,18 @@ export function createEditorUIHandlers(ctx: EditorCtx): EditorUIHandlers {
 		view.updateSaveIndicator = (saved: boolean) => {
 			if (!view.sourceFile) {
 				view._saveBtn.disabled = true;
-				view._saveBtn.title = "Ouvrez un fichier pour sauvegarder";
+				view._saveBtn.title = t("editor.save.openFileFirst");
 				return;
 			}
 			if (saved) {
 				view._saveBtn.disabled = true;
-				view._saveBtn.title = "Toutes les modifications sont sauvegardées";
-				new Notice("✓ Sauvegardé", 2000);
+				view._saveBtn.title = t("editor.save.allSaved");
+				// Le ✓ reste dans le code : c'est une décoration de la notice,
+				// pas un mot à traduire.
+				new Notice("✓ " + t("editor.notice.saved"), 2000);
 			} else {
 				view._saveBtn.disabled = false;
-				view._saveBtn.title = "Cliquez pour sauvegarder les modifications";
+				view._saveBtn.title = t("editor.save.clickToSave");
 			}
 		};
 
@@ -354,6 +361,10 @@ export function createEditorUIHandlers(ctx: EditorCtx): EditorUIHandlers {
 	function showTypeModal(): void {
 		const modal = new TypePickerModal(view.app, type => {
 			const nq = makeDefault(type);
+			// « Question N » NON traduit : ce titre est écrit dans le .md et
+			// sert de motif à la renumérotation auto (/^Question \d+$/, cf.
+			// sidebar.ts) — le localiser casserait la détection sur les quiz
+			// créés dans une autre langue. Le mot est identique en EN et FR.
 			nq.title = `Question ${ctx.questions.length + 1}`;
 			ctx.questions.push(nq);
 			ctx.activeIdx = ctx.questions.length - 1;

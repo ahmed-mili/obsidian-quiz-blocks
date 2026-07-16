@@ -1,0 +1,143 @@
+import type { EN_ENGINE } from "../en/engine";
+
+/* Domaine « engine » — français. Reprend mot pour mot les libellés historiques
+   du moteur (aucune reformulation : le rendu français doit être identique à
+   celui d'avant l'i18n). */
+export const FR_ENGINE: Record<keyof typeof EN_ENGINE, string> = {
+	/* ── Erreurs du bloc ── */
+	"engine.error.noQuestions": "⚠️ Aucune question fournie au moteur de quiz.",
+
+	/* ── Navigation ── */
+	"engine.nav.results": "Résultats",
+	"engine.nav.prevQuestion": "Question précédente",
+	"engine.nav.nextQuestion": "Question suivante",
+
+	/* ── Bascule de mode ── */
+	"engine.mode.toggleAria": "Mode d'entraînement",
+	"engine.mode.toggleLabel": "Mode entraînement",
+	"engine.mode.switchOn": "Activer le mode entraînement",
+	"engine.mode.switchOff": "Désactiver le mode entraînement",
+
+	/* ── Écran de démarrage (choix du mode) ── */
+	"engine.start.selectorAria": "Choisir le mode du quiz",
+	"engine.start.examTitle": "Examen",
+	"engine.start.examSub": "QCM chronométré",
+	"engine.start.trainingTitle": "Entraînement",
+	"engine.start.trainingSub": "Réponse libre",
+
+	/* ── Mode examen ── */
+	"engine.exam.chooseMode": "Choisir le mode",
+	"engine.exam.startExam": "Commencer l'examen",
+	"engine.exam.startTraining": "Commencer l'entraînement",
+	"engine.exam.noTimer": "Sans chrono",
+	"engine.exam.duration.one": "Durée : {minutes} minute",
+	"engine.exam.duration.other": "Durée : {minutes} minutes",
+	"engine.exam.questionCount.one": "{count} question",
+	"engine.exam.questionCount.other": "{count} questions",
+	"engine.exam.finish": "Terminer l'examen",
+	"engine.exam.timeUpManual": "Temps écoulé ! Terminez et validez votre examen.",
+	"engine.exam.timeUpLocked": "Temps écoulé ! Le quiz a été verrouillé.",
+
+	/* ── Questions à choix ── */
+	"engine.qcm.multiHint": "Sélectionnez une ou plusieurs réponses",
+
+	/* ── Questions « ordering » ── */
+	"engine.ordering.instructions": "Classez les éléments dans le bon ordre (glisser-déposer). Déposez un élément sur un emplacement déjà rempli pour échanger automatiquement les positions.",
+	"engine.ordering.dropHere": "Glissez un élément ici",
+	"engine.ordering.itemsLabel": "Éléments à placer",
+
+	/* ── Questions « matching » ── */
+	"engine.matching.instructions": "Associez chaque situation à un support (glisser-déposer). Un même support peut être utilisé plusieurs fois.",
+	"engine.matching.dropHere": "Déposez un support ici",
+	"engine.matching.choicesLabel": "Supports disponibles",
+	"engine.matching.unknownChoice": "Support inconnu",
+
+	/* ── Indice ── */
+	"engine.hint.button": "Indice",
+	"engine.hint.title": "Indice",
+	"engine.hint.close": "Fermer",
+
+	/* ── Mode apprentissage ── */
+	"engine.learn.label": "Leçon",
+
+	/* ── Question texte / terminal ── */
+	"engine.text.placeholder": "Votre réponse...",
+
+	/* ── Mode entraînement (réponse libre) ── */
+	"engine.textOnly.answerLabel": "Votre réponse libre",
+	"engine.textOnly.answerPlaceholder": "Écrivez votre réponse avec vos mots...",
+	"engine.textOnly.check": "Vérifier",
+	"engine.textOnly.selfRating": "Auto-évaluation",
+	"engine.textOnly.optionsLabel": "Options QCM",
+	"engine.textOnly.explanationLabel": "Explication",
+	"engine.textOnly.noExpectedAnswer": "Réponse attendue non renseignée.",
+
+	/* ── Auto-évaluation ── */
+	"engine.rating.understood": "Compris",
+	"engine.rating.partial": "Partiel",
+	"engine.rating.review": "À revoir",
+
+	/* ── Slide de soumission ── */
+	"engine.submit.back": "Retour",
+	"engine.submit.showScore": "Voir le score",
+	"engine.submit.showResults": "Voir les résultats",
+	"engine.submit.reviewList": "Revenir sur une question :",
+	"engine.submit.missingList": "Questions sans réponse :",
+	"engine.submit.missingAnswers.one": "Il manque {count} réponse.",
+	"engine.submit.missingAnswers.other": "Il manque {count} réponses.",
+	"engine.submit.missingFreeAnswers.one": "Il manque {count} réponse libre.",
+	"engine.submit.missingFreeAnswers.other": "Il manque {count} réponses libres.",
+	"engine.submit.allFreeAnswered": "Toutes les questions ont une réponse libre.",
+	"engine.submit.missingRatings.one": "Il manque {count} auto-évaluation.",
+	"engine.submit.missingRatings.other": "Il manque {count} auto-évaluations.",
+	"engine.submit.toRateList": "Questions à auto-évaluer :",
+	"engine.submit.allRated": "Toutes les questions sont auto-évaluées.",
+
+	/* ── Slide de résultats ── */
+	"engine.result.title": "Résultats",
+	"engine.result.trainingTitle": "Résultats entraînement",
+	"engine.result.freeTextCorrection": "Correction réponse libre",
+	"engine.result.correctionHint": "Revenez sur les questions pour comparer vos réponses, lire les explications et vous auto-évaluer.",
+	"engine.result.reviewAnswers": "Corriger mes réponses",
+	"engine.result.ratedLabel": "Auto-évaluées :",
+	"engine.result.correctLabel": "Bonnes réponses :",
+	"engine.result.pending.one": "Non évaluée",
+	"engine.result.pending.other": "Non évaluées",
+	"engine.result.retry": "Recommencer",
+	"engine.result.takeExam": "Passer l'examen",
+	"engine.result.retakeExam": "Repasser l'examen",
+
+	/* ── Sauvegarde des résultats ── */
+	"engine.result.save": "Sauvegarder mes résultats",
+	"engine.result.saved": "Résultats sauvegardés",
+	"engine.result.saving": "Sauvegarde...",
+	"engine.result.savedIn": "Sauvegardé dans {path}",
+	"engine.result.savedNotice": "Résultats sauvegardés : {path}",
+	"engine.result.saveError": "Erreur sauvegarde résultats : {message}",
+	"engine.result.unknownError": "erreur inconnue",
+	"engine.result.storageUnavailable": "Impossible d'accéder au stockage du vault.",
+
+	/* ── Bouton ressource (pièce jointe) ── */
+	"engine.resource.missingName": "Nom de fichier manquant.",
+	"engine.resource.notFound": "Fichier introuvable dans le vault : {name}",
+	"engine.resource.duplicate": "Plusieurs fichiers portent ce nom ({name}). Premier résultat utilisé.",
+	"engine.resource.openedDefaultApp": "Ouverture avec l'application par défaut : {name}",
+	"engine.resource.openedAndroid": "Ouverture via le système Android : {name}",
+	"engine.resource.openedInternal": "Ouverture interne (fallback) : {name}",
+	"engine.resource.noDefaultApp": "Fichier localisé, mais aucune application par défaut trouvée pour : {name}",
+	"engine.resource.openFailed": "Impossible de révéler ou d'ouvrir le fichier : {name}",
+	"engine.resource.openError": "Erreur pendant l'ouverture du fichier.",
+
+	/* ── Clavier mathématique (MathLive) ── */
+	"engine.math.closeKeyboard": "Fermer le clavier",
+	"engine.math.matrixTab": "Matrices et structures",
+	"engine.math.matrix2x2Paren": "Matrice 2×2 (parenthèses)",
+	"engine.math.matrix3x3Paren": "Matrice 3×3 (parenthèses)",
+	"engine.math.matrix2x2Bracket": "Matrice 2×2 (crochets)",
+	"engine.math.determinant2x2": "Déterminant 2×2",
+	"engine.math.equationSystem": "Système d'équations",
+	"engine.math.vector": "Vecteur",
+	"engine.math.overline": "Barre (conjugué / moyenne)",
+	"engine.math.addRow": "Ajouter une ligne à la matrice",
+	"engine.math.addColumn": "Ajouter une colonne à la matrice",
+};

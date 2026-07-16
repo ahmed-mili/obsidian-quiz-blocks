@@ -1,5 +1,6 @@
 import type { EngineCtx } from "../types/engine-ctx";
 import { mathifyElement } from "./mathjax";
+import { t } from "../i18n";
 
 export interface HintHandlers {
 	getHintThemeMode(): "light" | "dark";
@@ -75,8 +76,8 @@ export function createHintHandlers(ctx: EngineCtx): HintHandlers {
 		overlay.innerHTML = `
 			<div class="quiz-hint-modal" role="dialog" aria-modal="true" aria-labelledby="${ctx.HINT_TITLE_ID}">
 				<div class="quiz-hint-modal-header">
-					<div class="quiz-hint-modal-title" id="${ctx.HINT_TITLE_ID}">Indice</div>
-					<button class="quiz-hint-modal-close" type="button" aria-label="Fermer">×</button>
+					<div class="quiz-hint-modal-title" id="${ctx.HINT_TITLE_ID}">${t("engine.hint.title")}</div>
+					<button class="quiz-hint-modal-close" type="button" aria-label="${ctx.escapeHtmlAttr(t("engine.hint.close"))}">×</button>
 				</div>
 				<div class="quiz-hint-modal-body"></div>
 			</div>`;

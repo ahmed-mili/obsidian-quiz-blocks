@@ -1,3 +1,4 @@
+import { t } from "../i18n";
 import type { EditorCtx } from "../types/editor-ctx";
 
 /** Handlers de la modale d'indice (overlay plein écran, hors flux de l'éditeur). */
@@ -24,8 +25,8 @@ export function createHintHandlers(ctx: EditorCtx): HintHandlers {
 		overlay.innerHTML = `
 			<div class="quiz-hint-modal" role="dialog" aria-modal="true">
 				<div class="quiz-hint-modal-header">
-					<div class="quiz-hint-modal-title">Indice</div>
-					<button class="quiz-hint-modal-close" type="button" aria-label="Fermer">×</button>
+					<div class="quiz-hint-modal-title">${t("editor.hint.label")}</div>
+					<button class="quiz-hint-modal-close" type="button" aria-label="${t("editor.action.close")}">×</button>
 				</div>
 				<div class="quiz-hint-modal-body"></div>
 			</div>`;
@@ -93,6 +94,13 @@ export function createHintHandlers(ctx: EditorCtx): HintHandlers {
 		const overlay = _ensureHintOverlay();
 		const body = overlay.querySelector<HTMLElement>(".quiz-hint-modal-body");
 		const modal = overlay.querySelector<HTMLElement>(".quiz-hint-modal");
+		// L'overlay est construit UNE fois puis réutilisé (cache par id sur le
+		// body) : ses libellés seraient figés dans la langue du 1er affichage.
+		// On les rafraîchit à chaque ouverture.
+		const titleEl = overlay.querySelector<HTMLElement>(".quiz-hint-modal-title");
+		if (titleEl) titleEl.textContent = t("editor.hint.label");
+		const closeEl = overlay.querySelector<HTMLElement>(".quiz-hint-modal-close");
+		if (closeEl) closeEl.setAttribute("aria-label", t("editor.action.close"));
 		if (body) body.innerHTML = view._resolveImagesInHtml(md2html(text));
 		_applyHintTheme(overlay);
 		_addHintEscHandler();

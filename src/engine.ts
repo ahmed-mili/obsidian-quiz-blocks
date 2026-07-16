@@ -17,6 +17,7 @@ import { createQuestionHandlers } from "./engine/questions";
 import { createTextOnlyHandlers } from "./engine/text-only";
 import { createResultsSaver } from "./engine/results-save";
 import { mathifyElement } from "./engine/mathjax";
+import { t } from "./i18n";
 
 import type { App, Plugin } from "obsidian";
 import type { EngineCtx } from "./types/engine-ctx";
@@ -62,14 +63,14 @@ async function renderInteractiveQuiz(context: RenderQuizContext): Promise<void> 
 	container.empty();
 
 	if (!Array.isArray(rawQuiz) || rawQuiz.length === 0) {
-		renderParagraph(container, "⚠️ Aucune question fournie au moteur de quiz.");
+		renderParagraph(container, t("engine.error.noQuestions"));
 		return;
 	}
 
 	const { questions: quiz, quizMode, examOptions, learnExamOptions } = extractExamOptions(rawQuiz);
 
 	if (!Array.isArray(quiz) || quiz.length === 0) {
-		renderParagraph(container, "⚠️ Aucune question fournie au moteur de quiz.");
+		renderParagraph(container, t("engine.error.noQuestions"));
 		return;
 	}
 

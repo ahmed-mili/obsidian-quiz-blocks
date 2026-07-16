@@ -1,10 +1,21 @@
 import { Platform, requestUrl } from "obsidian";
+import { t, currentLang } from "../i18n";
+import type { Lang, TransKey } from "../i18n";
 
 /* ══════════════════════════════════════════════════════════
    AI PROVIDERS — Registry central
    Providers, logos de marque (Simple Icons, CC0), modèles
    par défaut et détections de statut. Source unique partagée
    par ai.js (dashboard), ai-client.js et plugin.js (settings).
+
+   I18N — pourquoi des GETTERS dans les tables ci-dessous
+   (PROVIDERS.sub, hint/desc/badge des modèles, sub des efforts) :
+   ces constantes sont évaluées au CHARGEMENT du module. Un `t()` posé
+   directement dedans figerait le libellé dans la langue du démarrage, et
+   changer de langue n'aurait plus aucun effet. Un getter traduit à
+   l'ACCÈS, donc au rendu — et, contrairement à une fonction, il ne
+   change AUCUN appelant (`p.sub` / `m.hint` continuent de marcher tels
+   quels, y compris dans plugin.ts et les spreads `{ ...m }`).
 ══════════════════════════════════════════════════════════ */
 
 /* ── Types partagés ── */
@@ -95,7 +106,7 @@ export const PROVIDERS: Provider[] = [
 	{
 		id: "claude-code",
 		name: "Claude",
-		sub: "Compte Pro / Max",
+		get sub() { return t("ai.provider.claudeSub"); },
 		logo: "claude",
 		desktopOnly: true,
 		defaultModel: "opus",
@@ -107,7 +118,7 @@ export const PROVIDERS: Provider[] = [
 		// « Codex CLI » explicite : l'application de bureau Codex ne
 		// fournit PAS la commande « codex » — la confusion fait installer
 		// le mauvais outil (vécu Ahmed 2026-07-12).
-		sub: "Codex CLI · Abonnement ChatGPT",
+		get sub() { return t("ai.provider.codexSub"); },
 		logo: "openai",
 		desktopOnly: true,
 		defaultModel: "gpt-5.6-terra",
@@ -118,7 +129,7 @@ export const PROVIDERS: Provider[] = [
 		name: "Kimi",
 		// « Kimi Code CLI » explicite, même logique que Codex : la commande
 		// installée est « kimi », fournie par le Kimi Code CLI (Moonshot AI).
-		sub: "Kimi Code CLI · Abonnement Kimi",
+		get sub() { return t("ai.provider.kimiSub"); },
 		logo: "kimi",
 		desktopOnly: true,
 		// AUCUN alias en dur : les alias Kimi (« kimi-code/kimi-for-coding »…)
@@ -131,7 +142,7 @@ export const PROVIDERS: Provider[] = [
 	{
 		id: "ollama",
 		name: "Ollama",
-		sub: "Local et cloud",
+		get sub() { return t("ai.provider.ollamaSub"); },
 		logo: "ollama",
 		desktopOnly: false,
 		defaultModel: "glm-5.2:cloud",
@@ -147,10 +158,10 @@ export function getProvider(id: string): Provider {
 /* Mêmes noms que le sélecteur /model de Claude Code ; les values
    sont les alias CLI stables (suivent les derniers modèles du compte). */
 export const CLAUDE_CODE_MODELS: ModelDef[] = [
-	{ value: "fable", label: "Fable 5", hint: "le plus puissant", desc: "Pour vos défis les plus difficiles", badge: "Inclus" },
-	{ value: "opus", label: "Opus 4.8", hint: "recommandé", desc: "Pour les tâches complexes" },
-	{ value: "sonnet", label: "Sonnet 5", hint: "efficace au quotidien", desc: "Le plus efficace pour les tâches quotidiennes" },
-	{ value: "haiku", label: "Haiku 4.5", hint: "le plus rapide", desc: "Le plus rapide pour des réponses rapides" }
+	{ value: "fable", label: "Fable 5", get hint() { return t("ai.modelHint.mostPowerful"); }, get desc() { return t("ai.modelDesc.fable"); }, get badge() { return t("ai.badge.included"); } },
+	{ value: "opus", label: "Opus 4.8", get hint() { return t("ai.modelHint.recommended"); }, get desc() { return t("ai.modelDesc.opus"); } },
+	{ value: "sonnet", label: "Sonnet 5", get hint() { return t("ai.modelHint.everyday"); }, get desc() { return t("ai.modelDesc.sonnet"); } },
+	{ value: "haiku", label: "Haiku 4.5", get hint() { return t("ai.modelHint.fastest"); }, get desc() { return t("ai.modelDesc.haiku"); } }
 ];
 
 /* Niveaux d'effort (façon sélecteur claude.ai). Décoratif/persisté
@@ -165,7 +176,7 @@ export const CLAUDE_EFFORTS: EffortDef[] = [
 	{ value: "high", label: "high", isDefault: true },
 	{ value: "xhigh", label: "xhigh" },
 	{ value: "max", label: "max" },
-	{ value: "ultracode", label: "ultracode", sub: "xhigh + workflows", accent: true }
+	{ value: "ultracode", label: "ultracode", get sub() { return t("ai.effort.ultracodeSub"); }, accent: true }
 ];
 
 /* ── Modèles Codex (ChatGPT) ──
@@ -179,16 +190,18 @@ export const CLAUDE_EFFORTS: EffortDef[] = [
    comportement de clamp que la liste dynamique). `fast` = le modèle expose le
    service tier « priority » (Fast, 1.5x speed) — tous sauf gpt-5.4-mini. */
 export const CODEX_FALLBACK_MODELS: ModelDef[] = [
-	{ value: "gpt-5.6-sol", label: "GPT-5.6 Sol", hint: "le plus puissant", desc: "Dernier modèle frontière pour le code agentique", efforts: ["low", "medium", "high", "xhigh", "max", "ultra"], defaultEffort: "low", fast: true },
-	{ value: "gpt-5.6-terra", label: "GPT-5.6 Terra", hint: "recommandé", desc: "Équilibré pour le travail quotidien", efforts: ["low", "medium", "high", "xhigh", "max", "ultra"], defaultEffort: "medium", fast: true },
-	{ value: "gpt-5.6-luna", label: "GPT-5.6 Luna", hint: "rapide", desc: "Rapide et économique", efforts: ["low", "medium", "high", "xhigh", "max"], defaultEffort: "medium", fast: true },
-	{ value: "gpt-5.5", label: "GPT-5.5", hint: "frontier", desc: "Pour le code complexe et la recherche", efforts: ["low", "medium", "high", "xhigh"], defaultEffort: "medium", fast: true },
-	{ value: "gpt-5.4", label: "GPT-5.4", hint: "solide", desc: "Solide pour le code au quotidien", efforts: ["low", "medium", "high", "xhigh"], defaultEffort: "medium", fast: true },
-	{ value: "gpt-5.4-mini", label: "GPT-5.4 Mini", hint: "léger", desc: "Léger et rapide pour les tâches simples", efforts: ["low", "medium", "high", "xhigh"], defaultEffort: "medium", fast: false }
+	{ value: "gpt-5.6-sol", label: "GPT-5.6 Sol", get hint() { return t("ai.modelHint.mostPowerful"); }, get desc() { return t("ai.modelDesc.codexSol"); }, efforts: ["low", "medium", "high", "xhigh", "max", "ultra"], defaultEffort: "low", fast: true },
+	{ value: "gpt-5.6-terra", label: "GPT-5.6 Terra", get hint() { return t("ai.modelHint.recommended"); }, get desc() { return t("ai.modelDesc.codexTerra"); }, efforts: ["low", "medium", "high", "xhigh", "max", "ultra"], defaultEffort: "medium", fast: true },
+	{ value: "gpt-5.6-luna", label: "GPT-5.6 Luna", get hint() { return t("ai.modelHint.fast"); }, get desc() { return t("ai.modelDesc.codexLuna"); }, efforts: ["low", "medium", "high", "xhigh", "max"], defaultEffort: "medium", fast: true },
+	{ value: "gpt-5.5", label: "GPT-5.5", get hint() { return t("ai.modelHint.frontier"); }, get desc() { return t("ai.modelDesc.codex55"); }, efforts: ["low", "medium", "high", "xhigh"], defaultEffort: "medium", fast: true },
+	{ value: "gpt-5.4", label: "GPT-5.4", get hint() { return t("ai.modelHint.solid"); }, get desc() { return t("ai.modelDesc.codex54"); }, efforts: ["low", "medium", "high", "xhigh"], defaultEffort: "medium", fast: true },
+	{ value: "gpt-5.4-mini", label: "GPT-5.4 Mini", get hint() { return t("ai.modelHint.light"); }, get desc() { return t("ai.modelDesc.codex54mini"); }, efforts: ["low", "medium", "high", "xhigh"], defaultEffort: "medium", fast: false }
 ];
 
-/* Traductions FR des descriptions du cache Codex — un nouveau modèle dont la
-   description est inconnue garde sa description anglaise d'origine. */
+/* Traductions FR des descriptions du cache Codex. Le cache est ANGLAIS : en
+   anglais on affiche donc la description d'origine telle quelle (aucune table
+   à consulter), et cette table ne sert qu'à la langue française. Un nouveau
+   modèle dont la description est inconnue garde sa description d'origine. */
 const CODEX_DESC_FR: Record<string, string> = {
 	"Latest frontier agentic coding model.": "Dernier modèle frontière pour le code agentique",
 	"Balanced agentic coding model for everyday work.": "Équilibré pour le travail quotidien",
@@ -220,16 +233,23 @@ interface CodexCacheFile {
    Les slugs connus gardent leur entrée FR curée ; les inconnus reçoivent un
    label dérivé du display_name (« GPT-5.7-Nova » → « GPT-5.7 Nova ») et la
    description du cache (traduite si connue). Ordre = priority du cache. */
-let codexModelsCache: { mtimeMs: number; models: ModelDef[] } | null = null;
+/* Le cache porte la LANGUE en plus du mtime : les libellés sont recopiés en
+   dur dans `models` (Object.assign fige la valeur des getters), donc un
+   changement de langue doit invalider le cache — sans ça, la liste Codex
+   resterait dans la langue du dernier parse. */
+let codexModelsCache: { mtimeMs: number; lang: Lang; models: ModelDef[] } | null = null;
 
 export function getCodexModels(): ModelDef[] {
+	const lang = currentLang();
 	try {
 		const fs = require("fs") as typeof import("fs");
 		const os = require("os") as typeof import("os");
 		const path = require("path") as typeof import("path");
 		const file = path.join(process.env.CODEX_HOME || path.join(os.homedir(), ".codex"), "models_cache.json");
 		const mtimeMs = fs.statSync(file).mtimeMs;
-		if (codexModelsCache && codexModelsCache.mtimeMs === mtimeMs) return codexModelsCache.models;
+		if (codexModelsCache && codexModelsCache.mtimeMs === mtimeMs && codexModelsCache.lang === lang) {
+			return codexModelsCache.models;
+		}
 		const data = JSON.parse(fs.readFileSync(file, "utf8")) as CodexCacheFile;
 		const models: ModelDef[] = (data.models || [])
 			.filter(m => m && m.slug && m.visibility === "list")
@@ -239,7 +259,9 @@ export function getCodexModels(): ModelDef[] {
 				const base: ModelDef = curated || {
 					value: m.slug as string,
 					label: String(m.display_name || m.slug).replace(/(\d)-(?=[A-Za-z])/g, "$1 "),
-					desc: CODEX_DESC_FR[m.description || ""] || m.description || ""
+					// Le cache Codex est en anglais : en anglais, la description
+					// d'origine est déjà la bonne — la table FR ne sert qu'au français.
+					desc: (lang === "fr" ? CODEX_DESC_FR[m.description || ""] : "") || m.description || ""
 				};
 				// Efforts supportés + effort par défaut + tier Fast : toujours ceux
 				// du cache (source de vérité, prime sur le repli curé — un modèle
@@ -255,7 +277,7 @@ export function getCodexModels(): ModelDef[] {
 					{ fast }) as ModelDef;
 			});
 		if (!models.length) return CODEX_FALLBACK_MODELS;
-		codexModelsCache = { mtimeMs, models };
+		codexModelsCache = { mtimeMs, lang, models };
 		return models;
 	} catch (e) {
 		// mobile (pas de fs), cache absent ou JSON invalide → repli embarqué
@@ -283,7 +305,7 @@ export const CODEX_EFFORTS: EffortDef[] = [
 	{ value: "high", label: "high" },
 	{ value: "xhigh", label: "xhigh" },
 	{ value: "max", label: "max" },
-	{ value: "ultra", label: "ultra", sub: "max + délégation auto", accent: true }
+	{ value: "ultra", label: "ultra", get sub() { return t("ai.effort.ultraSub"); }, accent: true }
 ];
 
 /* Niveaux d'effort d'Ollama. Effort RÉEL : passé à l'API /api/chat via le
@@ -372,14 +394,20 @@ export function getEffortLabel(value: string | undefined, providerId: string): s
    (~/.codex/models_cache.json). Lecture desktop-only (fs), cache TTL pour ne pas
    relire ~/.claude.json à chaque ouverture de menu. Fallback prudent si
    illisible/absent : Fable masqué. Si la date est introuvable : badge « Inclus ». */
-type FableInfo = { offered: boolean; badge: string };
+/* `through` = la DATE BRUTE de fin de promo (mois anglais du cache + jour), pas
+   un libellé : le badge est fabriqué au rendu par fableBadge(). Sans ça, le
+   cache TTL figerait le badge dans la langue du moment où il a été rempli. */
+type FableInfo = { offered: boolean; through?: { month: string; day: string } };
 let fableInfoCache: { at: number; info: FableInfo } | null = null;
 const FABLE_CACHE_TTL = 60000;
 
-const MONTHS_EN_FR: Record<string, string> = {
-	January: "janvier", February: "février", March: "mars", April: "avril",
-	May: "mai", June: "juin", July: "juillet", August: "août",
-	September: "septembre", October: "octobre", November: "novembre", December: "décembre"
+/* Mois anglais du cache CLI → clé i18n (jamais un libellé : table évaluée au
+   chargement du module). */
+const MONTH_KEYS: Record<string, TransKey> = {
+	January: "ai.month.january", February: "ai.month.february", March: "ai.month.march",
+	April: "ai.month.april", May: "ai.month.may", June: "ai.month.june",
+	July: "ai.month.july", August: "ai.month.august", September: "ai.month.september",
+	October: "ai.month.october", November: "ai.month.november", December: "ai.month.december"
 };
 
 /* Une entrée `additionalModelOptionsCache` désigne-t-elle Fable ? */
@@ -389,28 +417,40 @@ function cacheEntryIsFable(entry: unknown): boolean {
 	return typeof value === "string" && value.toLowerCase().includes("fable");
 }
 
-/* Badge daté depuis l'annonce promo Fable (« Extended through July 19 » →
-   « Inclus jusqu'au 19 juillet »). Retombe sur « Inclus » si non trouvée/parsée. */
-function fableBadgeFromAnnouncements(anns: unknown): string {
-	if (!Array.isArray(anns)) return "Inclus";
+/* Date de fin de promo lue dans l'annonce Fable (« Extended through July 19 »
+   → { month: "July", day: "19" }). undefined si non trouvée/parsée → badge nu. */
+function fableThroughFromAnnouncements(anns: unknown): FableInfo["through"] {
+	if (!Array.isArray(anns)) return undefined;
 	const fable = anns.find(
 		(a): a is { title?: string; text?: string } =>
 			!!a && typeof (a as { id?: unknown }).id === "string" &&
 			(a as { id: string }).id.toLowerCase().includes("fable")
 	);
-	if (!fable) return "Inclus";
+	if (!fable) return undefined;
 	const m = `${fable.title ?? ""} ${fable.text ?? ""}`.match(/through\s+([A-Za-z]+)\s+(\d{1,2})/);
-	const month = m ? MONTHS_EN_FR[m[1]] : undefined;
-	return m && month ? `Inclus jusqu'au ${m[2]} ${month}` : "Inclus";
+	if (!m || !MONTH_KEYS[m[1]]) return undefined;
+	return { month: m[1], day: m[2] };
 }
 
-/* Lit ~/.claude.json (cache TTL, desktop) : Fable proposé ? + libellé de badge daté. */
+/* Libellé du badge Fable, traduit AU RENDU (« Included until July 19 » /
+   « Inclus jusqu'au 19 juillet »). Chaque langue ordonne jour et mois
+   elle-même via les jetons {day}/{month}. */
+function fableBadge(info: FableInfo): string {
+	if (!info.through) return t("ai.badge.included");
+	return t("ai.badge.includedUntil", {
+		day: info.through.day,
+		month: t(MONTH_KEYS[info.through.month])
+	});
+}
+
+/* Lit ~/.claude.json (cache TTL, desktop) : Fable proposé ? + date de fin de
+   promo (le libellé du badge, lui, est fabriqué au rendu par fableBadge). */
 function readFableInfo(): FableInfo {
-	if (!Platform.isDesktopApp) return { offered: false, badge: "Inclus" };
+	if (!Platform.isDesktopApp) return { offered: false };
 	if (fableInfoCache && Date.now() - fableInfoCache.at < FABLE_CACHE_TTL) {
 		return fableInfoCache.info;
 	}
-	let info: FableInfo = { offered: false, badge: "Inclus" };
+	let info: FableInfo = { offered: false };
 	try {
 		const fs = require("fs") as typeof import("fs");
 		const os = require("os") as typeof import("os");
@@ -423,10 +463,10 @@ function readFableInfo(): FableInfo {
 		const offered = Array.isArray(cache) ? cache.some(cacheEntryIsFable) : cacheEntryIsFable(cache);
 		info = {
 			offered,
-			badge: offered ? fableBadgeFromAnnouncements(cfg.cachedGrowthBookFeatures?.tengu_startup_announcements) : "Inclus"
+			through: offered ? fableThroughFromAnnouncements(cfg.cachedGrowthBookFeatures?.tengu_startup_announcements) : undefined
 		};
 	} catch {
-		info = { offered: false, badge: "Inclus" }; // ~/.claude.json absent/illisible → masquer
+		info = { offered: false }; // ~/.claude.json absent/illisible → masquer
 	}
 	fableInfoCache = { at: Date.now(), info };
 	return info;
@@ -442,7 +482,7 @@ export function isFableOffered(): boolean {
 export function getClaudeModels(): ModelDef[] {
 	const info = readFableInfo();
 	if (!info.offered) return CLAUDE_CODE_MODELS.filter(m => m.value !== "fable");
-	return CLAUDE_CODE_MODELS.map(m => m.value === "fable" ? { ...m, badge: info.badge } : m);
+	return CLAUDE_CODE_MODELS.map(m => m.value === "fable" ? { ...m, badge: fableBadge(info) } : m);
 }
 
 /* Modèle Claude effectif : si le modèle choisi n'est plus visible

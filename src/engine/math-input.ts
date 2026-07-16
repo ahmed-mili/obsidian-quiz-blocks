@@ -11,6 +11,7 @@
 
 import { Platform, setIcon } from "obsidian";
 import { hasMath } from "./mathjax";
+import { t } from "../i18n";
 // Import TYPE only (erased) : garde `mathlive` en chargement LAZY (require dans
 // configureMathlive), tout en typant `MathfieldElement`/le layout et en activant
 // l'augmentation globale `Window.mathVirtualKeyboard` fournie par mathlive.
@@ -218,7 +219,7 @@ function makeKeyboardFloating(attempt = 0): void {
 	const close = document.createElement("button");
 	close.type = "button";
 	close.className = "qbd-kb-handle-close";
-	close.setAttribute("aria-label", "Fermer le clavier");
+	close.setAttribute("aria-label", t("engine.math.closeKeyboard"));
 	setIcon(close, "x");
 	close.addEventListener("click", () => {
 		// La croix ferme le clavier ET désélectionne le champ (demande Ahmed) :
@@ -366,34 +367,51 @@ function __mkMatrix(env: string, rows: number, cols: number): string {
 	const line = new Array<string>(cols).fill(__PH).join("&");
 	return "\\begin{" + env + "}" + new Array<string>(rows).fill(line).join("\\\\") + "\\end{" + env + "}";
 }
-const MATRIX_LAYOUT: VirtualKeyboardLayout = {
-	// Le label de l'onglet est injecté en markup brut par MathLive (pas de rendu
-	// LaTeX) → glyphe Unicode évoquant une matrice, cohérent avec 123/∫/αβγ.
-	label: "[∷]",
-	labelClass: "MLK__tex-math",
-	tooltip: "Matrices et structures",
-	rows: [
-		[
-			{ latex: __mkMatrix("pmatrix", 2, 2), class: "small", tooltip: "Matrice 2×2 (parenthèses)" },
-			{ latex: __mkMatrix("pmatrix", 3, 3), class: "small", tooltip: "Matrice 3×3 (parenthèses)" },
-			{ latex: __mkMatrix("bmatrix", 2, 2), class: "small", tooltip: "Matrice 2×2 (crochets)" },
-			{ latex: __mkMatrix("vmatrix", 2, 2), class: "small", tooltip: "Déterminant 2×2" },
+/* FONCTION, et non constante de module : les `tooltip` sont des libellés VISIBLES.
+   Un objet construit au chargement du module figerait la langue du démarrage
+   d'Obsidian — la fonction est rappelée à chaque configureMathlive(), donc les
+   infobulles suivent le réglage de langue. Le `label` de l'onglet reste un glyphe
+   Unicode (jamais traduit), comme les `latex` (fragments insérés = données). */
+function matrixLayout(): VirtualKeyboardLayout {
+	return {
+		// Le label de l'onglet est injecté en markup brut par MathLive (pas de rendu
+		// LaTeX) → glyphe Unicode évoquant une matrice, cohérent avec 123/∫/αβγ.
+		label: "[∷]",
+		labelClass: "MLK__tex-math",
+		tooltip: t("engine.math.matrixTab"),
+		rows: [
+			[
+				{ latex: __mkMatrix("pmatrix", 2, 2), class: "small", tooltip: t("engine.math.matrix2x2Paren") },
+				{ latex: __mkMatrix("pmatrix", 3, 3), class: "small", tooltip: t("engine.math.matrix3x3Paren") },
+				{ latex: __mkMatrix("bmatrix", 2, 2), class: "small", tooltip: t("engine.math.matrix2x2Bracket") },
+				{ latex: __mkMatrix("vmatrix", 2, 2), class: "small", tooltip: t("engine.math.determinant2x2") },
+			],
+			[
+				{ latex: __mkMatrix("cases", 2, 1), class: "small", tooltip: t("engine.math.equationSystem") },
+				{ latex: "\\vec{" + __PH + "}", class: "small", tooltip: t("engine.math.vector") },
+				{ latex: "\\overline{" + __PH + "}", class: "small", tooltip: t("engine.math.overline") },
+				// command prime : ces touches n'agissent que si le caret est DANS une
+				// matrice (sinon sans effet, comportement attendu).
+				{ latex: "+\\,\\downarrow", command: "addRowAfter", class: "small", tooltip: t("engine.math.addRow") },
+				{ latex: "+\\,\\rightarrow", command: "addColumnAfter", class: "small", tooltip: t("engine.math.addColumn") },
+			],
 		],
-		[
-			{ latex: __mkMatrix("cases", 2, 1), class: "small", tooltip: "Système d'équations" },
-			{ latex: "\\vec{" + __PH + "}", class: "small", tooltip: "Vecteur" },
-			{ latex: "\\overline{" + __PH + "}", class: "small", tooltip: "Barre (conjugué / moyenne)" },
-			// command prime : ces touches n'agissent que si le caret est DANS une
-			// matrice (sinon sans effet, comportement attendu).
-			{ latex: "+\\,\\downarrow", command: "addRowAfter", class: "small", tooltip: "Ajouter une ligne à la matrice" },
-			{ latex: "+\\,\\rightarrow", command: "addColumnAfter", class: "small", tooltip: "Ajouter une colonne à la matrice" },
-		],
-	],
-};
+	};
+}
 
 let __mathliveConfigured = false;
 
 function configureMathlive(): void {
+	// Clavier virtuel NATIF MathLive (choix Ahmed 2026-07-11 : « c'est propre ce
+	// clavier-là ») — sans l'onglet alphabétique (« abc », inutile avec un clavier
+	// physique) : 123, symboles, grec.
+	// (Ré)appliqué à CHAQUE appel, AVANT le verrou __mathliveConfigured : le layout
+	// porte des infobulles traduites, et configureMathlive n'est appelée qu'à la
+	// création d'un champ math — sinon la langue des infobulles resterait celle du
+	// premier champ math de la session. L'assignation est idempotente.
+	if (window.mathVirtualKeyboard) {
+		window.mathVirtualKeyboard.layouts = ["numeric", "symbols", "greek", matrixLayout()];
+	}
 	if (__mathliveConfigured) return;
 	const lib = require("mathlive") as typeof import("mathlive");
 	// PIÈGE reload plugin : customElements.define('math-field') ne peut
@@ -410,12 +428,6 @@ function configureMathlive(): void {
 	// Purge un padding orphelin d'une session précédente (reload plugin
 	// pendant que le clavier était ouvert).
 	clearKeyboardBodyPadding();
-	// Clavier virtuel NATIF MathLive (choix Ahmed 2026-07-11 : « c'est
-	// propre ce clavier-là ») — sans l'onglet alphabétique (« abc »,
-	// inutile avec un clavier physique) : 123, symboles, grec.
-	if (window.mathVirtualKeyboard) {
-		window.mathVirtualKeyboard.layouts = ["numeric", "symbols", "greek", MATRIX_LAYOUT];
-	}
 	__mathliveConfigured = true;
 }
 

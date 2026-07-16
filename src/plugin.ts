@@ -28,6 +28,8 @@ import type { OllamaCatalogEntry } from "./dashboard/ai-providers";
 import { formatHotkey, eventToHotkey } from "./hotkey-format";
 import type { Hotkey } from "./hotkey-format";
 import { closeAllSelects } from "./dashboard/ui-select";
+import { t, setLanguage, langSetting } from "./i18n";
+import type { LangSetting } from "./i18n";
 
 const PLUGIN_ID = "quiz-blocks";
 const PLUGIN_NAME = "Quiz Blocks";
@@ -37,6 +39,9 @@ const QUIZ_BLOCK_LANGUAGE = "quiz-blocks";
  *  plugin.js est converti). Le sous-ensemble « IA/dictée » est réexposé aux vues
  *  via `AiSettings` (types/dashboard-ctx.ts) ; `quizStats` via `StatsStorePlugin`. */
 interface QuizBlocksSettings {
+	/** Langue de l'INTERFACE. « auto » = celle d'Obsidian. Sans effet sur la
+	 *  langue des quiz générés (le modèle suit celle de la demande). */
+	language: LangSetting;
 	enableCodeHighlighting: boolean;
 	quizStats: Record<string, QuizStatRecord>;
 	aiProvider: string;
@@ -63,6 +68,9 @@ interface QuizBlocksSettings {
 }
 
 const DEFAULT_SETTINGS: QuizBlocksSettings = {
+	// Défaut « auto » : l'anglais s'applique de lui-même hors Obsidian français
+	// — un utilisateur de la liste communautaire n'a rien à régler.
+	language: "auto",
 	enableCodeHighlighting: true,
 	quizStats: {},
 	aiProvider: "",
@@ -138,6 +146,12 @@ interface DashboardHotkeyRebindable {
 	bindComposerHotkeys?: () => void;
 }
 
+/** Vue dashboard exposant son re-rendu (utilisé au changement de langue). */
+interface DashboardRefreshable {
+	renderSidebar?: () => void;
+	renderCurrentView?: () => void;
+}
+
 /** Éditeur exposant l'ouverture d'un fichier quiz (méthode custom greffée sur
  *  QuizBuilderView, absente de l'API publique `View`). */
 interface QuizFileOpenable {
@@ -168,6 +182,118 @@ interface TutorialDef {
 	tips?: string[];
 }
 
+/** Tutoriels par fournisseur. FONCTION, jamais constante : les libellés sont
+ *  résolus par t() À L'APPEL (depuis display()). Une constante top-level serait
+ *  évaluée au chargement du module et figerait la langue du démarrage —
+ *  changer de langue n'aurait alors aucun effet sur ce bloc.
+ *  Commandes shell et URL restent en dur : ce ne sont pas des libellés. */
+function buildTutorials(): Record<string, TutorialDef> {
+	return {
+		"claude-code": {
+			title: t("plugin.tutorial.claude.title"),
+			sections: [
+				{
+					heading: t("plugin.tutorial.claude.s1.heading"),
+					text: t("plugin.tutorial.claude.s1.text"),
+					link: { label: t("plugin.tutorial.claude.s1.link"), url: "https://claude.com/claude-code" }
+				},
+				{
+					heading: t("plugin.tutorial.claude.s2.heading"),
+					text: t("plugin.tutorial.claude.s2.text"),
+					link: null
+				},
+				{
+					heading: t("plugin.tutorial.claude.s3.heading"),
+					text: t("plugin.tutorial.claude.s3.text"),
+					link: null
+				}
+			],
+			warning: t("plugin.tutorial.claude.warning"),
+			docsLink: { label: t("plugin.tutorial.claude.docs"), url: "https://code.claude.com/docs" }
+		},
+		codex: {
+			title: t("plugin.tutorial.codex.title"),
+			sections: [
+				{
+					heading: t("plugin.tutorial.codex.s1.heading"),
+					text: t("plugin.tutorial.codex.s1.text"),
+					link: { label: t("plugin.tutorial.codex.s1.link"), url: "https://learn.chatgpt.com/docs/codex/cli#getting-started" }
+				},
+				{
+					heading: t("plugin.tutorial.codex.s2.heading"),
+					text: t("plugin.tutorial.codex.s2.text"),
+					link: null
+				},
+				{
+					heading: t("plugin.tutorial.codex.s3.heading"),
+					text: t("plugin.tutorial.codex.s3.text"),
+					link: null
+				}
+			],
+			warning: t("plugin.tutorial.codex.warning"),
+			docsLink: { label: t("plugin.tutorial.codex.docs"), url: "https://learn.chatgpt.com/docs/codex/cli" }
+		},
+		"kimi-code": {
+			title: t("plugin.tutorial.kimi.title"),
+			sections: [
+				{
+					heading: t("plugin.tutorial.kimi.s1.heading"),
+					text: t("plugin.tutorial.kimi.s1.text"),
+					link: { label: t("plugin.tutorial.kimi.s1.link"), url: "https://www.kimi.com/code" }
+				},
+				{
+					heading: t("plugin.tutorial.kimi.s2.heading"),
+					text: t("plugin.tutorial.kimi.s2.text"),
+					// « Voir les abonnements » → page d'abonnement, où les cartes
+					// (prix + Subscribe + « Kimi Code available ») sont visibles
+					// d'emblée. URL nue, sans les paramètres de tracking du site
+					// (cf. le même choix, commenté, dans ai.ts).
+					link: { label: t("plugin.tutorial.kimi.s2.link"), url: "https://www.kimi.com/membership/pricing" }
+				},
+				{
+					heading: t("plugin.tutorial.kimi.s3.heading"),
+					text: t("plugin.tutorial.kimi.s3.text"),
+					link: null
+				}
+			],
+			warning: t("plugin.tutorial.kimi.warning"),
+			docsLink: { label: t("plugin.tutorial.kimi.docs"), url: "https://moonshotai.github.io/kimi-code/" }
+		},
+		ollama: {
+			title: t("plugin.tutorial.ollama.title"),
+			sections: [
+				{
+					heading: t("plugin.tutorial.ollama.s1.heading"),
+					text: t("plugin.tutorial.ollama.s1.text"),
+					link: { label: t("plugin.tutorial.ollama.s1.link"), url: "https://ollama.com/download" }
+				},
+				{
+					heading: t("plugin.tutorial.ollama.s2a.heading"),
+					text: t("plugin.tutorial.ollama.s2a.text"),
+					link: { label: t("plugin.tutorial.ollama.s2a.link"), url: "https://ollama.com/search?c=cloud" }
+				},
+				{
+					heading: t("plugin.tutorial.ollama.s2b.heading"),
+					text: t("plugin.tutorial.ollama.s2b.text"),
+					link: { label: t("plugin.tutorial.ollama.s2b.link"), url: "https://ollama.com/search" }
+				},
+				{
+					heading: t("plugin.tutorial.ollama.s3.heading"),
+					text: t("plugin.tutorial.ollama.s3.text"),
+					link: null
+				}
+			],
+			warning: t("plugin.tutorial.ollama.warning"),
+			docsLink: { label: t("plugin.tutorial.ollama.docs"), url: "https://github.com/ollama/ollama" },
+			tips: [
+				t("plugin.tutorial.ollama.tip1"),
+				t("plugin.tutorial.ollama.tip2"),
+				t("plugin.tutorial.ollama.tip3")
+			]
+		}
+	};
+}
+
 class QuizBlocksSettingTab extends PluginSettingTab {
 	plugin: InteractiveQuizPlugin;
 
@@ -183,21 +309,44 @@ class QuizBlocksSettingTab extends PluginSettingTab {
 		containerEl.createEl("h2", { text: PLUGIN_NAME });
 
 		containerEl.createEl("p", {
-			text: "Create interactive quizzes in Obsidian from quiz-blocks code blocks.",
+			text: t("plugin.intro"),
 			cls: "setting-item-description"
 		});
 
-		containerEl.createEl("h3", { text: "Supported question types" });
+		// Langue de l'interface — en tête : c'est le réglage qui change tout ce
+		// qui est affiché en dessous.
+		new Setting(containerEl)
+			.setName(t("settings.language.name"))
+			.setDesc(t("settings.language.desc"))
+			.addDropdown(dropdown => {
+				dropdown.addOption("auto", t("settings.language.auto"));
+				dropdown.addOption("en", t("settings.language.en"));
+				dropdown.addOption("fr", t("settings.language.fr"));
+				dropdown.setValue(langSetting())
+					.onChange(async (value) => {
+						this.plugin.settings.language = value as LangSetting;
+						await this.plugin.saveSettings();
+						// applyLanguage retraduit TOUT ce qui est déjà affiché :
+						// commandes de la palette, tooltip du ribbon et vues
+						// ouvertes. Puis on redessine ces réglages eux-mêmes.
+						this.plugin.applyLanguage(this.plugin.settings.language);
+						this.display();
+					});
+			});
+
+		containerEl.createEl("h3", { text: t("plugin.types.heading") });
 
 		const typesEl = containerEl.createEl("ul");
-		typesEl.createEl("li", { text: "Single choice" });
-		typesEl.createEl("li", { text: "Multiple choice" });
-		typesEl.createEl("li", { text: "Text input" });
-		typesEl.createEl("li", { text: "Ordering" });
-		typesEl.createEl("li", { text: "Matching" });
+		typesEl.createEl("li", { text: t("plugin.types.single") });
+		typesEl.createEl("li", { text: t("plugin.types.multiple") });
+		typesEl.createEl("li", { text: t("plugin.types.text") });
+		typesEl.createEl("li", { text: t("plugin.types.ordering") });
+		typesEl.createEl("li", { text: t("plugin.types.matching") });
 
-		containerEl.createEl("h3", { text: "Quick example" });
+		containerEl.createEl("h3", { text: t("plugin.example.heading") });
 
+		// Exemple de FORMAT de données : jamais traduit, c'est ce que
+		// l'utilisateur colle tel quel dans sa note.
 		const exampleCode = `[
   {
     title: "Question 1",
@@ -225,8 +374,8 @@ class QuizBlocksSettingTab extends PluginSettingTab {
 		});
 
 		copyBtn.setAttr("type", "button");
-		copyBtn.setAttr("aria-label", "Copy code");
-		copyBtn.setAttr("title", "Copy code");
+		copyBtn.setAttr("aria-label", t("plugin.example.copy"));
+		copyBtn.setAttr("title", t("plugin.example.copy"));
 
 		setIcon(copyBtn, "copy");
 
@@ -252,32 +401,35 @@ class QuizBlocksSettingTab extends PluginSettingTab {
 				}, 1200);
 			} catch (error) {
 				console.error("[quiz-blocks] copy failed", error);
-				new Notice("Unable to copy the example.");
+				new Notice(t("plugin.example.copyFailed"));
 			}
 		});
 
-		containerEl.createEl("h3", { text: "Notes" });
+		containerEl.createEl("h3", { text: t("plugin.notes.heading") });
 
 		const notesEl = containerEl.createEl("ul");
-		notesEl.createEl("li", { text: "The code block content must be a valid JSON5 array." });
-		notesEl.createEl("li", { text: "Hints, explanations, scoring, navigation, and transitions are supported." });
-		notesEl.createEl("li", { text: "Interactive rendering happens directly inside the note preview." });
+		notesEl.createEl("li", { text: t("plugin.notes.json5") });
+		notesEl.createEl("li", { text: t("plugin.notes.features") });
+		notesEl.createEl("li", { text: t("plugin.notes.rendering") });
 
 		// ─── Available Commands Section ───
-		containerEl.createEl("h3", { text: "Commandes et raccourcis clavier (par défaut)" });
+		containerEl.createEl("h3", { text: t("plugin.commands.heading") });
 
+		// `id` = identifiant technique de la commande (persisté dans les hotkeys
+		// de l'utilisateur) : jamais traduit. Les raccourcis affichés sont les
+		// défauts déclarés dans onload().
 		const commandsInfo = [
 			{
 				id: "open-quiz-builder",
-				name: "Ouvrir le Quiz Editor",
+				name: t("plugin.command.openEditor.name"),
 				hotkey: "Ctrl+Shift+E",
-				desc: "Ouvre un nouvel onglet avec le Quiz Editor vide"
+				desc: t("plugin.command.openEditor.desc")
 			},
 			{
 				id: "open-quiz-from-active-note",
-				name: "Ouvrir le quiz de la note active",
+				name: t("plugin.command.openFromNote.name"),
 				hotkey: "Ctrl+Shift+Q",
-				desc: "Ouvre l'éditeur et charge le quiz de la note active"
+				desc: t("plugin.command.openFromNote.desc")
 			}
 		];
 
@@ -313,7 +465,7 @@ class QuizBlocksSettingTab extends PluginSettingTab {
 		buttonContainer.style.cssText = "margin-top: 1.5em; text-align: center;";
 
 		const configButton = buttonContainer.createEl("button", { cls: "mod-cta" });
-		configButton.textContent = "Configurer les raccourcis";
+		configButton.textContent = t("plugin.commands.configure");
 		configButton.style.cssText = "padding: 0.75em 1.5em; font-size: 1em;";
 		configButton.addEventListener("click", () => {
 			const settingApi = (this.app as unknown as { setting: AppSettingApi }).setting;
@@ -330,124 +482,25 @@ class QuizBlocksSettingTab extends PluginSettingTab {
 
 		// Note explicative
 		const noteEl = containerEl.createEl("p", { cls: "setting-item-description" });
-		noteEl.textContent = "Cliquez sur le bouton ci-dessus pour personnaliser les raccourcis clavier dans les paramètres d'Obsidian.";
+		noteEl.textContent = t("plugin.commands.configureNote");
 		noteEl.style.cssText = "text-align: center; margin-top: 0.75em; font-style: italic;";
 
 		// ─── AI Settings ───
-		containerEl.createEl("h3", { text: "Génération IA" });
+		containerEl.createEl("h3", { text: t("plugin.ai.heading") });
 
 		containerEl.createEl("p", {
-			text: "Configurez votre fournisseur IA pour générer des quiz automatiquement.",
+			text: t("plugin.ai.intro"),
 			cls: "setting-item-description"
 		});
 
-		const TUTORIALS: Record<string, TutorialDef> = {
-			"claude-code": {
-				title: "Comment configurer Claude (compte par abonnement)",
-				sections: [
-					{
-						heading: "1. Installer Claude Code",
-						text: "La génération utilise le CLI Claude Code : aucune clé API, c'est votre abonnement Claude (Pro, Max, Team ou Enterprise) qui est utilisé.",
-						link: { label: "Installer Claude Code", url: "https://claude.com/claude-code" }
-					},
-					{
-						heading: "2. Connecter votre compte",
-						text: "Ouvrez un terminal, lancez « claude », puis tapez /login et connectez-vous avec votre compte Claude.",
-						link: null
-					},
-					{
-						heading: "3. C'est tout",
-						text: "Le plugin détecte Claude Code automatiquement. Choisissez un modèle ci-dessus et générez.",
-						link: null
-					}
-				],
-				warning: "Vos requêtes passent par votre session Claude Code locale et comptent dans l'usage de votre abonnement. Aucune clé n'est stockée dans Obsidian.",
-				docsLink: { label: "Documentation Claude Code", url: "https://code.claude.com/docs" }
-			},
-			codex: {
-				title: "Comment configurer ChatGPT (Codex CLI)",
-				sections: [
-					{
-						heading: "1. Installer le Codex CLI — pas l'application Codex",
-						text: "La génération utilise le Codex CLI, l'outil de terminal d'OpenAI. L'application de bureau Codex ne suffit pas : elle n'installe pas la commande « codex » que le plugin utilise. Installateur officiel — Windows : powershell -ExecutionPolicy ByPass -c \"irm https://chatgpt.com/codex/install.ps1 | iex\" · macOS/Linux : curl -fsSL https://chatgpt.com/codex/install.sh | sh (alternative : npm install -g @openai/codex).",
-						link: { label: "Guide d'installation officiel", url: "https://learn.chatgpt.com/docs/codex/cli#getting-started" }
-					},
-					{
-						heading: "2. Connecter votre compte ChatGPT",
-						text: "Dans un terminal, lancez « codex login » et connectez-vous avec votre compte ChatGPT. Aucune clé API : c'est votre abonnement qui est utilisé.",
-						link: null
-					},
-					{
-						heading: "3. C'est tout",
-						text: "Le plugin détecte le Codex CLI automatiquement, quelle que soit la méthode d'installation — revenez simplement sur Obsidian après l'installation. Choisissez un modèle ci-dessus et générez.",
-						link: null
-					}
-				],
-				warning: "Vos requêtes passent par votre session Codex locale et comptent dans l'usage de votre abonnement ChatGPT. Aucune clé n'est stockée dans Obsidian.",
-				docsLink: { label: "Documentation Codex CLI", url: "https://learn.chatgpt.com/docs/codex/cli" }
-			},
-			"kimi-code": {
-				title: "Comment configurer Kimi (Kimi Code CLI)",
-				sections: [
-					{
-						heading: "1. Installer le Kimi Code CLI",
-						text: "La génération utilise le Kimi Code CLI, l'outil de terminal de Moonshot AI (commande « kimi »). Installateur officiel — Windows : irm https://code.kimi.com/kimi-code/install.ps1 | iex · macOS/Linux : curl -fsSL https://code.kimi.com/kimi-code/install.sh | bash",
-						link: { label: "Découvrir Kimi Code", url: "https://www.kimi.com/code" }
-					},
-					{
-						heading: "2. Connecter votre abonnement",
-						text: "Dans un terminal, lancez « kimi » puis tapez /login. Aucune clé API : c'est votre abonnement Kimi Code qui est utilisé. Kimi Code est un service payant — sans abonnement actif, aucun modèle n'est proposé.",
-						link: { label: "Voir les abonnements", url: "https://www.kimi.com/code" }
-					},
-					{
-						heading: "3. Choisir un modèle",
-						text: "La liste de modèles ci-dessus est celle que votre CLI publie (kimi provider list) : elle suit votre compte, donc les nouveaux modèles (K3…) apparaissent d'eux-mêmes. Tant qu'aucun compte n'est connecté, elle reste vide.",
-						link: null
-					}
-				],
-				warning: "Vos requêtes passent par votre session Kimi Code locale et comptent dans l'usage de votre abonnement. Aucune clé n'est stockée dans Obsidian.",
-				docsLink: { label: "Documentation Kimi Code", url: "https://moonshotai.github.io/kimi-code/" }
-			},
-			ollama: {
-				title: "Comment configurer Ollama (local + cloud)",
-				sections: [
-					{
-						heading: "1. Installer Ollama",
-						text: "Téléchargez et installez Ollama pour votre système.",
-						link: { label: "Télécharger Ollama", url: "https://ollama.com/download" }
-					},
-					{
-						heading: "2a. Modèles cloud (recommandé sans GPU)",
-						text: "Connectez le daemon à votre compte : ollama signin. Les modèles « :cloud » tournent sur le cloud Ollama, sans téléchargement ni clé API. Le forfait gratuit donne accès aux modèles gpt-oss et minimax-m3 ; les plus gros (glm, kimi, qwen3.5…) nécessitent un abonnement Pro/Max.",
-						link: { label: "Voir les modèles cloud", url: "https://ollama.com/search?c=cloud" }
-					},
-					{
-						heading: "2b. Modèles locaux (nécessite un GPU / de la RAM)",
-						text: "Téléchargez un modèle : ollama pull qwen3.5:9b. Il tourne sur votre machine.",
-						link: { label: "Voir tous les modèles", url: "https://ollama.com/search" }
-					},
-					{
-						heading: "3. Configurer ici",
-						text: "Choisissez un modèle dans la liste ci-dessus. Les « :cloud » = cloud, les autres = local. Serveur par défaut : http://localhost:11434",
-						link: null
-					}
-				],
-				warning: "Un seul serveur Ollama (localhost) sert local ET cloud : le suffixe « :cloud » distingue les deux. Les modèles cloud passent par votre compte Ollama connecté ; les locaux restent sur votre machine.",
-				docsLink: { label: "Documentation Ollama", url: "https://github.com/ollama/ollama" },
-				tips: [
-					"💡 Sans GPU : utilisez un modèle « :cloud » gratuit (ex. gpt-oss:120b-cloud).",
-					"💡 Modèles cloud : pas de limite de mémoire — même les très grands modèles fonctionnent.",
-					"💡 Erreur « requires a subscription » : le modèle cloud choisi est réservé au forfait Pro/Max. Prenez un gpt-oss gratuit ou abonnez-vous."
-				]
-			}
-		};
+		const TUTORIALS = buildTutorials();
 
 		// Provider dropdown
 		new Setting(containerEl)
-			.setName("Fournisseur IA")
-			.setDesc("Choisissez le fournisseur pour la génération de quiz")
+			.setName(t("plugin.ai.provider.name"))
+			.setDesc(t("plugin.ai.provider.desc"))
 			.addDropdown(dropdown => {
-				dropdown.addOption("", "Aucun (à choisir)");
+				dropdown.addOption("", t("plugin.ai.provider.none"));
 				for (const p of aiProviders.PROVIDERS) {
 					dropdown.addOption(p.id, p.name + (p.sub ? " — " + p.sub : ""));
 				}
@@ -483,8 +536,8 @@ class QuizBlocksSettingTab extends PluginSettingTab {
 			// seconde passe a une liste pleine → aucune boucle de rendu).
 			if (!models.length) {
 				new Setting(containerEl)
-					.setName("Modèle")
-					.setDesc("Aucun modèle disponible. Le Kimi Code CLI ne publie ses modèles qu'une fois votre abonnement connecté : dans un terminal, lancez « kimi » puis /login, et rouvrez ces réglages.");
+					.setName(t("plugin.ai.model.name"))
+					.setDesc(t("plugin.ai.model.noneAvailable"));
 				// Le tutoriel ci-dessous (marche à suivre /login) doit rester
 				// affiché → surtout pas de return ici.
 				aiProviders.checkKimi(true).then(res => {
@@ -496,21 +549,21 @@ class QuizBlocksSettingTab extends PluginSettingTab {
 					: (this.plugin.settings.aiModel || models[0].value);
 
 				new Setting(containerEl)
-					.setName("Modèle")
+					.setName(t("plugin.ai.model.name"))
 					.setDesc(currentProvider === "ollama"
-						? "Modèle Ollama. Les « :cloud » tournent sur le cloud (compte connecté via ollama signin) ; les autres en local (ollama pull)."
+						? t("plugin.ai.model.descOllama")
 						: currentProvider === "codex"
-						? "Modèle Codex (ChatGPT) à utiliser pour la génération."
+						? t("plugin.ai.model.descCodex")
 						: currentProvider === "kimi-code"
-						? "Modèle Kimi publié par votre CLI (kimi provider list) — la liste suit votre abonnement."
-						: "Modèle Claude à utiliser (mêmes noms que dans Claude Code).")
+						? t("plugin.ai.model.descKimi")
+						: t("plugin.ai.model.descClaude"))
 					.addDropdown(dropdown => {
 						for (const m of models) {
 							dropdown.addOption(m.value, m.label + (m.hint ? " (" + m.hint + ")" : ""));
 						}
 						// If current model is not in the list, add it as custom
 						if (!models.find(m => m.value === currentModel)) {
-							dropdown.addOption(currentModel, currentModel + " (personnalisé)");
+							dropdown.addOption(currentModel, t("plugin.ai.model.custom", { model: currentModel }));
 						}
 						dropdown.setValue(currentModel);
 						dropdown.onChange(async (value) => {
@@ -524,8 +577,8 @@ class QuizBlocksSettingTab extends PluginSettingTab {
 		// Ollama URL (local only)
 		if (currentProvider === "ollama") {
 			new Setting(containerEl)
-				.setName("URL du serveur Ollama")
-				.setDesc("Adresse du serveur Ollama local.")
+				.setName(t("plugin.ollama.url.name"))
+				.setDesc(t("plugin.ollama.url.desc"))
 				.addText(text => text
 					.setPlaceholder("http://localhost:11434")
 					.setValue(this.plugin.settings.aiOllamaUrl || "http://localhost:11434")
@@ -547,22 +600,22 @@ class QuizBlocksSettingTab extends PluginSettingTab {
 			};
 
 			const setting = new Setting(containerEl)
-				.setName("Modèles affichés dans le menu")
-				.setDesc("Glissez pour réordonner. Le menu affiche une liste défilante ; les " + VISIBLE + " premiers sont visibles sans défiler (max " + MAX + "). Certains modèles cloud nécessitent un abonnement Ollama Pro/Max (erreur 403 à la génération).");
+				.setName(t("plugin.ollama.models.name"))
+				.setDesc(t("plugin.ollama.models.desc", { visible: VISIBLE, max: MAX }));
 			setting.settingEl.style.display = "block";
 			// Bouton « rafraîchir » : récupère le catalogue récent depuis ollama.com.
 			setting.addExtraButton(b => b
 				.setIcon("refresh-cw")
-				.setTooltip("Rafraîchir la liste depuis ollama.com")
+				.setTooltip(t("plugin.ollama.models.refresh"))
 				.onClick(async () => {
 					b.setDisabled(true);
 					try {
 						const cat = await aiProviders.fetchOllamaCloudCatalog();
 						this.plugin.settings.aiOllamaCatalog = cat;
 						await this.plugin.saveSettings();
-						new Notice("Catalogue Ollama à jour (" + cat.length + " modèles).");
+						new Notice(t("plugin.ollama.models.refreshed", { count: cat.length }));
 					} catch (e) {
-						new Notice("Échec du rafraîchissement (ollama.com injoignable).");
+						new Notice(t("plugin.ollama.models.refreshFailed"));
 					}
 					b.setDisabled(false);
 					render();
@@ -576,7 +629,7 @@ class QuizBlocksSettingTab extends PluginSettingTab {
 				const sel = getSel();
 				sel.forEach((val, idx) => {
 					const meta = aiProviders.getOllamaModelMeta(val, catalog);
-					if (idx === VISIBLE) listEl.createDiv({ cls: "qbd-model-manager-sep", text: "Accessible en défilant" });
+					if (idx === VISIBLE) listEl.createDiv({ cls: "qbd-model-manager-sep", text: t("plugin.ollama.models.scrollSep") });
 					const row = listEl.createDiv({ cls: "qbd-model-manager-row" });
 					row.setAttribute("draggable", "true");
 					const handle = row.createSpan({ cls: "qbd-model-manager-handle" });
@@ -586,7 +639,7 @@ class QuizBlocksSettingTab extends PluginSettingTab {
 					row.createSpan({ cls: "qbd-model-manager-label", text: meta.label });
 					const rm = row.createEl("button", { cls: "qbd-model-manager-remove" });
 					setIcon(rm, "x");
-					rm.setAttribute("aria-label", "Retirer");
+					rm.setAttribute("aria-label", t("plugin.ollama.models.remove"));
 					rm.addEventListener("click", async () => {
 						const a = getSel(); a.splice(idx, 1); await saveSel(a); render();
 					});
@@ -609,12 +662,12 @@ class QuizBlocksSettingTab extends PluginSettingTab {
 					});
 				});
 				if (sel.length >= MAX) {
-					listEl.createDiv({ cls: "qbd-model-manager-note", text: "Maximum " + MAX + " modèles. Retirez-en un pour en ajouter un autre." });
+					listEl.createDiv({ cls: "qbd-model-manager-note", text: t("plugin.ollama.models.maxNote", { max: MAX }) });
 				} else {
 					const avail = catalog.filter(m => !sel.includes(m.value));
 					if (avail.length) {
 						const addWrap = listEl.createDiv({ cls: "qbd-model-manager-add" });
-						addWrap.createSpan({ cls: "qbd-model-manager-add-label", text: "Ajouter :" });
+						addWrap.createSpan({ cls: "qbd-model-manager-add-label", text: t("plugin.ollama.models.addLabel") });
 						avail.forEach(m => {
 							const chip = addWrap.createEl("button", { cls: "qbd-model-manager-chip" });
 							const ci = chip.createSpan({ cls: "qbd-model-manager-chip-icon" });
@@ -628,14 +681,14 @@ class QuizBlocksSettingTab extends PluginSettingTab {
 					}
 					// Ajout manuel : n'importe quel tag de modèle (futur-proof).
 					const manualWrap = listEl.createDiv({ cls: "qbd-model-manager-manual" });
-					const input = manualWrap.createEl("input", { cls: "qbd-model-manager-input", attr: { type: "text", placeholder: "Autre modèle (ex. glm-5.3:cloud)" } });
+					const input = manualWrap.createEl("input", { cls: "qbd-model-manager-input", attr: { type: "text", placeholder: t("plugin.ollama.models.manualPlaceholder") } });
 					const addManual = async () => {
 						const v = (input.value || "").trim();
 						if (!v) return;
 						const a = getSel();
 						if (!a.includes(v) && a.length < MAX) { a.push(v); await saveSel(a); render(); }
 					};
-					const addBtn = manualWrap.createEl("button", { cls: "qbd-model-manager-manual-btn", text: "Ajouter" });
+					const addBtn = manualWrap.createEl("button", { cls: "qbd-model-manager-manual-btn", text: t("plugin.ollama.models.addButton") });
 					addBtn.addEventListener("click", addManual);
 					input.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); addManual(); } });
 				}
@@ -728,7 +781,7 @@ class QuizBlocksSettingTab extends PluginSettingTab {
 		// raccourci (un modificateur est exigé : une lettre nue taperait
 		// le raccourci en écrivant dans le composer). Les vues dashboard
 		// ouvertes re-bindent leur Scope immédiatement.
-		containerEl.createEl("h3", { text: "Raccourcis du composer IA" });
+		containerEl.createEl("h3", { text: t("plugin.hotkey.heading") });
 		const rebindDashboards = () => {
 			for (const leaf of this.app.workspace.getLeavesOfType(VIEW_TYPE_DASHBOARD)) {
 				const view = leaf.view as unknown as DashboardHotkeyRebindable;
@@ -741,10 +794,10 @@ class QuizBlocksSettingTab extends PluginSettingTab {
 				.setDesc(desc)
 				.addButton((btn) => {
 					btn.buttonEl.addClass("quiz-blocks-hotkey-btn");
-					const paint = () => btn.setButtonText(formatHotkey(this.plugin.settings[key]) || "Aucun");
+					const paint = () => btn.setButtonText(formatHotkey(this.plugin.settings[key]) || t("plugin.hotkey.none"));
 					paint();
 					btn.onClick(() => {
-						btn.setButtonText("Appuyez sur une combinaison…");
+						btn.setButtonText(t("plugin.hotkey.press"));
 						const onKey = async (e: KeyboardEvent) => {
 							e.preventDefault();
 							e.stopPropagation();
@@ -752,7 +805,7 @@ class QuizBlocksSettingTab extends PluginSettingTab {
 							const hk = eventToHotkey(e);
 							if (!hk) return; // modificateur seul : on attend la touche
 							if (!hk.modifiers.length) {
-								new Notice("Ajoutez un modificateur (Ctrl, Alt ou Shift)");
+								new Notice(t("plugin.hotkey.needModifier"));
 								return;
 							}
 							cleanup();
@@ -773,7 +826,7 @@ class QuizBlocksSettingTab extends PluginSettingTab {
 				})
 				.addExtraButton((b) => b
 					.setIcon("rotate-ccw")
-					.setTooltip("Restaurer le défaut")
+					.setTooltip(t("plugin.hotkey.reset"))
 					.onClick(async () => {
 						this.plugin.settings[key] = JSON.parse(JSON.stringify(DEFAULT_SETTINGS[key])) as Hotkey;
 						await this.plugin.saveSettings();
@@ -781,21 +834,21 @@ class QuizBlocksSettingTab extends PluginSettingTab {
 						this.display();
 					}));
 		};
-		addHotkeySetting("Ajouter des fichiers ou des images", "Ouvre le sélecteur de fichiers du composer (menu « + »).", "hotkeyAddFiles");
-		addHotkeySetting("Ajouter des notes", "Ouvre le sélecteur de notes du composer (menu « + »).", "hotkeyAddNotes");
+		addHotkeySetting(t("plugin.hotkey.addFiles.name"), t("plugin.hotkey.addFiles.desc"), "hotkeyAddFiles");
+		addHotkeySetting(t("plugin.hotkey.addNotes.name"), t("plugin.hotkey.addNotes.desc"), "hotkeyAddNotes");
 
 		// ─── Saisie vocale (dictée) ───
-		containerEl.createEl("h3", { text: "Saisie vocale (dictée)" });
+		containerEl.createEl("h3", { text: t("plugin.voice.heading") });
 		if (!voiceInstall.isSupported()) {
 			containerEl.createEl("p", {
-				text: "Disponible sur Windows uniquement pour l'instant.",
+				text: t("plugin.voice.windowsOnly"),
 				cls: "setting-item-description",
 			});
 		} else {
 			new Setting(containerEl)
-				.setName("Activer la dictée")
-				.setDesc("Maintenir Espace dans le composer IA pour dicter (transcription 100 % locale, whisper.cpp).")
-				.addToggle(t => t
+				.setName(t("plugin.voice.enable.name"))
+				.setDesc(t("plugin.voice.enable.desc"))
+				.addToggle(toggle => toggle
 					.setValue(this.plugin.settings.voiceEnabled)
 					.onChange(async (v) => {
 						this.plugin.settings.voiceEnabled = v;
@@ -805,11 +858,11 @@ class QuizBlocksSettingTab extends PluginSettingTab {
 
 			if (this.plugin.settings.voiceEnabled) {
 				new Setting(containerEl)
-					.setName("Accélération")
-					.setDesc("CPU : léger (8 Mo), universel. GPU NVIDIA : téléchargement ~680 Mo, transcription quasi instantanée. (Pas de build AMD/Intel en v1.)")
+					.setName(t("plugin.voice.backend.name"))
+					.setDesc(t("plugin.voice.backend.desc"))
 					.addDropdown(d => d
-						.addOption("cpu", "CPU")
-						.addOption("cuda", "GPU NVIDIA (CUDA)")
+						.addOption("cpu", t("plugin.voice.backend.cpu"))
+						.addOption("cuda", t("plugin.voice.backend.cuda"))
 						.setValue(this.plugin.settings.voiceBackend)
 						.onChange(async (v) => {
 							this.plugin.settings.voiceBackend = v as VoiceBackend;
@@ -818,8 +871,8 @@ class QuizBlocksSettingTab extends PluginSettingTab {
 						}));
 
 				new Setting(containerEl)
-					.setName("Modèle")
-					.setDesc("Rapide suffit pour une dictée propre ; Max gagne sur le bruit/les accents.")
+					.setName(t("plugin.voice.model.name"))
+					.setDesc(t("plugin.voice.model.desc"))
 					.addDropdown(d => {
 						for (const [id, m] of Object.entries(voiceInstall.MODELS)) d.addOption(id, m.label);
 						d.setValue(this.plugin.settings.voiceModel)
@@ -831,11 +884,11 @@ class QuizBlocksSettingTab extends PluginSettingTab {
 					});
 
 				new Setting(containerEl)
-					.setName("Langue")
+					.setName(t("plugin.voice.lang.name"))
 					.addDropdown(d => d
-						.addOption("fr", "Français")
-						.addOption("auto", "Détection automatique")
-						.addOption("en", "Anglais")
+						.addOption("fr", t("plugin.voice.lang.fr"))
+						.addOption("auto", t("plugin.voice.lang.auto"))
+						.addOption("en", t("plugin.voice.lang.en"))
 						.setValue(this.plugin.settings.voiceLang)
 						.onChange(async (v) => {
 							this.plugin.settings.voiceLang = v as VoiceLang;
@@ -844,52 +897,56 @@ class QuizBlocksSettingTab extends PluginSettingTab {
 
 				// État d'installation + téléchargements (rien sans clic explicite).
 				const st = voiceInstall.getStatus(this.plugin.settings);
-				const fmtPct = (d: number, t: number): string => (t ? Math.round((d / t) * 100) + " %" : Math.round(d / 1e6) + " Mo");
+				// Paramètres nommés done/total (et non d/t) : un paramètre « t »
+				// masquerait la fonction de traduction importée.
+				const fmtPct = (done: number, total: number): string => (total
+					? Math.round((done / total) * 100) + " %"
+					: t("plugin.voice.megabytes", { n: Math.round(done / 1e6) }));
 			// onProgress arrive à CHAQUE chunk (~16 Ko) : sur le zip CUDA
 			// (~678 Mo) ça ferait des dizaines de milliers de setButtonText.
 			// Ne toucher au DOM que quand le libellé change réellement.
 			const throttledProgress = (btn: ButtonComponent) => {
 				let last = "";
-				return (d: number, t: number): void => {
-					const label = fmtPct(d, t);
+				return (done: number, total: number): void => {
+					const label = fmtPct(done, total);
 					if (label !== last) { last = label; btn.setButtonText(label); }
 				};
 			};
 
 				const binRow = new Setting(containerEl)
-					.setName("Binaire whisper.cpp (" + this.plugin.settings.voiceBackend + ")")
-					.setDesc(st.cliPath ? "Installé — " + st.cliPath : "Non installé.");
+					.setName(t("plugin.voice.binary.name", { backend: this.plugin.settings.voiceBackend }))
+					.setDesc(st.cliPath ? t("plugin.voice.installed", { path: st.cliPath }) : t("plugin.voice.notInstalled"));
 				if (!st.cliPath) binRow.addButton(b => b
-					.setButtonText("Télécharger")
+					.setButtonText(t("plugin.voice.download"))
 					.setCta()
 					.onClick(async () => {
 						b.setDisabled(true);
 						try {
 							await voiceInstall.installBinary(this.plugin.settings.voiceBackend,
 								throttledProgress(b));
-							new Notice("Binaire whisper.cpp installé.");
+							new Notice(t("plugin.voice.binaryInstalled"));
 						} catch (e) {
 							console.error("[quiz-blocks] install binaire:", e);
-							new Notice("Téléchargement échoué : " + (e instanceof Error ? e.message : String(e)));
+							new Notice(t("plugin.voice.downloadFailed", { error: e instanceof Error ? e.message : String(e) }));
 						}
 						this.display();
 					}));
 
 				const mdlRow = new Setting(containerEl)
-					.setName("Modèle — " + (voiceInstall.MODELS[this.plugin.settings.voiceModel]?.label || this.plugin.settings.voiceModel))
-					.setDesc(st.modelFile ? "Installé — " + st.modelFile : "Non installé.");
+					.setName(t("plugin.voice.model.rowName", { label: voiceInstall.MODELS[this.plugin.settings.voiceModel]?.label || this.plugin.settings.voiceModel }))
+					.setDesc(st.modelFile ? t("plugin.voice.installed", { path: st.modelFile }) : t("plugin.voice.notInstalled"));
 				if (!st.modelFile) mdlRow.addButton(b => b
-					.setButtonText("Télécharger")
+					.setButtonText(t("plugin.voice.download"))
 					.setCta()
 					.onClick(async () => {
 						b.setDisabled(true);
 						try {
 							await voiceInstall.installModel(this.plugin.settings.voiceModel,
 								throttledProgress(b));
-							new Notice("Modèle installé.");
+							new Notice(t("plugin.voice.modelInstalled"));
 						} catch (e) {
 							console.error("[quiz-blocks] install modèle:", e);
-							new Notice("Téléchargement échoué : " + (e instanceof Error ? e.message : String(e)));
+							new Notice(t("plugin.voice.downloadFailed", { error: e instanceof Error ? e.message : String(e) }));
 						}
 						this.display();
 					}));
@@ -903,6 +960,8 @@ export default class InteractiveQuizPlugin extends Plugin {
 	log!: Logger;
 	_scanner!: Scanner;
 	_statsStore!: StatsStore;
+	/** Icône du ribbon : conservée pour retraduire son tooltip (applyLanguage). */
+	_ribbonEl: HTMLElement | null = null;
 
 	async onload(): Promise<void> {
 		await this.loadSettings();
@@ -918,22 +977,6 @@ export default class InteractiveQuizPlugin extends Plugin {
 		/* ─── Quiz Dashboard View ─── */
 		this.registerView(VIEW_TYPE_DASHBOARD, (leaf) => new QuizDashboardView(leaf, this));
 
-		this.addCommand({
-			id: "open-quiz-dashboard",
-			name: "Ouvrir le Dashboard",
-			hotkeys: [{ modifiers: ["Ctrl", "Shift"], key: "d" }],
-			callback: async () => {
-				const existing = this.app.workspace.getLeavesOfType(VIEW_TYPE_DASHBOARD);
-				if (existing.length > 0) {
-					this.app.workspace.revealLeaf(existing[0]);
-					return;
-				}
-				const leaf = this.app.workspace.getLeaf("tab");
-				await leaf.setViewState({ type: VIEW_TYPE_DASHBOARD, active: true });
-				this.app.workspace.revealLeaf(leaf);
-			},
-		});
-
 		this.addSettingTab(new QuizBlocksSettingTab(this.app, this));
 
 		if (this.settings.enableCodeHighlighting) {
@@ -944,79 +987,13 @@ export default class InteractiveQuizPlugin extends Plugin {
 		/* ─── Quiz Builder View ─── */
 		this.registerView(VIEW_TYPE, (leaf) => new QuizBuilderView(leaf, this));
 
-		this.addCommand({
-			id: "open-quiz-builder",
-			name: "Ouvrir le Quiz Editor",
-			hotkeys: [{ modifiers: ["Ctrl", "Shift"], key: "e" }],
-			callback: async () => {
-				const existing = this.app.workspace.getLeavesOfType(VIEW_TYPE);
-				if (existing.length > 0) {
-					this.app.workspace.revealLeaf(existing[0]);
-					return;
-				}
-				const leaf = this.app.workspace.getLeaf("tab");
-				await leaf.setViewState({ type: VIEW_TYPE, active: true });
-				this.app.workspace.revealLeaf(leaf);
-			},
-		});
-
-		this.addCommand({
-			id: "open-quiz-from-active-note",
-			name: "Ouvrir le quiz de la note active",
-			hotkeys: [{ modifiers: ["Ctrl", "Shift"], key: "q" }],
-			callback: async () => {
-				// Check if there's an active file
-				const activeFile = this.app.workspace.getActiveFile();
-				if (!activeFile || !activeFile.path.endsWith('.md')) {
-					new Notice("Aucune note active");
-					return;
-				}
-
-				try {
-					// Read file content
-					const content = await this.app.vault.read(activeFile);
-					// Find first quiz-blocks fence
-					const match = content.match(/```quiz-blocks\n([\s\S]*?)\n```/);
-					if (!match) {
-						new Notice("Aucun bloc quiz-blocks trouvé dans cette note");
-						return;
-					}
-
-					// Open or get the Quiz Editor
-					const existing = this.app.workspace.getLeavesOfType(VIEW_TYPE);
-					let leaf: WorkspaceLeaf;
-					if (existing.length > 0) {
-						leaf = existing[0];
-						this.app.workspace.revealLeaf(leaf);
-					} else {
-						leaf = this.app.workspace.getLeaf("tab");
-						await leaf.setViewState({ type: VIEW_TYPE, active: true });
-						this.app.workspace.revealLeaf(leaf);
-					}
-
-					// Open the quiz for editing
-					const view = leaf.view as unknown as QuizFileOpenable;
-					if (view && view.openQuizFile) {
-						await view.openQuizFile(activeFile, match[1]);
-						new Notice(`Quiz ouvert : ${activeFile.name}`);
-					}
-				} catch (err) {
-					console.error("Open error:", err);
-					new Notice("Erreur lors de l'ouverture");
-				}
-			},
-		});
+		this.registerCommands();
 
 		/* ─── Ribbon Icon ─── */
-		this.addRibbonIcon("graduation-cap", "Ouvrir le Dashboard", async () => {
-			const existing = this.app.workspace.getLeavesOfType(VIEW_TYPE_DASHBOARD);
-			if (existing.length > 0) {
-				this.app.workspace.revealLeaf(existing[0]);
-				return;
-			}
-			const leaf = this.app.workspace.getLeaf("tab");
-			await leaf.setViewState({ type: VIEW_TYPE_DASHBOARD, active: true });
-			this.app.workspace.revealLeaf(leaf);
+		// Élément conservé : son aria-label (le tooltip) est retraduit à chaud
+		// par applyLanguage() — un second addRibbonIcon ajouterait une icône.
+		this._ribbonEl = this.addRibbonIcon("graduation-cap", t("plugin.command.openDashboard.name"), () => {
+			void this.openDashboard();
 		});
 
 		/* ─── Code Block Processor ─── */
@@ -1049,7 +1026,9 @@ export default class InteractiveQuizPlugin extends Plugin {
 
 					host.empty();
 					host.createEl("p", {
-						text: `⚠️ Impossible de charger le quiz : ${error instanceof Error ? error.message : "erreur inconnue"}`
+						text: t("plugin.block.error", {
+							error: error instanceof Error ? error.message : t("plugin.block.unknownError")
+						})
 					});
 				}
 			}
@@ -1074,6 +1053,10 @@ export default class InteractiveQuizPlugin extends Plugin {
 		// attendue, fusionnée par-dessus les défauts.
 		const data = await this.loadData() as Partial<QuizBlocksSettings> | null;
 		this.settings = Object.assign({}, DEFAULT_SETTINGS, data || {});
+
+		// Langue appliquée AVANT tout rendu : les vues, commandes et menus lisent
+		// t() dès leur enregistrement dans onload().
+		setLanguage(this.settings.language);
 
 		if ("enableDebugLogs" in this.settings) {
 			delete this.settings.enableDebugLogs;
@@ -1110,6 +1093,122 @@ export default class InteractiveQuizPlugin extends Plugin {
 
 	async saveSettings(): Promise<void> {
 		await this.saveData(this.settings);
+	}
+
+	/** Ouvre (ou révèle) le dashboard. Partagé par la commande et le ribbon. */
+	async openDashboard(): Promise<void> {
+		const existing = this.app.workspace.getLeavesOfType(VIEW_TYPE_DASHBOARD);
+		if (existing.length > 0) {
+			this.app.workspace.revealLeaf(existing[0]);
+			return;
+		}
+		const leaf = this.app.workspace.getLeaf("tab");
+		await leaf.setViewState({ type: VIEW_TYPE_DASHBOARD, active: true });
+		this.app.workspace.revealLeaf(leaf);
+	}
+
+	/** Enregistre les commandes. MÉTHODE, pas un bloc d'onload : elle est
+	 *  rejouée au changement de langue pour retraduire les noms affichés dans la
+	 *  palette. Réenregistrer un même `id` remplace l'entrée existante (aucun
+	 *  doublon) et ne touche pas aux raccourcis personnalisés, qui vivent dans
+	 *  le hotkey manager, pas dans la commande.
+	 *  Les `id` sont des identifiants techniques persistés dans les hotkeys de
+	 *  l'utilisateur : jamais traduits, les changer casserait ses raccourcis.
+	 *  Seul `name` l'est. */
+	registerCommands(): void {
+		this.addCommand({
+			id: "open-quiz-dashboard",
+			name: t("plugin.command.openDashboard.name"),
+			hotkeys: [{ modifiers: ["Ctrl", "Shift"], key: "d" }],
+			callback: () => { void this.openDashboard(); },
+		});
+
+		this.addCommand({
+			id: "open-quiz-builder",
+			name: t("plugin.command.openEditor.name"),
+			hotkeys: [{ modifiers: ["Ctrl", "Shift"], key: "e" }],
+			callback: async () => {
+				const existing = this.app.workspace.getLeavesOfType(VIEW_TYPE);
+				if (existing.length > 0) {
+					this.app.workspace.revealLeaf(existing[0]);
+					return;
+				}
+				const leaf = this.app.workspace.getLeaf("tab");
+				await leaf.setViewState({ type: VIEW_TYPE, active: true });
+				this.app.workspace.revealLeaf(leaf);
+			},
+		});
+
+		this.addCommand({
+			id: "open-quiz-from-active-note",
+			name: t("plugin.command.openFromNote.name"),
+			hotkeys: [{ modifiers: ["Ctrl", "Shift"], key: "q" }],
+			callback: async () => {
+				const activeFile = this.app.workspace.getActiveFile();
+				if (!activeFile || !activeFile.path.endsWith(".md")) {
+					new Notice(t("plugin.notice.noActiveNote"));
+					return;
+				}
+				try {
+					const content = await this.app.vault.read(activeFile);
+					// Premier bloc quiz-blocks de la note.
+					const match = content.match(/```quiz-blocks\n([\s\S]*?)\n```/);
+					if (!match) {
+						new Notice(t("plugin.notice.noQuizBlock"));
+						return;
+					}
+					const existing = this.app.workspace.getLeavesOfType(VIEW_TYPE);
+					let leaf: WorkspaceLeaf;
+					if (existing.length > 0) {
+						leaf = existing[0];
+						this.app.workspace.revealLeaf(leaf);
+					} else {
+						leaf = this.app.workspace.getLeaf("tab");
+						await leaf.setViewState({ type: VIEW_TYPE, active: true });
+						this.app.workspace.revealLeaf(leaf);
+					}
+					const view = leaf.view as unknown as QuizFileOpenable;
+					if (view && view.openQuizFile) {
+						await view.openQuizFile(activeFile, match[1]);
+						new Notice(t("plugin.notice.quizOpened", { name: activeFile.name }));
+					}
+				} catch (err) {
+					console.error("Open error:", err);
+					new Notice(t("plugin.notice.openError"));
+				}
+			},
+		});
+	}
+
+	/** Applique une langue à TOUT ce qui est déjà affiché. Sans ça, un
+	 *  changement de langue ne toucherait que les réglages : les vues ouvertes,
+	 *  les noms de commandes de la palette et le tooltip du ribbon resteraient
+	 *  dans l'ancienne langue jusqu'au prochain démarrage d'Obsidian. */
+	applyLanguage(value: LangSetting): void {
+		setLanguage(value);
+		this.registerCommands();
+		if (this._ribbonEl) {
+			this._ribbonEl.setAttribute("aria-label", t("plugin.command.openDashboard.name"));
+		}
+		this.refreshOpenViews();
+	}
+
+	/** Redessine les vues ouvertes (dashboard, éditeur) après un changement de
+	 *  langue. Les libellés sont lus via t() AU RENDU : un simple re-render
+	 *  suffit, aucun rechargement du plugin n'est nécessaire.
+	 *  L'éditeur est remonté via setViewState (son UI est bâtie à onOpen). */
+	refreshOpenViews(): void {
+		for (const leaf of this.app.workspace.getLeavesOfType(VIEW_TYPE_DASHBOARD)) {
+			const view = leaf.view as unknown as DashboardRefreshable;
+			if (view && view.renderSidebar && view.renderCurrentView) {
+				view.renderSidebar();
+				view.renderCurrentView();
+			}
+		}
+		for (const leaf of this.app.workspace.getLeavesOfType(VIEW_TYPE)) {
+			const state = leaf.getViewState();
+			void leaf.setViewState({ type: "empty" }).then(() => leaf.setViewState(state));
+		}
 	}
 
 	getCodeMirrorGlobal(): CodeMirrorGlobal | null {

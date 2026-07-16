@@ -8,6 +8,8 @@ import type { SelectHandle, SelectOption } from "./ui-select";
 import { formatHotkey } from "../hotkey-format";
 import * as voiceInput from "./voice-input";
 import type { AiClient, ImagePayload } from "./ai-client";
+import { t } from "../i18n";
+import type { TransKey } from "../i18n";
 
 /* ══════════════════════════════════════════════════════════
    AI VIEW — Dashboard
@@ -140,7 +142,24 @@ export function createAiHandlers(ctx: DashboardCtx): AiHandlers {
 	let errorMessage = "";
 	let containerRef: HTMLElement | null = null;
 
-	const TYPES = ["Mixte", "Choix unique", "Choix multiple", "Texte libre"];
+	// Le type de questions a DEUX faces, à ne jamais confondre : une VALEUR
+	// canonique, envoyée telle quelle au modèle (ai-client la compare à
+	// « Mixte »/« Choix unique »… pour construire le prompt), et un LIBELLÉ
+	// traduit, seul affiché. Traduire la valeur casserait la génération dès que
+	// l'UI passe en anglais. Les deux listes restent parallèles (même ordre).
+	const TYPE_VALUES = ["Mixte", "Choix unique", "Choix multiple", "Texte libre"];
+	const TYPE_KEYS: TransKey[] = ["ai.type.mixed", "ai.type.single", "ai.type.multiple", "ai.type.text"];
+	// Libellés recalculés à chaque usage (menu, tooltip) : jamais figés dans la
+	// langue du chargement.
+	const typeLabels = (): string[] => TYPE_KEYS.map(k => t(k));
+	const typeLabel = (value: string): string => {
+		const i = TYPE_VALUES.indexOf(value);
+		return i < 0 ? value : t(TYPE_KEYS[i]);
+	};
+	const typeValue = (label: string): string => {
+		const i = typeLabels().indexOf(label);
+		return i < 0 ? TYPE_VALUES[0] : TYPE_VALUES[i];
+	};
 
 	function canGenerate(): boolean {
 		const providerId = ctx.plugin.settings.aiProvider || "";
@@ -180,8 +199,8 @@ export function createAiHandlers(ctx: DashboardCtx): AiHandlers {
 			const titleRow = formCol.createDiv({ cls: "qbd-ai-title-row" });
 			const titleIcon = titleRow.createSpan({ cls: "qbd-ai-title-icon" });
 			setIcon(titleIcon, "sparkles");
-			titleRow.createEl("h2", { cls: "qbd-ai-title", text: "Générer un quiz" });
-			formCol.createEl("p", { cls: "qbd-ai-subtitle", text: "Créez un quiz à partir d'un sujet, d'images ou d'un texte." });
+			titleRow.createEl("h2", { cls: "qbd-ai-title", text: t("ai.page.title") });
+			formCol.createEl("p", { cls: "qbd-ai-subtitle", text: t("ai.page.subtitle") });
 		}
 
 		// Zone du loader de génération : AU-DESSUS du composer (demande
@@ -245,7 +264,7 @@ export function createAiHandlers(ctx: DashboardCtx): AiHandlers {
 				if (tip) return;
 				tip = document.body.createDiv({ cls: "qbd-hover-tip" });
 				const p = aiProviders.PROVIDERS.find(x => x.id === (ctx.plugin.settings.aiProvider || ""));
-				tip.createDiv({ cls: "qbd-hover-tip-title", text: p ? p.name : "Choisir un fournisseur" });
+				tip.createDiv({ cls: "qbd-hover-tip-title", text: p ? p.name : t("ai.provider.choose") });
 				const st = p && providerStatus[p.id];
 				if (st) tip.createDiv({ cls: "qbd-hover-tip-body", text: st.text });
 				const r = sel.el.getBoundingClientRect();
@@ -422,7 +441,7 @@ export function createAiHandlers(ctx: DashboardCtx): AiHandlers {
 					const cur = models.find(m => m.value === currentMv()) || models[0];
 					trigLabel.createSpan({
 						cls: "qbd-model-trigger-name",
-						text: cur ? cur.label : "Connexion requise"
+						text: cur ? cur.label : t("ai.status.loginRequired")
 					});
 					trigger.disabled = !models.length;
 				};
@@ -543,7 +562,7 @@ export function createAiHandlers(ctx: DashboardCtx): AiHandlers {
 		const composerInput = composer.createEl("textarea", { cls: "qbd-ai-composer-input" });
 		// Dictée vocale push-to-talk (opt-in — réglages « Saisie vocale »).
 		voiceInput.attach(ctx, composerInput);
-		composerInput.placeholder = "Décrivez le sujet du quiz, ou collez votre contenu…";
+		composerInput.placeholder = t("ai.composer.placeholder");
 		composerInput.value = composerText;
 		composerInput.rows = 2;
 		const autoGrow = () => {
@@ -578,7 +597,7 @@ export function createAiHandlers(ctx: DashboardCtx): AiHandlers {
 		const composerBottom = composer.createDiv({ cls: "qbd-ai-composer-bottom" });
 		const addBtn = composerBottom.createEl("button", { cls: "qbd-ai-composer-add" });
 		addBtn.type = "button";
-		addBtn.setAttribute("aria-label", "Ajouter du contenu");
+		addBtn.setAttribute("aria-label", t("ai.composer.addContent"));
 		setIcon(addBtn, "plus");
 
 		// Groupe droite : logo fournisseur, sélecteur modèle + effort, puis
@@ -591,14 +610,16 @@ export function createAiHandlers(ctx: DashboardCtx): AiHandlers {
 		// « Options » du formulaire — popover à la demande, tooltip d'état.
 		const optsBtn = composerTools.createEl("button", { cls: "qbd-ai-composer-opts" });
 		optsBtn.type = "button";
-		optsBtn.setAttribute("aria-label", "Options du quiz");
+		optsBtn.setAttribute("aria-label", t("ai.composer.quizOptions"));
 		setIcon(optsBtn, "sliders-horizontal");
 		optsBtn.addEventListener("click", () => {
+			// Le menu ne connaît que des libellés : on traduit à l'aller et on
+			// retraduit la sélection en valeur canonique au retour.
 			openOptionsMenu(optsBtn, {
 				count: questionCount,
-				type: questionType, types: TYPES,
+				type: typeLabel(questionType), types: typeLabels(),
 				onCount: (n) => { questionCount = n; },
-				onType: (t) => { questionType = t; }
+				onType: (label) => { questionType = typeValue(label); }
 			});
 		});
 		// Tooltip au survol : l'état courant (« 5 questions · Mixte »),
@@ -609,7 +630,7 @@ export function createAiHandlers(ctx: DashboardCtx): AiHandlers {
 			optsBtn.addEventListener("mouseenter", () => {
 				if (tip) return;
 				tip = document.body.createDiv({ cls: "qbd-hover-tip" });
-				tip.createDiv({ cls: "qbd-hover-tip-title", text: questionCount + " questions · " + questionType });
+				tip.createDiv({ cls: "qbd-hover-tip-title", text: t("ai.options.tooltip", { count: questionCount, type: typeLabel(questionType) }) });
 				const r = optsBtn.getBoundingClientRect();
 				tip.style.visibility = "hidden";
 				const tr = tip.getBoundingClientRect();
@@ -640,7 +661,7 @@ export function createAiHandlers(ctx: DashboardCtx): AiHandlers {
 			attachStopTip(sendBtn);
 			sendBtn.addEventListener("click", () => { if (activeClient) activeClient.abort(); });
 		} else {
-			sendBtn.setAttribute("aria-label", "Générer le quiz");
+			sendBtn.setAttribute("aria-label", t("ai.composer.generate"));
 			setIcon(sendIcon, "arrow-up");
 			sendBtn.addEventListener("click", () => {
 				if (canGenerate()) startGeneration(containerRef);
@@ -670,13 +691,13 @@ export function createAiHandlers(ctx: DashboardCtx): AiHandlers {
 			openActionMenu(addBtn, [
 				{
 					icon: "paperclip",
-					label: "Ajouter des fichiers ou des images",
+					label: t("ai.add.files"),
 					hint: formatHotkey(ctx.plugin.settings.hotkeyAddFiles),
 					onClick: () => fileInput.click()
 				},
 				{
 					icon: "file-text",
-					label: "Ajouter des notes",
+					label: t("ai.add.notes"),
 					hint: formatHotkey(ctx.plugin.settings.hotkeyAddNotes),
 					onClick: () => openAddNotes()
 				}
@@ -888,26 +909,26 @@ export function createAiHandlers(ctx: DashboardCtx): AiHandlers {
 
 		aiProviders.checkClaudeCode(force).then(res => {
 			if (res.ok) {
-				setStatus("claude-code", providerSelect, "ok", "Claude Code v" + res.version);
+				setStatus("claude-code", providerSelect, "ok", t("ai.status.claudeOk", { version: res.version }));
 			} else if (res.reason === "mobile") {
-				setStatus("claude-code", providerSelect, "warn", "Desktop uniquement");
+				setStatus("claude-code", providerSelect, "warn", t("ai.status.desktopOnly"));
 			} else {
-				setStatus("claude-code", providerSelect, "err", "Claude Code non installé");
+				setStatus("claude-code", providerSelect, "err", t("ai.status.claudeMissing"));
 			}
 			if (res.ok) {
 				setHint("claude-code", hintZone, provider, null);
 			} else if (res.reason === "mobile") {
 				setHint("claude-code", hintZone, provider, {
 					type: "warn", icon: "monitor",
-					text: "La génération via Claude est disponible sur desktop uniquement."
+					text: t("ai.hint.claudeDesktopOnly")
 				});
 			} else {
 				setHint("claude-code", hintZone, provider, {
 					type: "err", icon: "download",
-					text: "Claude Code n'est pas installé. Installez-le puis connectez votre compte avec « /login » :",
+					text: t("ai.hint.claudeNotInstalled"),
 					...installCmd("claude-code"),
 					action: {
-						label: "Installer Claude Code", icon: "arrow-up-right",
+						label: t("ai.hint.installClaude"), icon: "arrow-up-right",
 						onClick: () => window.open("https://claude.com/claude-code", "_blank")
 					}
 				});
@@ -916,18 +937,18 @@ export function createAiHandlers(ctx: DashboardCtx): AiHandlers {
 
 		aiProviders.checkCodex(force).then(res => {
 			if (res.ok) {
-				setStatus("codex", providerSelect, "ok", "Codex CLI v" + res.version);
+				setStatus("codex", providerSelect, "ok", t("ai.status.codexOk", { version: res.version }));
 			} else if (res.reason === "mobile") {
-				setStatus("codex", providerSelect, "warn", "Desktop uniquement");
+				setStatus("codex", providerSelect, "warn", t("ai.status.desktopOnly"));
 			} else {
-				setStatus("codex", providerSelect, "err", "Codex CLI non installé");
+				setStatus("codex", providerSelect, "err", t("ai.status.codexMissing"));
 			}
 			if (res.ok) {
 				setHint("codex", hintZone, provider, null);
 			} else if (res.reason === "mobile") {
 				setHint("codex", hintZone, provider, {
 					type: "warn", icon: "monitor",
-					text: "La génération via ChatGPT (Codex CLI) est disponible sur desktop uniquement."
+					text: t("ai.hint.codexDesktopOnly")
 				});
 			} else {
 				// « Codex CLI », jamais « Codex » nu : l'APPLICATION Codex
@@ -938,10 +959,10 @@ export function createAiHandlers(ctx: DashboardCtx): AiHandlers {
 				// Ahmed) ; npm reste détecté aussi.
 				setHint("codex", hintZone, provider, {
 					type: "err", icon: "download",
-					text: "Le Codex CLI n'est pas installé — c'est l'outil de terminal d'OpenAI, différent de l'application Codex. Installez-le puis connectez votre compte ChatGPT avec « codex login » :",
+					text: t("ai.hint.codexNotInstalled"),
 					...installCmd("codex"),
 					action: {
-						label: "Installer Codex CLI", icon: "arrow-up-right",
+						label: t("ai.hint.installCodex"), icon: "arrow-up-right",
 						onClick: () => window.open("https://learn.chatgpt.com/docs/codex/cli#getting-started", "_blank")
 					}
 				});
@@ -951,38 +972,54 @@ export function createAiHandlers(ctx: DashboardCtx): AiHandlers {
 		aiProviders.checkKimi(force).then(res => {
 			if (!res.ok) {
 				setStatus("kimi-code", providerSelect, res.reason === "mobile" ? "warn" : "err",
-					res.reason === "mobile" ? "Desktop uniquement" : "Kimi Code non installé");
+					res.reason === "mobile" ? t("ai.status.desktopOnly") : t("ai.status.kimiMissing"));
 				setHint("kimi-code", hintZone, provider, res.reason === "mobile"
 					? {
 						type: "warn", icon: "monitor",
-						text: "La génération via Kimi (Kimi Code CLI) est disponible sur desktop uniquement."
+						text: t("ai.hint.kimiDesktopOnly")
 					}
 					: {
 						type: "err", icon: "download",
-						text: "Le Kimi Code CLI n'est pas installé. Installez-le puis connectez votre abonnement avec « /login » :",
+						text: t("ai.hint.kimiNotInstalled"),
 						...installCmd("kimi-code"),
 						action: {
-							label: "Installer Kimi Code", icon: "arrow-up-right",
+							label: t("ai.hint.installKimi"), icon: "arrow-up-right",
 							onClick: () => window.open("https://www.kimi.com/code", "_blank")
 						}
 					});
 				return;
 			}
+			// Statut = le CLI et sa version, connecté ou non (comme Claude/Codex/
+			// Ollama) : c'est la PASTILLE qui dit l'état — verte si des modèles
+			// sont là, orange s'il faut encore /login (demande Ahmed). Le détail
+			// et la marche à suivre vivent dans le hint, pas dans le sous-titre.
+			setStatus("kimi-code", providerSelect,
+				res.models.length ? "ok" : "warn",
+				t("ai.status.kimiVersion", { version: res.version }));
+
 			// CLI présent mais aucun modèle : le compte n'est pas connecté (tant
 			// que /login n'a rien peuplé, `provider list` est vide). État distinct
 			// d'un CLI absent → warn + marche à suivre, pas une erreur rouge.
 			if (!res.models.length) {
-				setStatus("kimi-code", providerSelect, "warn", "Connexion requise");
 				setHint("kimi-code", hintZone, provider, {
 					type: "warn", icon: "log-in",
-					text: "Kimi Code v" + res.version + " est installé mais aucun compte n'est connecté. Dans un terminal, lancez « kimi » puis tapez /login — vos modèles apparaîtront ici.",
+					text: t("ai.hint.kimiNotLoggedIn"),
 					action: {
-						label: "Voir les abonnements Kimi", icon: "arrow-up-right",
-						onClick: () => window.open("https://www.kimi.com/code", "_blank")
+						label: t("ai.hint.kimiPlans"), icon: "arrow-up-right",
+						// Page d'abonnement, PAS kimi.com/code : les cartes (Moderato,
+						// Allegretto… avec « Kimi Code available » et le bouton
+						// Subscribe) y sont visibles d'emblée, alors que sur /code il
+						// faut chercher les offres plus bas (choix Ahmed, vérifié au
+						// rendu le 2026-07-16). URL NUE volontairement : les « ?from=…
+						// &track_id=… » vus dans le navigateur sont le tracking du site
+						// (provenance du clic + id de visite), qu'il régénère seul —
+						// les recopier ferait passer le plugin pour sa propre topbar.
+						// À ne pas « corriger » en scrollant la page : une page tierce
+						// ouverte par window.open est cross-origin, donc impilotable.
+						onClick: () => window.open("https://www.kimi.com/membership/pricing", "_blank")
 					}
 				});
 			} else {
-				setStatus("kimi-code", providerSelect, "ok", "Kimi Code v" + res.version);
 				setHint("kimi-code", hintZone, provider, null);
 			}
 			// Modèles arrivés (ou disparus) → le trigger du composer se redessine.
@@ -994,8 +1031,12 @@ export function createAiHandlers(ctx: DashboardCtx): AiHandlers {
 				// Affiche la version d'Ollama installée (comme Claude/Codex), ex.
 				// « Ollama v0.31.2 ». Repli sur l'état du cache si version absente.
 				const n = res.models.length;
-				const fallback = n > 0 ? (n + " local" + (n > 1 ? "aux" : "") + " + cloud") : "Cloud prêt";
-				setStatus("ollama", providerSelect, "ok", res.version ? ("Ollama v" + res.version) : fallback);
+				// Deux clés plutôt qu'un pluriel calculé : « local » ne s'accorde
+				// qu'en français, et c'est à chaque langue de le décider.
+				const fallback = n > 0
+					? t(n > 1 ? "ai.status.ollamaLocalMany" : "ai.status.ollamaLocalOne", { count: n })
+					: t("ai.status.ollamaCloudReady");
+				setStatus("ollama", providerSelect, "ok", res.version ? t("ai.status.ollamaOk", { version: res.version }) : fallback);
 				setHint("ollama", hintZone, provider, null);
 				if (provider !== "ollama") return;
 				// Reconstruit les options (sélection + locaux réellement installés,
@@ -1016,13 +1057,13 @@ export function createAiHandlers(ctx: DashboardCtx): AiHandlers {
 				const inst = await aiProviders.checkOllamaInstalled(force);
 				setStatus("ollama", providerSelect,
 					inst.installed ? "warn" : "err",
-					inst.installed ? "Serveur arrêté" : "Non installé");
+					inst.installed ? t("ai.status.serverStopped") : t("ai.status.notInstalled"));
 				if (inst.installed) {
 					setHint("ollama", hintZone, provider, {
 						type: "warn", icon: "server-off",
-						text: "Ollama est installé mais son serveur ne tourne pas.",
+						text: t("ai.hint.ollamaServerOff"),
 						action: {
-							label: "Démarrer Ollama", icon: "circle-play",
+							label: t("ai.hint.startOllama"), icon: "circle-play",
 							onClick: () => {
 								aiProviders.startOllamaApp();
 								// Poll : vert automatique dès que le
@@ -1045,10 +1086,10 @@ export function createAiHandlers(ctx: DashboardCtx): AiHandlers {
 				} else {
 					setHint("ollama", hintZone, provider, {
 						type: "err", icon: "download",
-						text: "Ollama n'est pas installé. Installez-le, lancez-le, et le plugin le détectera automatiquement :",
+						text: t("ai.hint.ollamaNotInstalled"),
 						...installCmd("ollama"),
 						action: {
-							label: "Télécharger Ollama", icon: "arrow-up-right",
+							label: t("ai.hint.downloadOllama"), icon: "arrow-up-right",
 							onClick: () => window.open("https://ollama.com/download", "_blank")
 						}
 					});
@@ -1079,7 +1120,7 @@ export function createAiHandlers(ctx: DashboardCtx): AiHandlers {
 				try {
 					const content = await extractPdfText(file);
 					if (!content.trim()) {
-						new Notice("« " + file.name + " » : aucun texte extractible (PDF scanné ?)");
+						new Notice(t("ai.notice.pdfNoText", { name: file.name }));
 					} else if (!noteAttachments.some(n => n.name === file.name)) {
 						noteAttachments.push({ name: file.name, content });
 					}
@@ -1105,7 +1146,7 @@ export function createAiHandlers(ctx: DashboardCtx): AiHandlers {
 			render(containerRef);
 		}
 		if (rejected.length) {
-			new Notice("Format non pris en charge : " + rejected.join(", ") + " (images, PDF, .md, .txt)");
+			new Notice(t("ai.notice.unsupportedFormat", { files: rejected.join(", ") }));
 		}
 	}
 
@@ -1130,7 +1171,7 @@ export function createAiHandlers(ctx: DashboardCtx): AiHandlers {
 	   notes » et raccourci — remplace l'ancienne « note active »). */
 	async function attachNoteVaultFile(file: TFile): Promise<void> {
 		if (noteAttachments.some(n => n.path === file.path)) {
-			new Notice("« " + file.basename + " » est déjà attachée");
+			new Notice(t("ai.notice.noteAlreadyAttached", { name: file.basename }));
 			return;
 		}
 		try {
@@ -1138,7 +1179,7 @@ export function createAiHandlers(ctx: DashboardCtx): AiHandlers {
 			noteAttachments.push({ name: file.basename, content, path: file.path });
 			render(containerRef);
 		} catch (e) {
-			new Notice("Impossible de lire « " + file.basename + " »");
+			new Notice(t("ai.notice.noteReadFailed", { name: file.basename }));
 		}
 	}
 
@@ -1172,7 +1213,7 @@ export function createAiHandlers(ctx: DashboardCtx): AiHandlers {
 		const loader = host.createDiv({ cls: "qbd-ai-preview-loading" });
 		const iconWrap = loader.createDiv({ cls: "qbd-ai-loading-icon" });
 		setIcon(iconWrap, "sparkles");
-		loader.createEl("p", { cls: "qbd-ai-loading-title", text: "Quiz en cours de création…" });
+		loader.createEl("p", { cls: "qbd-ai-loading-title", text: t("ai.loading.title") });
 
 		const dots = loader.createDiv({ cls: "qbd-ai-loading-dots" });
 		for (let i = 0; i < 3; i++) {
@@ -1184,12 +1225,12 @@ export function createAiHandlers(ctx: DashboardCtx): AiHandlers {
 		const errorEl = host.createDiv({ cls: "qbd-ai-preview-error" });
 		const errorIcon = errorEl.createDiv({ cls: "qbd-ai-error-icon" });
 		setIcon(errorIcon, "alert-triangle");
-		errorEl.createEl("p", { cls: "qbd-ai-error-title", text: "Échec de la génération" });
+		errorEl.createEl("p", { cls: "qbd-ai-error-title", text: t("ai.error.title") });
 		errorEl.createEl("p", { cls: "qbd-ai-error-msg", text: errorMessage });
 
 		const retryBtn = errorEl.createEl("button", {
 			cls: "qbd-btn qbd-btn--ghost qbd-ai-error-retry",
-			text: "Réessayer"
+			text: t("ai.error.retry")
 		});
 		retryBtn.addEventListener("click", () => {
 			phase = "idle";
@@ -1206,11 +1247,11 @@ export function createAiHandlers(ctx: DashboardCtx): AiHandlers {
 		const countWrap = bar.createDiv({ cls: "qbd-ai-result-count-wrap" });
 		const checkIcon = countWrap.createSpan({ cls: "qbd-ai-result-check" });
 		setIcon(checkIcon, "check-circle");
-		countWrap.createSpan({ cls: "qbd-ai-result-count", text: `${generatedQuestions.length} questions générées` });
+		countWrap.createSpan({ cls: "qbd-ai-result-count", text: t("ai.result.count", { count: generatedQuestions.length }) });
 
 		const insertBtn = bar.createEl("button", {
 			cls: "qbd-btn qbd-btn--primary",
-			text: "Insérer dans une note"
+			text: t("ai.result.insert")
 		});
 		const insertIcon = insertBtn.createSpan({ cls: "qbd-btn-icon" });
 		setIcon(insertIcon, "plus");
@@ -1234,7 +1275,7 @@ export function createAiHandlers(ctx: DashboardCtx): AiHandlers {
 		const restartBtn = bar.createEl("button", { cls: "qbd-btn qbd-btn--ghost" });
 		const restartIcon = restartBtn.createSpan({ cls: "qbd-btn-icon" });
 		setIcon(restartIcon, "rotate-ccw");
-		restartBtn.createSpan({ text: "Recommencer" });
+		restartBtn.createSpan({ text: t("ai.result.restart") });
 		restartBtn.addEventListener("click", () => {
 			phase = "idle";
 			generatedQuestions = [];
@@ -1309,7 +1350,7 @@ export function createAiHandlers(ctx: DashboardCtx): AiHandlers {
 			if (tip) return;
 			tip = document.body.createDiv({ cls: "qbd-hover-tip" });
 			const row = tip.createDiv({ cls: "qbd-hover-tip-row" });
-			row.createSpan({ cls: "qbd-hover-tip-title", text: "Arrêter" });
+			row.createSpan({ cls: "qbd-hover-tip-title", text: t("ai.composer.stop") });
 			row.createSpan({ cls: "qbd-hover-tip-esc", text: "Esc" });
 			const r = btn.getBoundingClientRect();
 			tip.style.visibility = "hidden";
@@ -1349,8 +1390,11 @@ export function createAiHandlers(ctx: DashboardCtx): AiHandlers {
 			const notesBlock = noteAttachments
 				.map(n => (noteAttachments.length > 1 ? "--- " + n.name + " ---\n" : "") + n.content)
 				.join("\n\n");
+			// Repli quand des images sont envoyées SANS consigne : instruction au
+			// modèle (pas de l'UI) → anglais, et surtout « dans leur langue »,
+			// sinon des images françaises donneraient un quiz anglais.
 			const prompt = source === "image"
-				? (composerText.trim() || "Analyse les images fournies")
+				? (composerText.trim() || "Analyze the provided images and build the quiz in their language")
 				: source === "text"
 				? (composerText.trim() ? composerText.trim() + "\n\n" : "") + notesBlock
 				: composerText.trim();
@@ -1388,7 +1432,7 @@ export function createAiHandlers(ctx: DashboardCtx): AiHandlers {
 				render(container);
 				return;
 			}
-			errorMessage = e.message || "Vérifiez vos paramètres IA dans les paramètres du plugin.";
+			errorMessage = e.message || t("ai.error.checkSettings");
 			generatedQuestions = [];
 		}
 
@@ -1428,15 +1472,15 @@ export function createAiHandlers(ctx: DashboardCtx): AiHandlers {
 
 			// Vérifier s'il y a déjà un bloc quiz-blocks
 			if (content.includes("```quiz-blocks")) {
-				new Notice("Un bloc quiz-blocks existe déjà dans « " + file.basename + " ». Ouvrez l'éditeur pour le modifier.");
+				new Notice(t("ai.notice.blockExists", { name: file.basename }));
 				return;
 			}
 
 			content += "\n\n" + quizBlock;
 			await ctx.app.vault.modify(file, content);
-			new Notice("Quiz inséré dans « " + file.basename + " »");
+			new Notice(t("ai.notice.quizInserted", { name: file.basename }));
 		} catch (err) {
-			new Notice("Erreur lors de l'insertion");
+			new Notice(t("ai.notice.insertFailed"));
 		}
 	}
 

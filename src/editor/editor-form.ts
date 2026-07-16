@@ -1,3 +1,4 @@
+import { t } from "../i18n";
 import type { EditorCtx } from "../types/editor-ctx";
 import type { DraftQuestion } from "./utils";
 
@@ -44,10 +45,10 @@ export function createEditorFormHandlers(ctx: EditorCtx): EditorFormHandlers {
 		const promptSection = wrap.createEl("details", { cls: "qb-section-collapsible", attr: { open: "" } });
 		const promptSummary = promptSection.createEl("summary", { cls: "qb-section-header" });
 		ctx._setIcon(promptSummary, "file-question");
-		promptSummary.createSpan({ text: "Énoncé" });
+		promptSummary.createSpan({ text: t("editor.form.promptSection") });
 		const promptContent = promptSection.createDiv({ cls: "qb-section-content" });
 
-		_field(promptContent, "", (q._promptHtml || '').replace(/<br\s*\/?>/gi, '\n'), "Votre question...", true, v => {
+		_field(promptContent, "", (q._promptHtml || '').replace(/<br\s*\/?>/gi, '\n'), t("editor.form.promptPlaceholder"), true, v => {
 			q._promptHtml = v; // Garde les \n tels quels
 			onEdit();
 		});
@@ -61,10 +62,10 @@ export function createEditorFormHandlers(ctx: EditorCtx): EditorFormHandlers {
 		const hintSection = wrap.createEl("details", { cls: "qb-section-collapsible" });
 		const hintSummary = hintSection.createEl("summary", { cls: "qb-section-header" });
 		ctx._setIcon(hintSummary, "lightbulb");
-		hintSummary.createSpan({ text: "Indice" });
+		hintSummary.createSpan({ text: t("editor.hint.label") });
 		const hintContent = hintSection.createDiv({ cls: "qb-section-content" });
 
-		_field(hintContent, "", (q.hint || '').replace(/<br\s*\/?>/gi, '\n'), "Un indice pour aider...", true, v => {
+		_field(hintContent, "", (q.hint || '').replace(/<br\s*\/?>/gi, '\n'), t("editor.hint.placeholder"), true, v => {
 			q.hint = v; // Garde les \n tels quels
 			onEdit();
 		});
@@ -73,10 +74,10 @@ export function createEditorFormHandlers(ctx: EditorCtx): EditorFormHandlers {
 		const explainSection = wrap.createEl("details", { cls: "qb-section-collapsible" });
 		const explainSummary = explainSection.createEl("summary", { cls: "qb-section-header" });
 		ctx._setIcon(explainSummary, "book-open");
-		explainSummary.createSpan({ text: "Explication (Markdown)" });
+		explainSummary.createSpan({ text: t("editor.form.explainSection") });
 		const explainContent = explainSection.createDiv({ cls: "qb-section-content" });
 
-		_field(explainContent, "", (q.explain || '').replace(/<br\s*\/?>/gi, '\n'), "### Rappels\n- **Terme** — Définition", true, v => {
+		_field(explainContent, "", (q.explain || '').replace(/<br\s*\/?>/gi, '\n'), t("editor.form.explainPlaceholder"), true, v => {
 			q.explain = v; // Garde les \n tels quels
 			delete q._explainHtml;
 			onEdit();
@@ -84,15 +85,21 @@ export function createEditorFormHandlers(ctx: EditorCtx): EditorFormHandlers {
 	}
 
 	// ── Entités pour la toolbar ──
-	const ENTITIES = [
-		{ label: '>', insert: '&gt;', title: 'Supérieur (>)' },
-		{ label: '<', insert: '&lt;', title: 'Inférieur (<)' },
-		{ label: '&', insert: '&amp;', title: 'Esperluette (&)' },
-		{ label: '␣', insert: '&nbsp;', title: 'Espace insécable' },
-		{ label: "'", insert: "&#39;", title: 'Apostrophe' },
-		{ label: '"', insert: "&quot;", title: 'Guillemet' },
-		{ label: '```', insert: '<pre><code>\n</code></pre>', title: 'Bloc de code' },
-	];
+	// FONCTION et non constante : la liste était évaluée à la création des
+	// handlers (montage de l'éditeur), ce qui aurait figé les infobulles dans la
+	// langue d'alors. Appelée depuis _field, donc au rendu. `label` et `insert`
+	// sont des symboles/entités HTML — jamais traduits.
+	function entities(): { label: string; insert: string; title: string }[] {
+		return [
+			{ label: '>', insert: '&gt;', title: t("editor.entity.gt") },
+			{ label: '<', insert: '&lt;', title: t("editor.entity.lt") },
+			{ label: '&', insert: '&amp;', title: t("editor.entity.amp") },
+			{ label: '␣', insert: '&nbsp;', title: t("editor.entity.nbsp") },
+			{ label: "'", insert: "&#39;", title: t("editor.entity.apos") },
+			{ label: '"', insert: "&quot;", title: t("editor.entity.quot") },
+			{ label: '```', insert: '<pre><code>\n</code></pre>', title: t("editor.entity.codeBlock") },
+		];
+	}
 
 	function _insertAt(ta: HTMLTextAreaElement, text: string, cb: (value: string) => void): void {
 		const s = ta.selectionStart ?? 0;
@@ -120,7 +127,7 @@ export function createEditorFormHandlers(ctx: EditorCtx): EditorFormHandlers {
 			const toolbar = wrap.createDiv({ cls: "qb-entity-toolbar" });
 			const ta = wrap.createEl("textarea", { cls: "qb-field-textarea qb-prompt-editor", placeholder, text: value ?? "" });
 
-			ENTITIES.forEach(ent => {
+			entities().forEach(ent => {
 				const btn = toolbar.createEl("button", { cls: "qb-entity-btn", text: ent.label });
 				btn.title = ent.title;
 				btn.addEventListener("click", (e) => { e.preventDefault(); _insertAt(ta, ent.insert, onChange); _autoResize(ta); });
@@ -188,7 +195,7 @@ export function createEditorFormHandlers(ctx: EditorCtx): EditorFormHandlers {
 		const rb0 = q.resourceButton;
 		const has = !!rb0;
 		const fileName = rb0 && rb0.fileName ? rb0.fileName : "";
-		const summaryText = has && fileName ? `Ressource — ${fileName}` : "Ressource";
+		const summaryText = has && fileName ? t("editor.form.resourceSectionWithFile", { file: fileName }) : t("editor.form.resourceSection");
 
 		const details = parent.createEl("details", { cls: "qb-section-collapsible" + (has ? "" : " qb-section-locked"), attr: has ? { open: "" } : {} });
 		const summary = details.createEl("summary", { cls: "qb-section-header" });
@@ -196,12 +203,14 @@ export function createEditorFormHandlers(ctx: EditorCtx): EditorFormHandlers {
 		const summaryLabel = summary.createSpan({ text: summaryText, cls: "qb-resource-summary-text" });
 
 		// Toggle dans le header pour activer/désactiver
-		const toggle = summary.createEl("button", { cls: "qb-resource-toggle-btn", attr: { type: "button", title: has ? "Désactiver" : "Activer" } });
+		const toggle = summary.createEl("button", { cls: "qb-resource-toggle-btn", attr: { type: "button", title: t(has ? "editor.toggle.disable" : "editor.toggle.enable") } });
 		toggle.createSpan({ cls: "qb-resource-toggle-dot" + (has ? " is-on" : "") });
 		toggle.addEventListener("click", (e) => {
 			e.preventDefault();
 			e.stopPropagation();
-			q.resourceButton = has ? null : { label: "Activité PT", fileName: "" };
+			// Libellé de DÉPART du bouton ressource : contenu (modifiable puis
+			// écrit dans le .md), pas un jeton de format — traduit à la création.
+			q.resourceButton = has ? null : { label: t("editor.form.resourceDefaultLabel"), fileName: "" };
 			onEdit();
 			renderEditor();
 		});
@@ -211,22 +220,24 @@ export function createEditorFormHandlers(ctx: EditorCtx): EditorFormHandlers {
 const group = contentDiv.createDiv({ cls: "qb-resource-group" });
 const updateSummary = () => {
     const fn = q.resourceButton?.fileName || "";
-    summaryLabel.textContent = fn ? `Ressource — ${fn}` : "Ressource";
+    summaryLabel.textContent = fn ? t("editor.form.resourceSectionWithFile", { file: fn }) : t("editor.form.resourceSection");
 };
-_field(group, "Label", rb0.label, "Activité PT", false, v => { rb0.label = v; onEdit(); updateSummary(); });
-_field(group, "Nom du fichier à ouvrir", rb0.fileName, "fichier.pka", false, v => { rb0.fileName = v; onEdit(); updateSummary(); });
+_field(group, t("editor.form.resourceLabel"), rb0.label, t("editor.form.resourceLabelPlaceholder"), false, v => { rb0.label = v; onEdit(); updateSummary(); });
+_field(group, t("editor.form.resourceFileName"), rb0.fileName, t("editor.form.resourceFilePlaceholder"), false, v => { rb0.fileName = v; onEdit(); updateSummary(); });
 
 
 		const helpNote = contentDiv.createEl("p", { cls: "qb-resource-help-note" });
-		helpNote.createSpan({ text: "Le fichier doit être placé dans le coffre" });
+		helpNote.createSpan({ text: t("editor.form.resourceHelp") });
 	}
 
 	function _renderTypeFields(box: HTMLElement, q: DraftQuestion): void {
-		const t = q._type;
+		// Renommé `t` → `qType` : le type de question masquait la fonction de
+		// traduction t() importée en tête de module.
+		const qType = q._type;
 		const rerender = () => { onEdit(); };
 
-		if (t === "single" || t === "multi") {
-			const isMulti = t === "multi";
+		if (qType === "single" || qType === "multi") {
+			const isMulti = qType === "multi";
 			const cardsContainer = box.createDiv({ cls: "qb-answer-cards" });
 
 			const renderCards = () => {
@@ -237,7 +248,7 @@ _field(group, "Nom du fichier à ouvrir", rb0.fileName, "fichier.pka", false, v 
 					const card = cardsContainer.createDiv({ cls: `qb-answer-card ${isCorrect ? "qb-answer-correct" : "qb-answer-wrong"}` });
 
 					const toggleRow = card.createDiv({ cls: "qb-answer-toggle-row" });
-					toggleRow.createSpan({ cls: "qb-answer-toggle-label", text: isCorrect ? "Bonne réponse" : "Mauvaise réponse" });
+					toggleRow.createSpan({ cls: "qb-answer-toggle-label", text: t(isCorrect ? "editor.answer.correct" : "editor.answer.wrong") });
 
 					const toggle = toggleRow.createDiv({ cls: "qb-answer-toggle" });
 					const track = toggle.createDiv({ cls: "qb-answer-toggle-track" });
@@ -280,7 +291,7 @@ _field(group, "Nom du fichier à ouvrir", rb0.fileName, "fichier.pka", false, v 
 						cls: "qb-answer-input",
 						type: "text",
 						value: o || "",
-						placeholder: "Saisir la réponse"
+						placeholder: t("editor.answer.placeholder")
 					});
 
 					input.addEventListener("input", () => {
@@ -350,7 +361,7 @@ _field(group, "Nom du fichier à ouvrir", rb0.fileName, "fichier.pka", false, v 
 				});
 
 				const addBtn = box.createEl("button", { cls: "qb-answer-add" });
-				addBtn.appendChild(document.createTextNode("Ajouter une réponse"));
+				addBtn.appendChild(document.createTextNode(t("editor.answer.add")));
 				addBtn.addEventListener("click", () => {
 					q.options!.push("");
 					if (isMulti && q.options!.length === 1) {
@@ -363,17 +374,17 @@ _field(group, "Nom du fichier à ouvrir", rb0.fileName, "fichier.pka", false, v 
 			renderCards();
 		}
 
-		if (t === "ordering") {
-			_arrayEditor(box, "Possibilités", q.possibilities!, () => {
+		if (qType === "ordering") {
+			_arrayEditor(box, t("editor.ordering.possibilities"), q.possibilities!, () => {
 				while (q.correctOrder!.length < q.possibilities!.length) q.correctOrder!.push(q.correctOrder!.length);
 				q.correctOrder = q.correctOrder!.slice(0, q.possibilities!.length);
-				while (q.slots!.length < q.possibilities!.length) q.slots!.push(`Étape ${q.slots!.length + 1}`);
+				while (q.slots!.length < q.possibilities!.length) q.slots!.push(t("editor.ordering.slotDefault", { n: q.slots!.length + 1 }));
 				q.slots = q.slots!.slice(0, q.possibilities!.length);
 				rerender();
-			}, "Élément", "Ajouter");
-			_arrayEditor(box, "Labels des slots", q.slots!, rerender, "Slot", "Ajouter");
+			}, t("editor.ordering.itemPlaceholder"), t("editor.action.add"));
+			_arrayEditor(box, t("editor.ordering.slotLabels"), q.slots!, rerender, t("editor.ordering.slotPlaceholder"), t("editor.action.add"));
 
-			box.createEl("label", { cls: "qb-field-label", text: "Ordre correct (index → slot)" });
+			box.createEl("label", { cls: "qb-field-label", text: t("editor.ordering.correctOrder") });
 			(q.correctOrder || []).forEach((val, i) => {
 				const row = box.createDiv({ cls: "qb-arr-row" });
 				row.createSpan({ cls: "qb-arr-idx", text: (q.slots?.[i] || `S${i}`) + " →" });
@@ -383,21 +394,21 @@ _field(group, "Nom du fichier à ouvrir", rb0.fileName, "fichier.pka", false, v 
 			});
 		}
 
-		if (t === "matching") {
-			_arrayEditor(box, "Lignes (situations)", q.rows!, () => {
+		if (qType === "matching") {
+			_arrayEditor(box, t("editor.matching.rows"), q.rows!, () => {
 				while (q.correctMap!.length < q.rows!.length) q.correctMap!.push(0);
 				q.correctMap = q.correctMap!.slice(0, q.rows!.length);
 				rerender();
-			}, "Situation", "Ajouter");
-			_arrayEditor(box, "Choix (supports)", q.choices!, () => {
+			}, t("editor.matching.rowPlaceholder"), t("editor.action.add"));
+			_arrayEditor(box, t("editor.matching.choices"), q.choices!, () => {
 				q.correctMap = q.correctMap!.map(v => Math.min(v, q.choices!.length - 1));
 				rerender();
-			}, "Choix", "Ajouter");
+			}, t("editor.matching.choicePlaceholder"), t("editor.action.add"));
 
-			box.createEl("label", { cls: "qb-field-label", text: "Associations" });
+			box.createEl("label", { cls: "qb-field-label", text: t("editor.matching.mapping") });
 			(q.rows || []).forEach((row, i) => {
 				const r = box.createDiv({ cls: "qb-match-row" });
-				r.createSpan({ cls: "qb-match-label", text: row || `Ligne ${i}` });
+				r.createSpan({ cls: "qb-match-label", text: row || t("editor.matching.rowFallback", { n: i }) });
 				_iconSpan(r, "arrow-right", "qb-match-arrow");
 				const sel = r.createEl("select", { cls: "qb-field-select" });
 				(q.choices || []).forEach((c, ci) => {
@@ -408,15 +419,16 @@ _field(group, "Nom du fichier à ouvrir", rb0.fileName, "fichier.pka", false, v 
 			});
 		}
 
-		if (["text", "cmd", "powershell", "bash"].includes(t)) {
-			if (t === "cmd" || t === "powershell")
-				_field(box, "Préfix du prompt", q.commandPrefix, t === "cmd" ? "C:\\>" : "PS>", false, v => { q.commandPrefix = v; rerender(); });
-			_field(box, "Placeholder", q.placeholder, "Texte indicatif...", false, v => { q.placeholder = v; rerender(); });
-			_arrayEditor(box, "Réponses acceptées", q.acceptedAnswers!, rerender, "Réponse", "Ajouter");
+		if (["text", "cmd", "powershell", "bash"].includes(qType)) {
+			// "C:\>" / "PS>" : invites de commandes réelles, pas de l'UI.
+			if (qType === "cmd" || qType === "powershell")
+				_field(box, t("editor.text.commandPrefix"), q.commandPrefix, qType === "cmd" ? "C:\\>" : "PS>", false, v => { q.commandPrefix = v; rerender(); });
+			_field(box, t("editor.text.placeholderLabel"), q.placeholder, t("editor.text.placeholderHint"), false, v => { q.placeholder = v; rerender(); });
+			_arrayEditor(box, t("editor.text.acceptedAnswers"), q.acceptedAnswers!, rerender, t("editor.text.answerPlaceholder"), t("editor.action.add"));
 			const toggleWrap = box.createDiv({ cls: "qb-toggle-wrap" });
 			const track = toggleWrap.createDiv({ cls: `qb-toggle-track ${q.caseSensitive ? "on" : ""}` });
 			track.createDiv({ cls: "qb-toggle-thumb" });
-			toggleWrap.appendChild(document.createTextNode("Sensible à la casse"));
+			toggleWrap.appendChild(document.createTextNode(t("editor.text.caseSensitive")));
 			toggleWrap.addEventListener("click", () => { q.caseSensitive = !q.caseSensitive; view.render(); view.scheduleSave?.(); });
 		}
 	}

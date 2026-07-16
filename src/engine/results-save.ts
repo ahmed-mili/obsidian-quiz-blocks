@@ -8,6 +8,7 @@ import type {
 	OrderingQuestion,
 	MatchingQuestion,
 } from "../types/quiz";
+import { t } from "../i18n";
 
 export interface OptionEntry {
 	index: number;
@@ -323,6 +324,13 @@ export function createResultsSaver(ctx: EngineCtx): ResultsSaverHandlers {
 		};
 	}
 
+	/* Le payload est un ARTEFACT DE DONNÉES (JSON versionné par schemaVersion,
+	   écrit dans RESULTS_DIR), pas de l'UI : ses clés, ses `kind` (« text »,
+	   « ordering »…) et ses libellés de repli (« Option 3 », « Question 2 ») ne
+	   passent PAS par le dictionnaire — les traduire rendrait deux exports de la
+	   même session illisibles côté outillage. Seul `selfEvaluation.label` suit la
+	   langue de l'UI : c'est le doublon lisible de `selfEvaluation.value`, qui
+	   reste la clé stable (« understood » / « partial » / « review »). */
 	function buildPayload(): ResultsPayload {
 		const mode = ctx.textOnly?.isTextOnlyMode?.() ? "training" : "qcm";
 		const now = new Date();
@@ -373,7 +381,9 @@ export function createResultsSaver(ctx: EngineCtx): ResultsSaverHandlers {
 	async function saveCurrentResults(): Promise<SavedResults> {
 		const adapter = ctx.app?.vault?.adapter;
 		if (!adapter || typeof adapter.write !== "function") {
-			throw new Error("Impossible d'accéder au stockage du vault.");
+			// Message affiché tel quel à l'élève (Notice « Erreur sauvegarde
+			// résultats : … » dans interactions.ts) → traduit.
+			throw new Error(t("engine.result.storageUnavailable"));
 		}
 
 		await ensureFolder(adapter, RESULTS_DIR);

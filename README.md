@@ -64,6 +64,31 @@ Press `Ctrl+Shift+E` (or click the 🎓 icon in the ribbon) to open the **Quiz E
 
 ---
 
+## AI Quiz Generation
+
+Press `Ctrl+Shift+D` to open the **Dashboard**, then go to **Generate**: describe a topic, paste a text, attach notes or images, and get a ready-to-edit quiz.
+
+Generation runs through the **AI tools you already have installed locally** — the plugin never asks for an API key and never stores one. Your requests go through your own CLI session and count against your own subscription.
+
+| Provider | Requires | Notes |
+|---|---|---|
+| **Claude** | [Claude Code](https://claude.com/claude-code) CLI, `/login` | Pro / Max / Team / Enterprise account |
+| **ChatGPT** | [Codex CLI](https://learn.chatgpt.com/docs/codex/cli), `codex login` | The Codex *CLI*, not the Codex desktop app |
+| **Kimi** | [Kimi Code](https://www.kimi.com/code) CLI, `/login` | Paid Kimi Code plan |
+| **Ollama** | [Ollama](https://ollama.com/download) | Local models, and cloud models via `ollama signin` |
+
+The model list of each provider is read from the CLI itself, so new models show up on their own, without a plugin update. The plugin detects each tool and tells you what is missing (not installed, server stopped, not signed in) with the exact command to fix it.
+
+Quizzes are generated **in the language of your prompt**: ask in French, get a French quiz; ask in Arabic, get an Arabic one. This is independent of the plugin's interface language.
+
+---
+
+## Language
+
+The interface follows **your Obsidian language** by default (English, or French where translated). You can force it in **Settings → Quiz Blocks → Language**: `Automatic`, `English`, or `Français`.
+
+---
+
 ## Installation
 
 The recommended way to install **Quiz Blocks** is via **BRAT** (Beta Reviewers Auto-update Tool), which handles installation and automatic updates directly from GitHub.

@@ -6,6 +6,7 @@ import type {
 	MultiSelectQuestion,
 	TextOnlyRating,
 } from "../types/quiz";
+import { t } from "../i18n";
 
 export interface TextOnlyResults {
 	understood: number;
@@ -43,10 +44,15 @@ export interface TextOnlyHandlers {
 }
 
 export function createTextOnlyHandlers(ctx: EngineCtx): TextOnlyHandlers {
+	/* `label` en GETTER, pas en chaîne figée : RATINGS est construit une fois par
+	   instance de quiz (createTextOnlyHandlers), un libellé évalué ici resterait
+	   dans la langue en vigueur à l'assemblage. Le getter fait de `label` un
+	   accessor : la traduction est lue au moment où le HTML est construit.
+	   `className` reste une constante — c'est un identifiant CSS, jamais traduit. */
 	const RATINGS: Record<TextOnlyRating, RatingMeta> = {
-		understood: { label: "Compris", className: "understood" },
-		partial: { label: "Partiel", className: "partial" },
-		review: { label: "À revoir", className: "review" }
+		understood: { get label() { return t("engine.rating.understood"); }, className: "understood" },
+		partial: { get label() { return t("engine.rating.partial"); }, className: "partial" },
+		review: { get label() { return t("engine.rating.review"); }, className: "review" }
 	};
 
 	function isTextOnlyMode(): boolean {
@@ -152,7 +158,7 @@ export function createTextOnlyHandlers(ctx: EngineCtx): TextOnlyHandlers {
 			}
 		}
 
-		return `<div class="quiz-textonly-expected-item">Réponse attendue non renseignée.</div>`;
+		return `<div class="quiz-textonly-expected-item">${t("engine.textOnly.noExpectedAnswer")}</div>`;
 	}
 
 	function learningHtml(q: QuizQuestion): string {
@@ -162,7 +168,7 @@ export function createTextOnlyHandlers(ctx: EngineCtx): TextOnlyHandlers {
 			const content = learnHtml
 				? ctx.sanitize.replaceObsidianEmbedsInHtml(learnHtml)
 				: ctx.sanitize.renderTextWithEmbeds(q.learn || "");
-			chunks.push(`<div class="quiz-textonly-explain-block"><div class="quiz-textonly-label">Leçon</div><div class="quiz-textonly-explain-content">${content}</div></div>`);
+			chunks.push(`<div class="quiz-textonly-explain-block"><div class="quiz-textonly-label">${t("engine.learn.label")}</div><div class="quiz-textonly-explain-content">${content}</div></div>`);
 		}
 
 		const explainHtml = q.explainHtml || q._explainHtml;
@@ -170,7 +176,7 @@ export function createTextOnlyHandlers(ctx: EngineCtx): TextOnlyHandlers {
 			const content = explainHtml
 				? ctx.sanitize.replaceObsidianEmbedsInHtml(explainHtml)
 				: ctx.sanitize.renderTextWithEmbeds(q.explain || "");
-			chunks.push(`<div class="quiz-textonly-explain-block"><div class="quiz-textonly-label">Explication</div><div class="quiz-textonly-explain-content">${content}</div></div>`);
+			chunks.push(`<div class="quiz-textonly-explain-block"><div class="quiz-textonly-label">${t("engine.textOnly.explanationLabel")}</div><div class="quiz-textonly-explain-content">${content}</div></div>`);
 		}
 
 		return chunks.join("");
@@ -190,7 +196,7 @@ export function createTextOnlyHandlers(ctx: EngineCtx): TextOnlyHandlers {
 
 		const hasImg = /<img[\s>]/i.test(options);
 		return `<div class="quiz-textonly-comparison">
-			<div class="quiz-textonly-label">Options QCM</div>
+			<div class="quiz-textonly-label">${t("engine.textOnly.optionsLabel")}</div>
 			<div class="quiz-options-wrap${hasImg ? " quiz-options-image-grid" : ""}">${options}</div>
 		</div>`;
 	}
@@ -198,7 +204,7 @@ export function createTextOnlyHandlers(ctx: EngineCtx): TextOnlyHandlers {
 	function ratingButtonsHtml(qi: number): string {
 		const current = normalizeRating(ctx.quizState.textOnlyRatings?.[qi]);
 		return `<div class="quiz-textonly-self">
-			<div class="quiz-textonly-label">Auto-évaluation</div>
+			<div class="quiz-textonly-label">${t("engine.textOnly.selfRating")}</div>
 			<div class="quiz-textonly-rating-row">
 				${(Object.entries(RATINGS) as Array<[TextOnlyRating, RatingMeta]>).map(([value, meta]) => {
 					const selected = current === value ? " selected" : "";
@@ -224,20 +230,20 @@ export function createTextOnlyHandlers(ctx: EngineCtx): TextOnlyHandlers {
 
 		return `<div class="quiz-textonly">
 			<div class="quiz-textonly-answer">
-				<label class="quiz-textonly-label" for="quizTextOnly_${ctx.QUIZ_INSTANCE_ID}_${qi}">Votre réponse libre</label>
+				<label class="quiz-textonly-label" for="quizTextOnly_${ctx.QUIZ_INSTANCE_ID}_${qi}">${t("engine.textOnly.answerLabel")}</label>
 				<textarea
 					id="quizTextOnly_${ctx.QUIZ_INSTANCE_ID}_${qi}"
 					class="quiz-textarea quiz-textonly-textarea"
 					data-textonly-answer="1"
 					name="${textareaName}"
-					placeholder="Écrivez votre réponse avec vos mots..."
+					placeholder="${ctx.escapeHtmlAttr(t("engine.textOnly.answerPlaceholder"))}"
 					spellcheck="true"
 					autocapitalize="off"
 					autocomplete="off"
 					autocorrect="off"
 					${readOnlyAttr}
 				>${ctx.escapeHtmlText(value)}</textarea>
-				${(!revealed && !examAnswerPhase) ? `<div class="quiz-actions quiz-textonly-check-actions"><button class="quiz-action-btn success quiz-textonly-check-btn" type="button">Vérifier</button></div>` : ""}
+				${(!revealed && !examAnswerPhase) ? `<div class="quiz-actions quiz-textonly-check-actions"><button class="quiz-action-btn success quiz-textonly-check-btn" type="button">${t("engine.textOnly.check")}</button></div>` : ""}
 			</div>
 			${reviewHtml}
 		</div>`;
@@ -246,12 +252,12 @@ export function createTextOnlyHandlers(ctx: EngineCtx): TextOnlyHandlers {
 	function questionActionsHtml(qi: number): string {
 		const isFirst = qi <= 0;
 		const isLast = qi >= ctx.quiz.length - 1;
-		const lastLabel = isExamAnswerPhase() ? "Terminer l'examen" : "Résultats";
+		const lastLabel = t(isExamAnswerPhase() ? "engine.exam.finish" : "engine.nav.results");
 		return `<div class="quiz-actions quiz-textonly-nav-actions">
-			<button class="quiz-action-btn quiz-prev-btn" type="button"${isFirst ? " disabled" : ""}>Question précédente</button>
+			<button class="quiz-action-btn quiz-prev-btn" type="button"${isFirst ? " disabled" : ""}>${t("engine.nav.prevQuestion")}</button>
 			${isLast
 				? `<button class="quiz-action-btn success quiz-results-btn" type="button">${lastLabel}</button>`
-				: `<button class="quiz-action-btn quiz-next-btn" type="button">Question suivante</button>`}
+				: `<button class="quiz-action-btn quiz-next-btn" type="button">${t("engine.nav.nextQuestion")}</button>`}
 		</div>`;
 	}
 

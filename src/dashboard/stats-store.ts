@@ -1,4 +1,5 @@
 import type { Plugin } from "obsidian";
+import { t } from "../i18n";
 import type { StatsRecord } from "../types/quiz";
 
 /* ══════════════════════════════════════════════════════════
@@ -99,20 +100,26 @@ export function createStatsStore(plugin: StatsStorePlugin): StatsStore {
 		}
 	}
 
-	/* ── Formater un timestamp en temps relatif ── */
+	/* ── Formater un timestamp en temps relatif ──
+	   Appelée AU RENDU par les vues : les libellés suivent donc la langue
+	   courante sans que le store ait à être reconstruit. */
 	function formatRelativeTime(timestamp: number): string {
-		if (!timestamp) return "—";
+		if (!timestamp) return "—"; // tiret cadratin : pas de texte à traduire
 		const diff = Date.now() - timestamp;
 		const minutes = Math.floor(diff / 60000);
 		const hours = Math.floor(diff / 3600000);
 		const days = Math.floor(diff / 86400000);
 
-		if (minutes < 1) return "À l'instant";
-		if (minutes < 60) return `il y a ${minutes} min`;
-		if (hours < 24) return `il y a ${hours}h`;
-		if (days < 30) return `il y a ${days}j`;
-		if (days < 365) return `il y a ${Math.floor(days / 30)} mois`;
-		return "il y a plus d'un an";
+		if (minutes < 1) return t("dashboard.time.justNow");
+		if (minutes < 60) return t("dashboard.time.minutes", { n: minutes });
+		if (hours < 24) return t("dashboard.time.hours", { n: hours });
+		if (days < 30) return t("dashboard.time.days", { n: days });
+		if (days < 365) {
+			// 1..12 mois → l'anglais accorde (« 1 month ago »), pas le français.
+			const months = Math.floor(days / 30);
+			return t(months === 1 ? "dashboard.time.monthsOne" : "dashboard.time.monthsOther", { n: months });
+		}
+		return t("dashboard.time.overYear");
 	}
 
 	function destroy(): void {

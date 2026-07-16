@@ -1,4 +1,5 @@
 import type { EngineCtx } from "../types/engine-ctx";
+import { t } from "../i18n";
 
 export interface ExamHandlers {
 	examTimerHtml(): string;
@@ -21,10 +22,21 @@ export function createExamHandlers(ctx: EngineCtx): ExamHandlers {
     if (!ctx.examStarted) {
         const isTraining = ctx.quizState?.practiceMode === "text";
         const modeSelectorHtml = typeof ctx.cards?.startModeSelectorHtml === "function" ? ctx.cards.startModeSelectorHtml() : "";
-        const primaryLabel = isTraining ? "Commencer l'entraînement" : "Commencer l'examen";
+        const primaryLabel = t(isTraining ? "engine.exam.startTraining" : "engine.exam.startExam");
         // examOptions est non-null en mode examen (garde isExamMode ci-dessus) ;
-        // `!` reproduit exactement l'accès direct du JS (throw si null, jamais atteint).
-        const summaryLabel = isTraining ? "Sans chrono" : `Durée : ${ctx.examOptions!.durationMinutes} minutes`;
+        // `!` reproduit exactement l'accès direct du JS (throw si null, jamais
+        // atteint), et reste DANS la branche examen : l'entraînement ne le lit pas.
+        // Le format mm:ss du chrono reste du code ; seuls les libellés (et leur
+        // accord singulier/pluriel) passent par le dictionnaire.
+        const durationLabel = (): string => {
+            const minutes = ctx.examOptions!.durationMinutes;
+            return t(minutes > 1 ? "engine.exam.duration.other" : "engine.exam.duration.one", { minutes });
+        };
+        const summaryLabel = isTraining ? t("engine.exam.noTimer") : durationLabel();
+        const questionCount = t(
+            ctx.quiz.length > 1 ? "engine.exam.questionCount.other" : "engine.exam.questionCount.one",
+            { count: ctx.quiz.length }
+        );
         return `<div class="quiz-exam-start-screen" data-exam-start-screen="1">
             <div class="quiz-exam-start-content">
                 <div class="quiz-exam-start-icon">
@@ -34,9 +46,9 @@ export function createExamHandlers(ctx: EngineCtx): ExamHandlers {
                         <circle cx="12" cy="14" r="8"></circle>
                     </svg>
                 </div>
-                <div class="quiz-exam-start-title">Choisir le mode</div>
+                <div class="quiz-exam-start-title">${t("engine.exam.chooseMode")}</div>
                 <div class="quiz-exam-start-duration">${summaryLabel}</div>
-                <div class="quiz-exam-start-question-count">${ctx.quiz.length} questions</div>
+                <div class="quiz-exam-start-question-count">${questionCount}</div>
                 ${modeSelectorHtml}
                 <button class="quiz-exam-start-btn" type="button">${primaryLabel}</button>
             </div>
@@ -194,7 +206,7 @@ export function createExamHandlers(ctx: EngineCtx): ExamHandlers {
     // marque pas examEnded (sinon bascule en phase review) ni locked.
     if (ctx.examOptions && ctx.examOptions.autoSubmit === false) {
         if (typeof ctx.Notice === 'function') {
-            new ctx.Notice('Temps écoulé ! Terminez et validez votre examen.', 6000);
+            new ctx.Notice(t("engine.exam.timeUpManual"), 6000);
         }
         return;
     }
@@ -209,7 +221,7 @@ export function createExamHandlers(ctx: EngineCtx): ExamHandlers {
     ctx.goToResults();
 
     if (typeof ctx.Notice === 'function') {
-        new ctx.Notice('Temps écoulé ! Le quiz a été verrouillé.', 5000);
+        new ctx.Notice(t("engine.exam.timeUpLocked"), 5000);
     }
 }
 

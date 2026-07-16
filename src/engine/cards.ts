@@ -8,6 +8,7 @@ import type {
 	TextQuestion,
 } from "../types/quiz";
 import { mathifyElement } from "./mathjax";
+import { t, type TransKey } from "../i18n";
 
 export interface CardHandlers {
 	tabClass(i: number): string;
@@ -31,6 +32,14 @@ export function createCardRenderers(ctx: EngineCtx): CardHandlers {
 	let __quizSubmitSlideSignature = "";
 	let __quizResultsSlideSignature = "";
 
+	/* Compteurs : deux clés (« une réponse » / « deux réponses ») choisies ici,
+	   jamais un « s » concaténé — l'anglais et le français ne s'accordent pas de
+	   la même façon. Le seuil `> 1` reproduit exactement l'accord français
+	   d'origine (`n > 1 ? "s" : ""`) ; ces branches ne sont jamais atteintes
+	   avec n = 0, où anglais et français divergeraient. */
+	const plural = (count: number, one: TransKey, other: TransKey): string =>
+		t(count > 1 ? other : one, { count });
+
 	function tabClass(i: number): string {
 		const cur = ctx.quizState.current;
 		// slideMap[cur].questionIndex n'existe que sur la variante « question » —
@@ -52,16 +61,16 @@ export function createCardRenderers(ctx: EngineCtx): CardHandlers {
 
 	function navHtml(): string {
 		const resultsActive = (ctx.isSubmitSlideIndex(ctx.quizState.current) || ctx.isResultsSlideIndex(ctx.quizState.current)) ? "active" : "";
-		return `<div class="quiz-nav">${ctx.quiz.map((_, i) => `<a class="quiz-tab ${tabClass(i)}" href="#" data-nav="${i}">Q${i + 1}</a>`).join("")}<a class="quiz-tab is-result ${resultsActive}" href="#" data-nav-results="1">Résultats</a></div>`;
+		return `<div class="quiz-nav">${ctx.quiz.map((_, i) => `<a class="quiz-tab ${tabClass(i)}" href="#" data-nav="${i}">Q${i + 1}</a>`).join("")}<a class="quiz-tab is-result ${resultsActive}" href="#" data-nav-results="1">${t("engine.nav.results")}</a></div>`;
 	}
 
 	function modeToggleHtml(): string {
 		const mode = ctx.quizState.practiceMode === "text" ? "text" : "qcm";
 		const isTextOnly = mode === "text";
 		const nextMode = isTextOnly ? "qcm" : "text";
-		return `<div class="quiz-mode-toggle" aria-label="Mode d'entraînement">
-			<span class="quiz-mode-toggle-label">Mode entraînement</span>
-			<button class="quiz-mode-switch${isTextOnly ? " is-on" : ""}" type="button" role="switch" aria-checked="${isTextOnly ? "true" : "false"}" aria-label="${isTextOnly ? "Désactiver le mode entraînement" : "Activer le mode entraînement"}" data-quiz-mode="${nextMode}">
+		return `<div class="quiz-mode-toggle" aria-label="${ctx.escapeHtmlAttr(t("engine.mode.toggleAria"))}">
+			<span class="quiz-mode-toggle-label">${t("engine.mode.toggleLabel")}</span>
+			<button class="quiz-mode-switch${isTextOnly ? " is-on" : ""}" type="button" role="switch" aria-checked="${isTextOnly ? "true" : "false"}" aria-label="${ctx.escapeHtmlAttr(t(isTextOnly ? "engine.mode.switchOff" : "engine.mode.switchOn"))}" data-quiz-mode="${nextMode}">
 				<span class="quiz-mode-switch-track" aria-hidden="true"><span class="quiz-mode-switch-thumb"></span></span>
 			</button>
 		</div>`;
@@ -69,14 +78,14 @@ export function createCardRenderers(ctx: EngineCtx): CardHandlers {
 
 	function startModeSelectorHtml(): string {
 		const isTraining = ctx.quizState.practiceMode === "text";
-		return `<div class="quiz-start-mode-selector" role="group" aria-label="Choisir le mode du quiz">
+		return `<div class="quiz-start-mode-selector" role="group" aria-label="${ctx.escapeHtmlAttr(t("engine.start.selectorAria"))}">
 			<button class="quiz-start-mode-option${!isTraining ? " is-active" : ""}" type="button" data-quiz-start-mode="exam" aria-pressed="${!isTraining ? "true" : "false"}">
-				<span class="quiz-start-mode-title">Examen</span>
-				<span class="quiz-start-mode-sub">QCM chronométré</span>
+				<span class="quiz-start-mode-title">${t("engine.start.examTitle")}</span>
+				<span class="quiz-start-mode-sub">${t("engine.start.examSub")}</span>
 			</button>
 			<button class="quiz-start-mode-option${isTraining ? " is-active" : ""}" type="button" data-quiz-start-mode="training" aria-pressed="${isTraining ? "true" : "false"}">
-				<span class="quiz-start-mode-title">Entraînement</span>
-				<span class="quiz-start-mode-sub">Réponse libre</span>
+				<span class="quiz-start-mode-title">${t("engine.start.trainingTitle")}</span>
+				<span class="quiz-start-mode-sub">${t("engine.start.trainingSub")}</span>
 			</button>
 		</div>`;
 	}
@@ -171,7 +180,7 @@ export function createCardRenderers(ctx: EngineCtx): CardHandlers {
 
 			return `<div class="${cls}" data-order-slot="${si}" role="button" tabindex="0" ${(!ctx.quizState.locked && filled) ? `draggable="true" data-slot-item="${oi}"` : ""}>
 				<div class="quiz-slot-label">${slotLabels[si] ?? String(si + 1)}</div>
-				<div class="quiz-slot-value">${filled ? ctx.escapeHtmlText(items[oi]) : "Glissez un élément ici"}</div>
+				<div class="quiz-slot-value">${filled ? ctx.escapeHtmlText(items[oi]) : t("engine.ordering.dropHere")}</div>
 			</div>`;
 		}).join("");
 
@@ -187,10 +196,10 @@ export function createCardRenderers(ctx: EngineCtx): CardHandlers {
 			</div>`;
 		}).join("");
 
-		return `<div class="quiz-multi-indicator">Classez les éléments dans le bon ordre (glisser-déposer). Déposez un élément sur un emplacement déjà rempli pour échanger automatiquement les positions.</div>
+		return `<div class="quiz-multi-indicator">${t("engine.ordering.instructions")}</div>
 		<div class="quiz-ordering">
 			<div class="quiz-ordering-slots">${slots}</div>
-			<div class="quiz-ordering-label">Éléments à placer</div>
+			<div class="quiz-ordering-label">${t("engine.ordering.itemsLabel")}</div>
 			<div class="quiz-ordering-possibilities">${possibilities}</div>
 		</div>`;
 	}
@@ -218,7 +227,7 @@ export function createCardRenderers(ctx: EngineCtx): CardHandlers {
 
 			return `<div class="${cls}" data-match-slot="${rowIndex}" role="button" tabindex="0" ${(!ctx.quizState.locked && filled) ? `draggable="true" data-slot-choice="${chosen}"` : ""}>
 				<div class="quiz-slot-label">${ctx.escapeHtmlText(rows[rowIndex])}</div>
-				<div class="quiz-slot-value">${filled ? ctx.escapeHtmlText(choices[chosen] ?? "Support inconnu") : "Déposez un support ici"}</div>
+				<div class="quiz-slot-value">${filled ? ctx.escapeHtmlText(choices[chosen] ?? t("engine.matching.unknownChoice")) : t("engine.matching.dropHere")}</div>
 			</div>`;
 		}).join("");
 
@@ -232,10 +241,10 @@ export function createCardRenderers(ctx: EngineCtx): CardHandlers {
 			</div>`;
 		}).join("");
 
-		return `<div class="quiz-multi-indicator">Associez chaque situation à un support (glisser-déposer). Un même support peut être utilisé plusieurs fois.</div>
+		return `<div class="quiz-multi-indicator">${t("engine.matching.instructions")}</div>
 		<div class="quiz-ordering">
 			<div class="quiz-ordering-slots">${slots}</div>
-			<div class="quiz-ordering-label">Supports disponibles</div>
+			<div class="quiz-ordering-label">${t("engine.matching.choicesLabel")}</div>
 			<div class="quiz-ordering-possibilities">${possibilities}</div>
 		</div>`;
 	}
@@ -250,49 +259,55 @@ export function createCardRenderers(ctx: EngineCtx): CardHandlers {
 					.filter(i => !ctx.textOnly.hasAnyAnswer(i));
 				const mac = missingAnswers.length;
 				const intro = mac > 0
-					? `<div class="quiz-warn">Il manque ${mac} réponse${mac > 1 ? "s" : ""} libre${mac > 1 ? "s" : ""}.</div><div class="quiz-submit-sub">Questions sans réponse :</div>`
-					: `<div class="quiz-submit-sub">Toutes les questions ont une réponse libre.</div>`;
-				return `<div class="quiz-track-item" data-slide-kind="submit"><div class="quiz-submit-wrap"><div class="quiz-submit-card">${intro}<div class="quiz-chip-row">${(mac > 0 ? missingAnswers : ctx.quiz.map((_, i) => i)).map(i => `<button class="quiz-chip ${mac > 0 ? "missing" : ""}" type="button" data-jump="${i}">Q${i + 1}</button>`).join("")}</div><div class="quiz-actions"><button class="quiz-action-btn quiz-back-btn" type="button">Retour</button><button class="quiz-action-btn success quiz-show-score-btn" type="button">Terminer l'examen</button></div></div></div></div>`;
+					? `<div class="quiz-warn">${plural(mac, "engine.submit.missingFreeAnswers.one", "engine.submit.missingFreeAnswers.other")}</div><div class="quiz-submit-sub">${t("engine.submit.missingList")}</div>`
+					: `<div class="quiz-submit-sub">${t("engine.submit.allFreeAnswered")}</div>`;
+				return `<div class="quiz-track-item" data-slide-kind="submit"><div class="quiz-submit-wrap"><div class="quiz-submit-card">${intro}<div class="quiz-chip-row">${(mac > 0 ? missingAnswers : ctx.quiz.map((_, i) => i)).map(i => `<button class="quiz-chip ${mac > 0 ? "missing" : ""}" type="button" data-jump="${i}">Q${i + 1}</button>`).join("")}</div><div class="quiz-actions"><button class="quiz-action-btn quiz-back-btn" type="button">${t("engine.submit.back")}</button><button class="quiz-action-btn success quiz-show-score-btn" type="button">${t("engine.exam.finish")}</button></div></div></div></div>`;
 			}
 
 			const intro = mc > 0
-				? `<div class="quiz-warn">Il manque ${mc} auto-évaluation${mc > 1 ? "s" : ""}.</div><div class="quiz-submit-sub">Questions à auto-évaluer :</div>`
-				: `<div class="quiz-submit-sub">Toutes les questions sont auto-évaluées.</div>`;
-			return `<div class="quiz-track-item" data-slide-kind="submit"><div class="quiz-submit-wrap"><div class="quiz-submit-card">${intro}<div class="quiz-chip-row">${(mc > 0 ? missing : ctx.quiz.map((_, i) => i)).map(i => `<button class="quiz-chip ${mc > 0 ? "missing" : ""}" type="button" data-jump="${i}">Q${i + 1}</button>`).join("")}</div><div class="quiz-actions"><button class="quiz-action-btn quiz-back-btn" type="button">Retour</button><button class="quiz-action-btn success quiz-show-score-btn" type="button">Voir les résultats</button></div></div></div></div>`;
+				? `<div class="quiz-warn">${plural(mc, "engine.submit.missingRatings.one", "engine.submit.missingRatings.other")}</div><div class="quiz-submit-sub">${t("engine.submit.toRateList")}</div>`
+				: `<div class="quiz-submit-sub">${t("engine.submit.allRated")}</div>`;
+			return `<div class="quiz-track-item" data-slide-kind="submit"><div class="quiz-submit-wrap"><div class="quiz-submit-card">${intro}<div class="quiz-chip-row">${(mc > 0 ? missing : ctx.quiz.map((_, i) => i)).map(i => `<button class="quiz-chip ${mc > 0 ? "missing" : ""}" type="button" data-jump="${i}">Q${i + 1}</button>`).join("")}</div><div class="quiz-actions"><button class="quiz-action-btn quiz-back-btn" type="button">${t("engine.submit.back")}</button><button class="quiz-action-btn success quiz-show-score-btn" type="button">${t("engine.submit.showResults")}</button></div></div></div></div>`;
 		}
-		return `<div class="quiz-track-item" data-slide-kind="submit"><div class="quiz-submit-wrap"><div class="quiz-submit-card">${mc > 0 ? `<div class="quiz-warn">Il manque ${mc} réponse${mc > 1 ? "s" : ""}.</div><div class="quiz-submit-sub">Questions sans réponse :</div>` : `<div class="quiz-submit-sub">Revenir sur une question :</div>`}<div class="quiz-chip-row">${(mc > 0 ? missing : ctx.quiz.map((_, i) => i)).map(i => `<button class="quiz-chip ${mc > 0 ? "missing" : ""}" type="button" data-jump="${i}">Q${i + 1}</button>`).join("")}</div><div class="quiz-actions"><button class="quiz-action-btn quiz-back-btn" type="button">Retour</button><button class="quiz-action-btn success quiz-show-score-btn" type="button">Voir le score</button></div></div></div></div>`;
+		return `<div class="quiz-track-item" data-slide-kind="submit"><div class="quiz-submit-wrap"><div class="quiz-submit-card">${mc > 0 ? `<div class="quiz-warn">${plural(mc, "engine.submit.missingAnswers.one", "engine.submit.missingAnswers.other")}</div><div class="quiz-submit-sub">${t("engine.submit.missingList")}</div>` : `<div class="quiz-submit-sub">${t("engine.submit.reviewList")}</div>`}<div class="quiz-chip-row">${(mc > 0 ? missing : ctx.quiz.map((_, i) => i)).map(i => `<button class="quiz-chip ${mc > 0 ? "missing" : ""}" type="button" data-jump="${i}">Q${i + 1}</button>`).join("")}</div><div class="quiz-actions"><button class="quiz-action-btn quiz-back-btn" type="button">${t("engine.submit.back")}</button><button class="quiz-action-btn success quiz-show-score-btn" type="button">${t("engine.submit.showScore")}</button></div></div></div></div>`;
 	}
 
 	function saveResultsButtonHtml(): string {
 		const savedPath = ctx.quizState.savedResultsPath;
 		const saved = !!savedPath;
-		const titleAttr = saved ? ` title="Sauvegardé dans ${ctx.escapeHtmlAttr(savedPath)}"` : "";
-		return `<button class="quiz-action-btn quiz-save-results-btn${saved ? " is-saved" : ""}" type="button" data-save-results="1"${saved ? " disabled" : ""}${titleAttr}>${saved ? "Résultats sauvegardés" : "Sauvegarder mes résultats"}</button>`;
+		// Garde sur `savedPath` (et non sur `saved`, sa copie booléenne) : même
+		// condition au runtime, mais TS narrow ici string|null → string, ce
+		// qu'exige le typage des variables de t().
+		const titleAttr = savedPath ? ` title="${ctx.escapeHtmlAttr(t("engine.result.savedIn", { path: savedPath }))}"` : "";
+		return `<button class="quiz-action-btn quiz-save-results-btn${saved ? " is-saved" : ""}" type="button" data-save-results="1"${saved ? " disabled" : ""}${titleAttr}>${t(saved ? "engine.result.saved" : "engine.result.save")}</button>`;
 	}
 
 	function resultsSlideHtml(): string {
 		if (ctx.textOnly?.isTextOnlyMode?.()) {
 			const results = ctx.textOnly.computeResults();
 			const isExamCorrection = ctx.isExamMode && ctx.examEnded;
-			const title = isExamCorrection ? "Correction réponse libre" : "Résultats entraînement";
+			const title = t(isExamCorrection ? "engine.result.freeTextCorrection" : "engine.result.trainingTitle");
 			const correctionHint = isExamCorrection && results.pending > 0
-				? `<p class="quiz-textonly-correction-hint">Revenez sur les questions pour comparer vos réponses, lire les explications et vous auto-évaluer.</p>`
+				? `<p class="quiz-textonly-correction-hint">${t("engine.result.correctionHint")}</p>`
 				: "";
 			const correctionBtn = isExamCorrection && results.pending > 0
-				? `<button class="quiz-action-btn quiz-review-answers-btn" type="button">Corriger mes réponses</button>`
+				? `<button class="quiz-action-btn quiz-review-answers-btn" type="button">${t("engine.result.reviewAnswers")}</button>`
 				: "";
-			return `<div class="quiz-track-item" data-slide-kind="results"><section class="quiz-result quiz-textonly-result"><h2 class="quiz-result-title" style="font-weight:900;">${title}</h2><p>Auto-évaluées : <strong>${results.rated}/${results.total}</strong></p>${correctionHint}<div class="quiz-textonly-result-grid"><div class="quiz-textonly-result-stat understood"><strong>${results.understood}</strong><span>Compris</span></div><div class="quiz-textonly-result-stat partial"><strong>${results.partial}</strong><span>Partiel</span></div><div class="quiz-textonly-result-stat review"><strong>${results.review}</strong><span>À revoir</span></div>${results.pending > 0 ? `<div class="quiz-textonly-result-stat pending"><strong>${results.pending}</strong><span>Non évaluée${results.pending > 1 ? "s" : ""}</span></div>` : ""}</div><div class="quiz-actions">${correctionBtn}${saveResultsButtonHtml()}<button class="quiz-action-btn success quiz-retry-btn" type="button">Recommencer</button></div></section></div>`;
+			// Le compteur « rated/total » reste du code (mise en forme <strong>) :
+			// seule l'étiquette est traduite.
+			return `<div class="quiz-track-item" data-slide-kind="results"><section class="quiz-result quiz-textonly-result"><h2 class="quiz-result-title" style="font-weight:900;">${title}</h2><p>${t("engine.result.ratedLabel")} <strong>${results.rated}/${results.total}</strong></p>${correctionHint}<div class="quiz-textonly-result-grid"><div class="quiz-textonly-result-stat understood"><strong>${results.understood}</strong><span>${t("engine.rating.understood")}</span></div><div class="quiz-textonly-result-stat partial"><strong>${results.partial}</strong><span>${t("engine.rating.partial")}</span></div><div class="quiz-textonly-result-stat review"><strong>${results.review}</strong><span>${t("engine.rating.review")}</span></div>${results.pending > 0 ? `<div class="quiz-textonly-result-stat pending"><strong>${results.pending}</strong><span>${t(results.pending > 1 ? "engine.result.pending.other" : "engine.result.pending.one")}</span></div>` : ""}</div><div class="quiz-actions">${correctionBtn}${saveResultsButtonHtml()}<button class="quiz-action-btn success quiz-retry-btn" type="button">${t("engine.result.retry")}</button></div></section></div>`;
 		}
 		const { pct, correct, total } = ctx.computeScorePercent();
 		// Mode learn : bouton "Passer l'examen"
 		const learnExamBtn = (ctx.quizMode === "learn" && ctx.learnExamOptions)
-			? `<button class="quiz-action-btn quiz-exam-btn" type="button">Passer l'examen</button>`
+			? `<button class="quiz-action-btn quiz-exam-btn" type="button">${t("engine.result.takeExam")}</button>`
 			: "";
 		// Mode examen issu du mode learn : bouton "Repasser l'examen"
 		const retakeExamBtn = (ctx.quizMode === "exam" && ctx.originalQuizMode === "learn" && ctx.originalLearnExamOptions)
-			? `<button class="quiz-action-btn quiz-exam-btn" type="button">Repasser l'examen</button>`
+			? `<button class="quiz-action-btn quiz-exam-btn" type="button">${t("engine.result.retakeExam")}</button>`
 			: "";
-		return `<div class="quiz-track-item" data-slide-kind="results"><section class="quiz-result"><h2 class="quiz-result-title" style="font-weight:900;">Résultats</h2><p style="font-size:48px;font-weight:900;margin:18px 0 6px;">${pct}%</p><p>Bonnes réponses : <strong>${correct}/${total}</strong></p><div class="quiz-actions">${saveResultsButtonHtml()}<button class="quiz-action-btn success quiz-retry-btn" type="button">Recommencer</button>${learnExamBtn}${retakeExamBtn}</div></section></div>`;
+		// Le score (« 12/20 », « 60 % ») reste du code : seule l'étiquette est traduite.
+		return `<div class="quiz-track-item" data-slide-kind="results"><section class="quiz-result"><h2 class="quiz-result-title" style="font-weight:900;">${t("engine.result.title")}</h2><p style="font-size:48px;font-weight:900;margin:18px 0 6px;">${pct}%</p><p>${t("engine.result.correctLabel")} <strong>${correct}/${total}</strong></p><div class="quiz-actions">${saveResultsButtonHtml()}<button class="quiz-action-btn success quiz-retry-btn" type="button">${t("engine.result.retry")}</button>${learnExamBtn}${retakeExamBtn}</div></section></div>`;
 	}
 
 
@@ -379,7 +394,7 @@ export function createCardRenderers(ctx: EngineCtx): CardHandlers {
 		else {
 			const qcm = q as QcmQuestion | MultiSelectQuestion;
 			const smap = (ctx.quizState.shuffleMap[qi] as number[]) || [];
-			const mi = isMulti ? `<div class="quiz-multi-indicator">Sélectionnez une ou plusieurs réponses</div>` : "";
+			const mi = isMulti ? `<div class="quiz-multi-indicator">${t("engine.qcm.multiHint")}</div>` : "";
 			const sel = ctx.quizState.selections[qi];
 			const optionsHtml = smap.map((oi) => {
 				const contentHtml = optionContentHtml(qcm, oi);
@@ -393,14 +408,14 @@ export function createCardRenderers(ctx: EngineCtx): CardHandlers {
 			body = mi + `<div class="quiz-options-wrap${hasImg ? " quiz-options-image-grid" : ""}">${optionsHtml}</div>`;
 		}
 
-		const hintBtn = (!isTextOnly && q.hint && String(q.hint).trim()) ? `<button class="quiz-hint-btn" type="button">Indice</button>` : "";
+		const hintBtn = (!isTextOnly && q.hint && String(q.hint).trim()) ? `<button class="quiz-hint-btn" type="button">${t("engine.hint.button")}</button>` : "";
 		const learnSection = (!isTextOnly && ctx.quizMode === "learn" && (q.learn || q.learnHtml || q._learnHtml) && !ctx.quizState.locked)
 			? (() => {
 				const learnHtml = q.learnHtml || q._learnHtml;
 				const learnContent = learnHtml
 					? ctx.sanitize.replaceObsidianEmbedsInHtml(learnHtml)
 					: ctx.sanitize.renderTextWithEmbeds(q.learn || "");
-				return `<div class="quiz-learn-section"><div class="quiz-learn-label">Leçon</div><div class="quiz-learn-content">${learnContent}</div></div>`;
+				return `<div class="quiz-learn-section"><div class="quiz-learn-label">${t("engine.learn.label")}</div><div class="quiz-learn-content">${learnContent}</div></div>`;
 			})()
 			: "";
 		const textOnlyActions = isTextOnly ? ctx.textOnly.questionActionsHtml(qi) : "";

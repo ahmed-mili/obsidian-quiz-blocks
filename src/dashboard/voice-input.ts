@@ -2,6 +2,7 @@ import { Notice } from "obsidian";
 import type { ChildProcess } from "child_process";
 import { getStatus } from "./voice-install";
 import type { DashboardCtx } from "../types/dashboard-ctx";
+import { t } from "../i18n";
 
 /* ══════════════════════════════════════════════════════════
    VOICE INPUT — Dictée push-to-talk (composer IA)
@@ -87,7 +88,7 @@ export function attach(ctx: DashboardCtx, textarea: HTMLTextAreaElement): VoiceI
 		pill = document.body.createDiv({ cls: "qbd-voice-pill" + (busy ? " is-busy" : "") });
 		pill.createDiv({ cls: "qbd-voice-pill-dot" });
 		const label = pill.createSpan({
-			text: busy ? "Transcription…" : "0:00 · relâche Espace pour transcrire",
+			text: busy ? t("ai.voice.transcribing") : t("ai.voice.recordHint", { time: "0:00" }),
 		});
 		const r = textarea.getBoundingClientRect();
 		pill.style.visibility = "hidden";
@@ -99,8 +100,9 @@ export function attach(ctx: DashboardCtx, textarea: HTMLTextAreaElement): VoiceI
 			pillTick = window.setInterval(() => {
 				if (!textarea.isConnected) { cancelRecording(); return; }
 				const s = Math.floor((Date.now() - startTs) / 1000);
-				label.setText(Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0") +
-					" · relâche Espace pour transcrire");
+				label.setText(t("ai.voice.recordHint", {
+					time: Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0")
+				}));
 			}, 500);
 		}
 	}
@@ -120,8 +122,8 @@ export function attach(ctx: DashboardCtx, textarea: HTMLTextAreaElement): VoiceI
 		} catch (e) {
 			state = "idle";
 			new Notice(e instanceof DOMException && e.name === "NotAllowedError"
-				? "Dictée : permission micro refusée."
-				: "Dictée : aucun micro accessible.");
+				? t("ai.voice.micDenied")
+				: t("ai.voice.noMic"));
 			return;
 		}
 		// Espace relâché (ou Échap) pendant l'attente de permission → abandon.
@@ -180,7 +182,7 @@ export function attach(ctx: DashboardCtx, textarea: HTMLTextAreaElement): VoiceI
 			// (modèle supprimé…) : prévenir plutôt qu'avaler la dictée.
 			hidePillOnly();
 			state = "idle";
-			new Notice("Dictée : binaire ou modèle manquant, voir les réglages de Quiz Blocks.");
+			new Notice(t("ai.voice.missingInstall"));
 			return;
 		}
 		state = "transcribing";
@@ -194,7 +196,7 @@ export function attach(ctx: DashboardCtx, textarea: HTMLTextAreaElement): VoiceI
 		} catch (e) {
 			hidePillOnly();
 			state = "idle";
-			new Notice("Dictée : écriture du fichier audio impossible.");
+			new Notice(t("ai.voice.wavFailed"));
 			return;
 		}
 		const cp = require("child_process") as typeof import("child_process");
@@ -208,11 +210,11 @@ export function attach(ctx: DashboardCtx, textarea: HTMLTextAreaElement): VoiceI
 				state = "idle";
 				if (err) {
 					console.error("[quiz-blocks] whisper:", err);
-					new Notice("Dictée : transcription échouée (voir console).");
+					new Notice(t("ai.voice.transcribeFailed"));
 					return;
 				}
 				const text = String(stdout || "").trim();
-				if (!text) { new Notice("Dictée : aucun texte reconnu."); return; }
+				if (!text) { new Notice(t("ai.voice.noText")); return; }
 				if (!textarea.isConnected) return;
 				insertAtCursor(text);
 			});
@@ -239,7 +241,7 @@ export function attach(ctx: DashboardCtx, textarea: HTMLTextAreaElement): VoiceI
 		if (!st.supported) { state = "idle"; return; }
 		if (!st.ready) {
 			state = "idle";
-			new Notice("Dictée : binaire ou modèle manquant, voir les réglages de Quiz Blocks.");
+			new Notice(t("ai.voice.missingInstall"));
 			return;
 		}
 		// Retire l'espace inséré à l'armement : le hold n'est pas une frappe.

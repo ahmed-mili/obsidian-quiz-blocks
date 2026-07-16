@@ -1,8 +1,9 @@
 import { Modal, FuzzySuggestModal, Notice } from "obsidian";
 import type { App, TFile, FuzzyMatch, WorkspaceLeaf } from "obsidian";
-import { Q_TYPES, _setIcon, makeDefault } from "./utils";
+import { Q_TYPES, _setIcon, makeDefault, defaultSlots } from "./utils";
 import type { QuestionTypeKey, DraftQuestion } from "./utils";
 import { parseQuizSource } from "../quiz-utils";
+import { t } from "../i18n";
 import type { EditorHostView, EditorExamOptions } from "../types/editor-ctx";
 import type { ResourceButton } from "../types/quiz";
 
@@ -145,17 +146,19 @@ export class TypePickerModal extends Modal {
 		const { contentEl } = this;
 		contentEl.empty();
 		contentEl.addClass("qb-type-modal");
-		contentEl.createEl("h2", { text: "Ajouter une question" });
-		contentEl.createEl("p", { text: "Choisissez le type de question", cls: "qb-type-modal-sub" });
+		contentEl.createEl("h2", { text: t("editor.typeModal.title") });
+		contentEl.createEl("p", { text: t("editor.typeModal.subtitle"), cls: "qb-type-modal-sub" });
 
 		const grid = contentEl.createDiv({ cls: "qb-type-grid" });
-		for (const t of Q_TYPES) {
+		// `qt` et non `t` : la variable de boucle masquerait la fonction t().
+		// label/desc sont des getters (utils.ts) — lus ici, donc au rendu.
+		for (const qt of Q_TYPES) {
 			const card = grid.createDiv({ cls: "qb-type-card" });
-			const cardIcon = card.createDiv({ cls: "qb-type-card-icon" }); _setIcon(cardIcon, t.lucide);
+			const cardIcon = card.createDiv({ cls: "qb-type-card-icon" }); _setIcon(cardIcon, qt.lucide);
 			const text = card.createDiv();
-			text.createDiv({ cls: "qb-type-card-name", text: t.label });
-			text.createDiv({ cls: "qb-type-card-desc", text: t.desc });
-			card.addEventListener("click", () => { this.onPick(t.key); this.close(); });
+			text.createDiv({ cls: "qb-type-card-name", text: qt.label });
+			text.createDiv({ cls: "qb-type-card-desc", text: qt.desc });
+			card.addEventListener("click", () => { this.onPick(qt.key); this.close(); });
 		}
 	}
 
@@ -177,14 +180,14 @@ export class ImportQuizModal extends Modal {
 		const { contentEl } = this;
 		contentEl.empty();
 		contentEl.addClass("qb-import-modal");
-		contentEl.createEl("h2", { text: "Importer un quiz" });
+		contentEl.createEl("h2", { text: t("editor.import.title") });
 
 		const textarea = contentEl.createEl("textarea", {
 			cls: "qb-import-textarea",
-			placeholder: "Collez ici le contenu d'un bloc quiz-blocks ou le code JSON5 du quiz..."
+			placeholder: t("editor.import.placeholder")
 		});
 
-		const loadBtn = contentEl.createEl("button", { cls: "qb-import-btn", text: "Charger" });
+		const loadBtn = contentEl.createEl("button", { cls: "qb-import-btn", text: t("editor.import.load") });
 		loadBtn.addEventListener("click", async () => {
 			const text = textarea.value.trim();
 			if (!text) return;
@@ -192,7 +195,7 @@ export class ImportQuizModal extends Modal {
 			await this.loadQuiz(text);
 		});
 
-		const fromNoteBtn = contentEl.createEl("button", { cls: "qb-import-from-note", text: "Importer depuis une note" });
+		const fromNoteBtn = contentEl.createEl("button", { cls: "qb-import-from-note", text: t("editor.import.fromNote") });
 		fromNoteBtn.addEventListener("click", () => {
 			this.close();
 			new ImportFromNoteModal(this.app, this.builderView).open();
@@ -209,7 +212,7 @@ export class ImportQuizModal extends Modal {
 
 			const parsed = parseQuizSource(jsonText) as ParsedQuizItem[];
 			if (!Array.isArray(parsed) || parsed.length === 0) {
-				new Notice("Aucune question trouvée dans le contenu");
+				new Notice(t("editor.notice.noQuestionInContent"));
 				return;
 			}
 
@@ -232,7 +235,7 @@ export class ImportQuizModal extends Modal {
 			}
 
 			if (questions.length === 0) {
-				new Notice("Aucune question valide trouvée");
+				new Notice(t("editor.notice.noValidQuestion"));
 				return;
 			}
 
@@ -248,11 +251,11 @@ export class ImportQuizModal extends Modal {
 			}
 
 			this.builderView.render();
-			new Notice(`${questions.length} question(s) importée(s)`);
+			new Notice(t("editor.notice.imported", { n: questions.length }));
 			this.close();
 		} catch (err) {
 			console.error("Import error:", err);
-			new Notice("Erreur lors de l'import: " + (err as Error).message);
+			new Notice(t("editor.notice.importError", { error: (err as Error).message }));
 		}
 	}
 
@@ -271,6 +274,7 @@ export class ImportQuizModal extends Modal {
 		const question = makeDefault(type);
 		question._id = q.id || Math.random().toString(36).slice(2, 10);
 		question.title = q.title || "";
+		// « Question N » non localisé : motif du titre auto écrit dans le .md.
 		question._userModifiedTitle = !/^Question \d+$/.test(question.title);
 		question.hint = q.hint || "";
 
@@ -307,7 +311,7 @@ export class ImportQuizModal extends Modal {
 		}
 
 		if (type === "ordering") {
-			question.slots = q.slots || ["Étape 1", "Étape 2"];
+			question.slots = q.slots || defaultSlots();
 			question.possibilities = q.possibilities || ["", ""];
 			question.correctOrder = q.correctOrder || [0, 1];
 		}
@@ -363,7 +367,7 @@ export class QuizFileSuggestModal extends FuzzySuggestModal<TFile> {
 	constructor(app: App, onChoose: (file: TFile) => void) {
 		super(app);
 		this.onChooseCallback = onChoose;
-		this.setPlaceholder("Choisir une note contenant un quiz...");
+		this.setPlaceholder(t("editor.suggest.chooseNote"));
 		this.openFiles = new Set();
 	}
 
@@ -402,7 +406,7 @@ export class QuizFileSuggestModal extends FuzzySuggestModal<TFile> {
 			div.createDiv({ cls: "qb-suggest-main" }, main => {
 				main.createEl("span", { cls: "qb-suggest-name", text: file.basename });
 				if (isOpen) {
-					main.createEl("span", { cls: "qb-suggest-badge", text: "Ouvert" });
+					main.createEl("span", { cls: "qb-suggest-badge", text: t("editor.suggest.openBadge") });
 				}
 			});
 
@@ -437,15 +441,15 @@ export class ImportFromNoteModal extends Modal {
 				const content = await this.app.vault.read(file);
 				const match = content.match(/```quiz-blocks\n([\s\S]*?)\n```/);
 				if (!match) {
-					new Notice("Aucun bloc quiz-blocks trouvé dans cette note");
+					new Notice(t("editor.notice.noBlockInNote"));
 					return;
 				}
 
 				await this.builderView.importQuizSource(match[1], file.name);
-				new Notice(`Quiz importé depuis ${file.name}`);
+				new Notice(t("editor.notice.importedFromNote", { file: file.name }));
 			} catch (err) {
 				console.error("Import from note error:", err);
-				new Notice("Erreur lors de la lecture de la note");
+				new Notice(t("editor.notice.readNoteError"));
 			}
 		}).open();
 	}
@@ -488,7 +492,7 @@ export class OpenQuizFromNoteModal extends FuzzySuggestModal<TFile> {
 		}
 
 		// Placeholder pour indiquer l'état de chargement
-		this.setPlaceholder("Chargement des quiz en cours...");
+		this.setPlaceholder(t("editor.open.loadingPlaceholder"));
 
 		// Injecter le spinner directement dans le conteneur de résultats
 		// (remplace l'empty-state natif "Aucun résultat trouvé")
@@ -498,7 +502,7 @@ export class OpenQuizFromNoteModal extends FuzzySuggestModal<TFile> {
 			loader.createDiv({ cls: "qb-spinner" });
 			loader.createSpan({
 				cls: "qb-modal-loading-text",
-				text: "Recherche des quiz dans le vault..."
+				text: t("editor.open.searching")
 			});
 		}
 
@@ -590,7 +594,7 @@ export class OpenQuizFromNoteModal extends FuzzySuggestModal<TFile> {
 		}
 
 		// Restaurer le placeholder par défaut
-		this.setPlaceholder("Rechercher un quiz...");
+		this.setPlaceholder(t("editor.open.searchPlaceholder"));
 
 		// Forcer le rafraîchissement de la modale (passe maintenant au super
 		// puisque this.loading === false)
@@ -615,7 +619,7 @@ export class OpenQuizFromNoteModal extends FuzzySuggestModal<TFile> {
 			div.createDiv({ cls: "qb-suggest-main" }, main => {
 				main.createEl("span", { cls: "qb-suggest-name", text: fileName });
 				if (isActive) {
-					main.createEl("span", { cls: "qb-suggest-badge qb-active-badge", text: "Actif" });
+					main.createEl("span", { cls: "qb-suggest-badge qb-active-badge", text: t("editor.suggest.activeBadge") });
 				}
 			});
 			div.createEl("span", { cls: "qb-suggest-path", text: filePath });
@@ -627,7 +631,7 @@ export class OpenQuizFromNoteModal extends FuzzySuggestModal<TFile> {
 			const content = await this.app.vault.read(file);
 			const match = content.match(/```quiz-blocks\n([\s\S]*?)\n```/);
 			if (!match) {
-				new Notice("Aucun bloc quiz-blocks trouvé dans cette note");
+				new Notice(t("editor.notice.noBlockInNote"));
 				return;
 			}
 
@@ -647,11 +651,11 @@ export class OpenQuizFromNoteModal extends FuzzySuggestModal<TFile> {
 			const view = leaf.view as ViewLike;
 			if (view && view.openQuizFile) {
 				await view.openQuizFile(file, match[1]);
-				new Notice(`Quiz ouvert : ${file.name}`);
+				new Notice(t("editor.notice.quizOpened", { file: file.name }));
 			}
 		} catch (err) {
 			console.error("Open quiz error:", err);
-			new Notice("Erreur lors de l'ouverture");
+			new Notice(t("editor.notice.openError"));
 		}
 	}
 }

@@ -1,6 +1,25 @@
 import { setIcon } from "obsidian";
-import type { QuizIndexEntry } from "./scanner";
+import { t } from "../i18n";
+import type { TransKey } from "../i18n";
+import type { QuizIndexEntry, QuizTypeTag } from "./scanner";
 import type { QuizStatRecord } from "./stats-store";
+
+/* Tag de type de quiz (calculé au scan) → clé de traduction, résolue au rendu.
+   Table explicite plutôt qu'une clé construite par concaténation : `t()` n'accepte
+   qu'une TransKey littérale, donc un tag orphelin est une erreur de compilation. */
+const QUIZ_TYPE_KEYS: Record<QuizTypeTag, TransKey> = {
+	mixed: "dashboard.quizType.mixed",
+	single: "dashboard.quizType.single",
+	multiple: "dashboard.quizType.multiple",
+	text: "dashboard.quizType.text",
+	ordering: "dashboard.quizType.ordering",
+	matching: "dashboard.quizType.matching"
+};
+
+/** Libellé traduit du type d'un quiz (partagé par la carte et la vue Détail). */
+export function quizTypeLabel(tag: QuizTypeTag): string {
+	return t(QUIZ_TYPE_KEYS[tag]);
+}
 
 /* ══════════════════════════════════════════════════════════
    QUIZ CARD — composant carte partagé (home + quizzes)
@@ -24,14 +43,16 @@ export function renderQuizCard(
 	const best = stats ? stats.bestScore : 0;
 	const pct = total > 0 ? Math.round(done / total * 100) : 0;
 
+	// `state` reste un identifiant (suffixe de classe CSS) ; seul `stateLabel`
+	// est traduit — et il l'est ici, à chaque rendu de carte.
 	let state: string, stateLabel: string, stateIcon: string;
 	if (stats && total > 0 && done >= total) {
-		if (best >= 80) { state = "mastered"; stateLabel = "Maîtrisé"; stateIcon = "circle-check"; }
-		else { state = "review"; stateLabel = "À revoir"; stateIcon = "rotate-ccw"; }
+		if (best >= 80) { state = "mastered"; stateLabel = t("dashboard.card.mastered"); stateIcon = "circle-check"; }
+		else { state = "review"; stateLabel = t("dashboard.card.review"); stateIcon = "rotate-ccw"; }
 	} else if (done > 0) {
-		state = "progress"; stateLabel = `En cours · ${pct}%`; stateIcon = "rotate-cw";
+		state = "progress"; stateLabel = t("dashboard.card.progress", { pct }); stateIcon = "rotate-cw";
 	} else {
-		state = "fresh"; stateLabel = "À commencer"; stateIcon = "circle-play";
+		state = "fresh"; stateLabel = t("dashboard.card.fresh"); stateIcon = "circle-play";
 	}
 
 	// Barre d'accent colorée par état
@@ -65,9 +86,12 @@ export function renderQuizCard(
 
 	// Meta : nombre de questions + type + meilleur score (si joué)
 	const meta = body.createDiv({ cls: "qbd-quiz-card-meta" });
-	meta.createEl("span", { cls: "qbd-quiz-card-meta-item", text: `${quiz.questions} questions` });
+	meta.createEl("span", {
+		cls: "qbd-quiz-card-meta-item",
+		text: t(quiz.questions === 1 ? "dashboard.common.questionsOne" : "dashboard.common.questionsOther", { count: quiz.questions })
+	});
 	const badge = meta.createEl("span", { cls: "qbd-quiz-card-badge" });
-	badge.textContent = quiz.quizType;
+	badge.textContent = quizTypeLabel(quiz.quizType);
 
 	if (stats && best > 0) {
 		const scoreColor = best >= 80 ? "var(--color-green, #4ade80)"
@@ -75,7 +99,7 @@ export function renderQuizCard(
 			: "var(--color-red, #f87171)";
 		const scoreSpan = meta.createEl("span", { cls: "qbd-quiz-card-score-value" });
 		scoreSpan.style.color = scoreColor;
-		scoreSpan.textContent = `Meilleur ${best}%`;
+		scoreSpan.textContent = t("dashboard.card.best", { score: best });
 	}
 
 	// Ouverture (navigation laissée à l'appelant)

@@ -2,9 +2,11 @@ import { Notice, setIcon, TFile } from "obsidian";
 import type { WorkspaceLeaf } from "obsidian";
 import JSON5 from "json5";
 import { VIEW_TYPE } from "../editor";
+import { t } from "../i18n";
 import type { DashboardCtx } from "../types/dashboard-ctx";
 import type { QuizIndexEntry } from "./scanner";
 import type { QuizStatRecord } from "./stats-store";
+import { quizTypeLabel } from "./quiz-card";
 
 /* ══════════════════════════════════════════════════════════
    DETAIL VIEW — Dashboard
@@ -57,13 +59,13 @@ export function createDetailHandlers(ctx: DashboardCtx): DetailHandlers {
 		const editBtn = topbar.createEl("button", { cls: "qbd-btn qbd-btn--subtle" });
 		const editIcon = editBtn.createSpan({ cls: "qbd-btn-icon" });
 		setIcon(editIcon, "edit");
-		editBtn.createSpan({ text: "Modifier" });
+		editBtn.createSpan({ text: t("dashboard.detail.edit") });
 		editBtn.addEventListener("click", () => openInEditor(quiz));
 
 		const playBtn = topbar.createEl("button", { cls: "qbd-btn qbd-btn--primary" });
 		const playIcon = playBtn.createSpan({ cls: "qbd-btn-icon" });
 		setIcon(playIcon, "play");
-		playBtn.createSpan({ text: "Lancer" });
+		playBtn.createSpan({ text: t("dashboard.detail.play") });
 		playBtn.addEventListener("click", () => openForPlay(quiz));
 
 		// ── Body (2 colonnes) ──
@@ -78,14 +80,19 @@ export function createDetailHandlers(ctx: DashboardCtx): DetailHandlers {
 		ringCard.appendChild(ringSvg);
 		const ringInfo = ringCard.createDiv({ cls: "qbd-detail-ring-info" });
 		ringInfo.createEl("p", { cls: "qbd-detail-ring-pct", text: `${pct}%` });
-		ringInfo.createEl("p", { cls: "qbd-detail-ring-label", text: `${quizStat.questionsDone}/${quizStat.totalQuestions} questions` });
+		// L'accord se joue sur le TOTAL (« 0/1 question », « 3/10 questions »).
+		ringInfo.createEl("p", {
+			cls: "qbd-detail-ring-label",
+			text: t(quizStat.totalQuestions === 1 ? "dashboard.common.questionsOfOne" : "dashboard.common.questionsOfOther",
+				{ done: quizStat.questionsDone, total: quizStat.totalQuestions })
+		});
 
-		// Stat items
+		// Stat items — construits DANS render : libellés traduits à chaque rendu.
 		const statItems: Array<{ label: string; value: string; color: string }> = [
-			{ label: "Meilleur score", value: quizStat.bestScore > 0 ? `${quizStat.bestScore}%` : "—", color: quizStat.bestScore >= 80 ? "var(--color-green)" : quizStat.bestScore >= 60 ? "var(--color-yellow)" : "var(--text-muted)" },
-			{ label: "Type", value: quiz.quizType, color: "var(--text-muted)" },
-			{ label: "Dernière fois", value: ctx.statsStore ? ctx.statsStore.formatRelativeTime(quizStat.lastPlayed) : "—", color: "var(--text-muted)" },
-			{ label: "Tentatives", value: String(quizStat.attempts), color: "var(--text-muted)" }
+			{ label: t("dashboard.detail.statBest"), value: quizStat.bestScore > 0 ? `${quizStat.bestScore}%` : "—", color: quizStat.bestScore >= 80 ? "var(--color-green)" : quizStat.bestScore >= 60 ? "var(--color-yellow)" : "var(--text-muted)" },
+			{ label: t("dashboard.detail.statType"), value: quizTypeLabel(quiz.quizType), color: "var(--text-muted)" },
+			{ label: t("dashboard.detail.statLast"), value: ctx.statsStore ? ctx.statsStore.formatRelativeTime(quizStat.lastPlayed) : "—", color: "var(--text-muted)" },
+			{ label: t("dashboard.detail.statAttempts"), value: String(quizStat.attempts), color: "var(--text-muted)" }
 		];
 
 		for (const item of statItems) {
@@ -97,7 +104,7 @@ export function createDetailHandlers(ctx: DashboardCtx): DetailHandlers {
 
 		// Colonne questions (aperçu)
 		const questionsCol = body.createDiv({ cls: "qbd-detail-questions-col" });
-		questionsCol.createEl("p", { cls: "qbd-detail-section-title", text: "Aperçu des questions" });
+		questionsCol.createEl("p", { cls: "qbd-detail-section-title", text: t("dashboard.detail.questionsTitle") });
 
 		// Charger les questions depuis le fichier
 		loadQuestionPreviews(questionsCol, quiz, quizStat);
@@ -109,14 +116,14 @@ export function createDetailHandlers(ctx: DashboardCtx): DetailHandlers {
 		try {
 			const file = ctx.app.vault.getAbstractFileByPath(quiz.path);
 			if (!file || !(file instanceof TFile)) {
-				wrapper.createEl("p", { cls: "qbd-empty-hint", text: "Fichier introuvable" });
+				wrapper.createEl("p", { cls: "qbd-empty-hint", text: t("dashboard.detail.fileNotFound") });
 				return;
 			}
 
 			const content = await ctx.app.vault.read(file);
 			const startIdx = content.indexOf("```quiz-blocks");
 			if (startIdx === -1) {
-				wrapper.createEl("p", { cls: "qbd-empty-hint", text: "Aucun bloc quiz-blocks trouvé" });
+				wrapper.createEl("p", { cls: "qbd-empty-hint", text: t("dashboard.detail.noBlock") });
 				return;
 			}
 
@@ -137,7 +144,7 @@ export function createDetailHandlers(ctx: DashboardCtx): DetailHandlers {
 				const item = wrapper.createDiv({ cls: "qbd-detail-question-item" });
 				const num = item.createDiv({ cls: "qbd-detail-question-num" });
 				num.textContent = String(i + 1);
-				item.createSpan({ cls: "qbd-detail-question-text", text: q.prompt || q.title || `Question ${i + 1}` });
+				item.createSpan({ cls: "qbd-detail-question-text", text: q.prompt || q.title || t("dashboard.detail.questionFallback", { n: i + 1 }) });
 
 				if (quizStat.questionsDone > i) {
 					const check = item.createSpan({ cls: "qbd-detail-question-check" });
@@ -146,14 +153,15 @@ export function createDetailHandlers(ctx: DashboardCtx): DetailHandlers {
 			}
 
 			if (questions.length > 5) {
+				const extra = questions.length - 5;
 				const more = wrapper.createEl("button", {
 					cls: "qbd-detail-more-btn",
-					text: `+${questions.length - 5} questions de plus`
+					text: t(extra === 1 ? "dashboard.detail.moreOne" : "dashboard.detail.moreOther", { count: extra })
 				});
 				more.addEventListener("click", () => openInEditor(quiz));
 			}
 		} catch {
-			wrapper.createEl("p", { cls: "qbd-empty-hint", text: "Impossible de charger les questions" });
+			wrapper.createEl("p", { cls: "qbd-empty-hint", text: t("dashboard.detail.loadError") });
 		}
 	}
 
@@ -194,7 +202,7 @@ export function createDetailHandlers(ctx: DashboardCtx): DetailHandlers {
 	async function openForPlay(quiz: QuizIndexEntry): Promise<void> {
 		const file = ctx.app.vault.getAbstractFileByPath(quiz.path);
 		if (!file || !(file instanceof TFile)) {
-			new Notice("Fichier introuvable");
+			new Notice(t("dashboard.detail.fileNotFound"));
 			return;
 		}
 		const leaf = ctx.app.workspace.getLeaf(false);
@@ -204,7 +212,7 @@ export function createDetailHandlers(ctx: DashboardCtx): DetailHandlers {
 	async function openInEditor(quiz: QuizIndexEntry): Promise<void> {
 		const file = ctx.app.vault.getAbstractFileByPath(quiz.path);
 		if (!file || !(file instanceof TFile)) {
-			new Notice("Fichier introuvable");
+			new Notice(t("dashboard.detail.fileNotFound"));
 			return;
 		}
 
@@ -212,7 +220,7 @@ export function createDetailHandlers(ctx: DashboardCtx): DetailHandlers {
 			const content = await ctx.app.vault.read(file);
 			const match = content.match(/```quiz-blocks\n([\s\S]*?)\n```/);
 			if (!match) {
-				new Notice("Aucun bloc quiz-blocks trouvé dans cette note");
+				new Notice(t("dashboard.detail.noBlockInNote"));
 				return;
 			}
 
@@ -230,10 +238,10 @@ export function createDetailHandlers(ctx: DashboardCtx): DetailHandlers {
 			const view = leaf.view as QuizEditorViewLike;
 			if (view && view.openQuizFile) {
 				await view.openQuizFile(file, match[1]);
-				new Notice(`Quiz ouvert : ${file.basename}`);
+				new Notice(t("dashboard.detail.opened", { name: file.basename }));
 			}
 		} catch (err) {
-			new Notice("Erreur lors de l'ouverture");
+			new Notice(t("dashboard.detail.openError"));
 		}
 	}
 

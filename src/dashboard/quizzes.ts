@@ -1,6 +1,8 @@
 import { setIcon } from "obsidian";
 import type { WorkspaceLeaf } from "obsidian";
 import { VIEW_TYPE } from "../editor";
+import { t } from "../i18n";
+import type { TransKey } from "../i18n";
 import type { DashboardCtx } from "../types/dashboard-ctx";
 import type { QuizIndexEntry } from "./scanner";
 import type { QuizStatRecord } from "./stats-store";
@@ -15,11 +17,23 @@ export interface QuizzesHandlers {
 	render(container: HTMLElement): void;
 }
 
+/* Le filtre actif est une CLÉ stable, plus le libellé affiché : celui-ci
+   dépend de la langue, et le comparer (`currentFilter === "En cours"`) aurait
+   silencieusement rendu tout filtrage inopérant hors du français. */
+type FilterKey = "all" | "progress" | "mastered" | "fresh";
+
 export function createQuizzesHandlers(ctx: DashboardCtx): QuizzesHandlers {
-	let currentFilter = "Tous";
+	let currentFilter: FilterKey = "all";
 	let searchQuery = "";
 
-	const FILTERS = ["Tous", "En cours", "Maîtrisés", "Non commencés"];
+	// Clés de traduction (pas de libellés) : la liste est construite à
+	// l'ouverture de la vue, les libellés sont résolus à chaque rendu.
+	const FILTERS: Array<{ key: FilterKey; labelKey: TransKey }> = [
+		{ key: "all", labelKey: "dashboard.quizzes.filterAll" },
+		{ key: "progress", labelKey: "dashboard.quizzes.filterProgress" },
+		{ key: "mastered", labelKey: "dashboard.quizzes.filterMastered" },
+		{ key: "fresh", labelKey: "dashboard.quizzes.filterFresh" }
+	];
 
 	function render(container: HTMLElement): void {
 		container.empty();
@@ -29,12 +43,12 @@ export function createQuizzesHandlers(ctx: DashboardCtx): QuizzesHandlers {
 
 		// ── Header ──
 		const header = container.createDiv({ cls: "qbd-quizzes-header" });
-		header.createEl("h2", { cls: "qbd-quizzes-title", text: "Mes quiz" });
+		header.createEl("h2", { cls: "qbd-quizzes-title", text: t("dashboard.quizzes.title") });
 
 		const newBtn = header.createEl("button", { cls: "qbd-btn qbd-btn--ghost" });
 		const newIcon = newBtn.createSpan({ cls: "qbd-btn-icon" });
 		setIcon(newIcon, "plus");
-		newBtn.createSpan({ text: "Nouveau" });
+		newBtn.createSpan({ text: t("dashboard.quizzes.new") });
 		newBtn.addEventListener("click", async () => {
 			const existing = ctx.app.workspace.getLeavesOfType(VIEW_TYPE);
 			let leaf: WorkspaceLeaf;
@@ -55,7 +69,7 @@ export function createQuizzesHandlers(ctx: DashboardCtx): QuizzesHandlers {
 
 		const searchInput = searchWrap.createEl("input", {
 			type: "text",
-			placeholder: "Rechercher…",
+			placeholder: t("dashboard.quizzes.search"),
 			cls: "qbd-quizzes-search-input"
 		});
 		searchInput.value = searchQuery;
@@ -68,11 +82,11 @@ export function createQuizzesHandlers(ctx: DashboardCtx): QuizzesHandlers {
 		const filterBar = container.createDiv({ cls: "qbd-quizzes-filters" });
 		for (const filter of FILTERS) {
 			const btn = filterBar.createEl("button", {
-				cls: `qbd-filter-pill ${currentFilter === filter ? "qbd-filter-pill--active" : ""}`,
-				text: filter
+				cls: `qbd-filter-pill ${currentFilter === filter.key ? "qbd-filter-pill--active" : ""}`,
+				text: t(filter.labelKey)
 			});
 			btn.addEventListener("click", () => {
-				currentFilter = filter;
+				currentFilter = filter.key;
 				render(container);
 			});
 		}
@@ -92,15 +106,15 @@ export function createQuizzesHandlers(ctx: DashboardCtx): QuizzesHandlers {
 			}
 
 			const s = stats[q.path];
-			if (currentFilter === "En cours") return s && s.questionsDone > 0 && s.questionsDone < q.questions;
-			if (currentFilter === "Maîtrisés") return s && s.bestScore >= 80;
-			if (currentFilter === "Non commencés") return !s || s.questionsDone === 0;
+			if (currentFilter === "progress") return s && s.questionsDone > 0 && s.questionsDone < q.questions;
+			if (currentFilter === "mastered") return s && s.bestScore >= 80;
+			if (currentFilter === "fresh") return !s || s.questionsDone === 0;
 			return true;
 		});
 
 		if (filtered.length === 0) {
 			gridEl.createDiv({ cls: "qbd-empty-state" }, el => {
-				el.createEl("p", { text: "Aucun quiz trouvé" });
+				el.createEl("p", { text: t("dashboard.quizzes.empty") });
 			});
 			return;
 		}

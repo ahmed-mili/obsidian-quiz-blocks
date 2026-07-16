@@ -1,6 +1,7 @@
 import { Notice } from "obsidian";
 import { mathifyElement } from "../engine/mathjax";
 import { ConfirmModal } from "./modals";
+import { t } from "../i18n";
 import type { EditorCtx } from "../types/editor-ctx";
 
 /** Handlers de la liste des questions (barre latérale) : rendu, réordonnancement, suppression. */
@@ -17,10 +18,11 @@ export function createSidebarHandlers(ctx: EditorCtx): SidebarHandlers {
 	function renderSidebar(): void {
 		const list = view.sidebarListEl;
 		list.empty();
-		view.qCountEl.textContent = `Questions (${ctx.questions.length})`;
+		view.qCountEl.textContent = t("editor.sidebar.count", { n: ctx.questions.length });
 
 		ctx.questions.forEach((q, i) => {
-			const ti = Q_TYPES.find(t => t.key === q._type) || Q_TYPES[0];
+			// `qt` et non `t` : la variable de boucle masquerait t().
+			const ti = Q_TYPES.find(qt => qt.key === q._type) || Q_TYPES[0];
 			const item = list.createDiv({ cls: `qb-q-item ${i === ctx.activeIdx ? "active" : ""}` });
 			const qIcon = item.createDiv({ cls: "qb-q-icon" });
 			_setIcon(qIcon, ti.lucide);
@@ -76,7 +78,7 @@ export function createSidebarHandlers(ctx: EditorCtx): SidebarHandlers {
 
 	function deleteQuestion(i: number): void {
 		if (ctx.questions.length <= 1) {
-			new Notice("Impossible de supprimer la dernière question");
+			new Notice(t("editor.notice.cannotDeleteLast"));
 			return;
 		}
 
@@ -84,10 +86,10 @@ export function createSidebarHandlers(ctx: EditorCtx): SidebarHandlers {
 		const title = q.title || `Question ${i + 1}`;
 
 		const modal = new ConfirmModal(view.app,
-			`Supprimer "${title}" ?`,
-			`Cette action est irréversible. La question sera définitivement supprimée.`,
-			"Supprimer",
-			"Annuler",
+			t("editor.delete.title", { title }),
+			t("editor.delete.message"),
+			t("editor.action.delete"),
+			t("editor.action.cancel"),
 			(confirmed) => {
 				if (confirmed) {
 					ctx.questions.splice(i, 1);
@@ -96,7 +98,7 @@ export function createSidebarHandlers(ctx: EditorCtx): SidebarHandlers {
 					else if (ctx.activeIdx === i) ctx.activeIdx = Math.min(i, ctx.questions.length - 1);
 						ctx.questions.forEach((qq, idx) => { if (!qq._userModifiedTitle && /^Question \d+$/.test(qq.title)) qq.title = `Question ${idx + 1}`; });
 					view.render();
-					new Notice(`Question "${title}" supprimée`);
+					new Notice(t("editor.notice.questionDeleted", { title }));
 				}
 			}
 		);

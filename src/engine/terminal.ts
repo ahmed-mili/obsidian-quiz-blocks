@@ -1,6 +1,7 @@
 import type { EngineCtx } from "../types/engine-ctx";
 import type { QuizQuestion, TextQuestion } from "../types/quiz";
 import { isMathQuestion, matchesMathAnswer, createMathField } from "./math-input";
+import { t } from "../i18n";
 
 export interface TerminalVisualTokens {
 	leading: string;
@@ -272,8 +273,10 @@ export function createTerminalHandlers(ctx: EngineCtx): TerminalHandlers {
 		const readOnlyAttr = ctx.quizState.locked ? `readonly aria-readonly="true"` : "";
 		const maxLengthAttr = Number.isFinite(maxLength) ? `maxlength="${maxLength}"` : "";
 
+		// `q.placeholder` vient du .md de l'utilisateur (donnée du quiz) : il prime
+		// toujours. Seul le placeholder PAR DÉFAUT est traduit.
 		const placeholder = ctx.escapeHtmlAttr(
-			isTerminal ? (q?.placeholder || "") : (q?.placeholder || "Votre réponse...")
+			isTerminal ? (q?.placeholder || "") : (q?.placeholder || t("engine.text.placeholder"))
 		);
 		const textareaName = ctx.escapeHtmlAttr(q?.id || `q${qi + 1}`);
 

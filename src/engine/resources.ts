@@ -1,5 +1,6 @@
 import type { App, DataAdapter, TFile, View, WorkspaceLeaf } from "obsidian";
 import type { EngineCtx } from "../types/engine-ctx";
+import { t } from "../i18n";
 
 /** Shell Electron minimal (surface réellement consommée : shell.openPath). */
 interface ElectronShellLike {
@@ -109,27 +110,25 @@ export function createResourceHandlers(ctx: EngineCtx): ResourceHandlers {
 	async function handleQuizResourceButtonClick(fileName: string | undefined): Promise<void> {
 		try {
 			const rawName = String(fileName ?? "").trim();
-			if (!rawName) return void quizNotice("Nom de fichier manquant.", QUIZ_RESOURCE_NOTICE_MS.warning);
+			if (!rawName) return void quizNotice(t("engine.resource.missingName"), QUIZ_RESOURCE_NOTICE_MS.warning);
 			const matches = findVaultFilesByExactName(rawName);
-			if (matches.length === 0) return void quizNotice(`Fichier introuvable dans le vault : ${rawName}`, QUIZ_RESOURCE_NOTICE_MS.warning);
-			if (matches.length > 1) quizNotice(`Plusieurs fichiers portent ce nom (${rawName}). Premier résultat utilisé.`, QUIZ_RESOURCE_NOTICE_MS.warning);
+			if (matches.length === 0) return void quizNotice(t("engine.resource.notFound", { name: rawName }), QUIZ_RESOURCE_NOTICE_MS.warning);
+			if (matches.length > 1) quizNotice(t("engine.resource.duplicate", { name: rawName }), QUIZ_RESOURCE_NOTICE_MS.warning);
 			const file = matches[0];
 			const revealed = await revealFileInObsidianExplorer(file);
 			await new Promise<void>(r => setTimeout(r, 180));
 			const openResult = await openWithDefaultAppFromVault(file);
-			if (openResult.ok && openResult.mode === "default-app") return void quizNotice(`Ouverture avec l'application par défaut : ${file.name}`, QUIZ_RESOURCE_NOTICE_MS.defaultApp);
-			if (openResult.ok && openResult.mode === "system-chooser") return void quizNotice(`Ouverture via le système Android : ${file.name}`, QUIZ_RESOURCE_NOTICE_MS.androidSystem);
+			if (openResult.ok && openResult.mode === "default-app") return void quizNotice(t("engine.resource.openedDefaultApp", { name: file.name }), QUIZ_RESOURCE_NOTICE_MS.defaultApp);
+			if (openResult.ok && openResult.mode === "system-chooser") return void quizNotice(t("engine.resource.openedAndroid", { name: file.name }), QUIZ_RESOURCE_NOTICE_MS.androidSystem);
 			const openedFallback = await openVaultFileFallback(file);
-			if (openedFallback) return void quizNotice(`Ouverture interne (fallback) : ${file.name}`, QUIZ_RESOURCE_NOTICE_MS.fallbackOpen);
+			if (openedFallback) return void quizNotice(t("engine.resource.openedInternal", { name: file.name }), QUIZ_RESOURCE_NOTICE_MS.fallbackOpen);
 			quizNotice(
-				revealed
-					? `Fichier localisé, mais aucune application par défaut trouvée pour : ${file.name}`
-					: `Impossible de révéler ou d'ouvrir le fichier : ${file.name}`,
+				t(revealed ? "engine.resource.noDefaultApp" : "engine.resource.openFailed", { name: file.name }),
 				QUIZ_RESOURCE_NOTICE_MS.error
 			);
 		} catch (e) {
 			console.error("[Quiz] handleQuizResourceButtonClick erreur:", e);
-			quizNotice("Erreur pendant l'ouverture du fichier.", QUIZ_RESOURCE_NOTICE_MS.error);
+			quizNotice(t("engine.resource.openError"), QUIZ_RESOURCE_NOTICE_MS.error);
 		}
 	}
 

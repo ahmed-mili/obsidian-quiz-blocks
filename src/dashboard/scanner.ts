@@ -21,6 +21,17 @@ const QUIZ_FENCE_END = "```";
  */
 export type QuestionTypeTag = "single" | "multiple" | "text" | "ordering" | "matching";
 
+/**
+ * Type global d'un quiz — un TAG stable, pas un libellé.
+ * Il est calculé au SCAN et gardé en cache (QuizIndexEntry) : y stocker le
+ * libellé traduit l'aurait figé dans la langue du démarrage (le cache ne se
+ * reconstruit qu'au rechargement du plugin), et un changement de langue aurait
+ * fait diverger toutes les entrées du diff de scanFile ci-dessous. La
+ * traduction se fait donc au rendu (quiz-card.ts, detail.ts) via la clé
+ * « dashboard.quizType.<tag> ».
+ */
+export type QuizTypeTag = "mixed" | "single" | "multiple" | "text" | "ordering" | "matching";
+
 /** Forme minimale lue sur un item brut du tableau JSON5 par le scanner (pas le
  * QuizQuestion complet de types/quiz.ts : parseQuizMeta ne lit que ces 3 champs). */
 interface RawQuizItem {
@@ -33,7 +44,7 @@ interface RawQuizItem {
 export interface QuizMeta {
 	questions: number;
 	types: QuestionTypeTag[];
-	quizType: string;
+	quizType: QuizTypeTag;
 }
 
 /**
@@ -97,15 +108,15 @@ export function createScanner(app: App): Scanner {
 				else typeSet.add("single");
 			}
 
-			// Déterminer le type global du quiz
-			let quizType: string;
-			if (typeSet.size > 1) quizType = "Mixte";
-			else if (typeSet.has("single")) quizType = "Choix unique";
-			else if (typeSet.has("multiple")) quizType = "Choix multiple";
-			else if (typeSet.has("text")) quizType = "Texte libre";
-			else if (typeSet.has("ordering")) quizType = "Ordonnancement";
-			else if (typeSet.has("matching")) quizType = "Association";
-			else quizType = "Mixte";
+			// Déterminer le type global du quiz (tag stable — traduit au rendu)
+			let quizType: QuizTypeTag;
+			if (typeSet.size > 1) quizType = "mixed";
+			else if (typeSet.has("single")) quizType = "single";
+			else if (typeSet.has("multiple")) quizType = "multiple";
+			else if (typeSet.has("text")) quizType = "text";
+			else if (typeSet.has("ordering")) quizType = "ordering";
+			else if (typeSet.has("matching")) quizType = "matching";
+			else quizType = "mixed";
 
 			// Le titre affiché vient du nom de la note (défini au niveau du cache),
 			// pas de la 1re question (qui vaut souvent « Question 1 »).

@@ -1,0 +1,150 @@
+/* Domaine « engine » — anglais, dictionnaire de RÉFÉRENCE.
+   Toute clé ajoutée ici doit l'être aussi dans i18n/fr/engine.ts (le typage de
+   FR_ENGINE l'impose). Clés préfixées « engine. » : un domaine ne marche jamais
+   sur les clés d'un autre.
+
+   Ne contient QUE des libellés visibles par l'élève (boutons, résultats, examen,
+   aria-label, Notice). Les clés du format quiz (title, prompt, options, answer,
+   « single »/« text »/« exam »…) sont des DONNÉES du .md : elles ne passent
+   jamais par ici.
+
+   Pluriels : deux clés `.one` / `.other` choisies dans le code (jamais un « s »
+   concaténé — français et anglais ne s'accordent pas pareil). */
+export const EN_ENGINE = {
+	/* ── Erreurs du bloc ── */
+	"engine.error.noQuestions": "⚠️ No questions were given to the quiz engine.",
+
+	/* ── Navigation ── */
+	"engine.nav.results": "Results",
+	"engine.nav.prevQuestion": "Previous question",
+	"engine.nav.nextQuestion": "Next question",
+
+	/* ── Bascule de mode ── */
+	"engine.mode.toggleAria": "Practice mode",
+	"engine.mode.toggleLabel": "Practice mode",
+	"engine.mode.switchOn": "Turn practice mode on",
+	"engine.mode.switchOff": "Turn practice mode off",
+
+	/* ── Écran de démarrage (choix du mode) ── */
+	"engine.start.selectorAria": "Choose the quiz mode",
+	"engine.start.examTitle": "Exam",
+	"engine.start.examSub": "Timed multiple choice",
+	"engine.start.trainingTitle": "Practice",
+	"engine.start.trainingSub": "Free-text answers",
+
+	/* ── Mode examen ── */
+	"engine.exam.chooseMode": "Choose your mode",
+	"engine.exam.startExam": "Start the exam",
+	"engine.exam.startTraining": "Start practising",
+	"engine.exam.noTimer": "No timer",
+	"engine.exam.duration.one": "Duration: {minutes} minute",
+	"engine.exam.duration.other": "Duration: {minutes} minutes",
+	"engine.exam.questionCount.one": "{count} question",
+	"engine.exam.questionCount.other": "{count} questions",
+	"engine.exam.finish": "Finish the exam",
+	"engine.exam.timeUpManual": "Time's up! Finish and submit your exam.",
+	"engine.exam.timeUpLocked": "Time's up! The quiz has been locked.",
+
+	/* ── Questions à choix ── */
+	"engine.qcm.multiHint": "Select one or more answers",
+
+	/* ── Questions « ordering » ── */
+	"engine.ordering.instructions": "Put the items in the right order (drag and drop). Drop an item on a filled slot to swap the two positions automatically.",
+	"engine.ordering.dropHere": "Drag an item here",
+	"engine.ordering.itemsLabel": "Items to place",
+
+	/* ── Questions « matching » ── */
+	"engine.matching.instructions": "Match each item with an option (drag and drop). The same option can be used more than once.",
+	"engine.matching.dropHere": "Drop an option here",
+	"engine.matching.choicesLabel": "Available options",
+	"engine.matching.unknownChoice": "Unknown option",
+
+	/* ── Indice ── */
+	"engine.hint.button": "Hint",
+	"engine.hint.title": "Hint",
+	"engine.hint.close": "Close",
+
+	/* ── Mode apprentissage ── */
+	"engine.learn.label": "Lesson",
+
+	/* ── Question texte / terminal ── */
+	"engine.text.placeholder": "Your answer...",
+
+	/* ── Mode entraînement (réponse libre) ── */
+	"engine.textOnly.answerLabel": "Your own answer",
+	"engine.textOnly.answerPlaceholder": "Write your answer in your own words...",
+	"engine.textOnly.check": "Check",
+	"engine.textOnly.selfRating": "Self-assessment",
+	"engine.textOnly.optionsLabel": "Multiple-choice options",
+	"engine.textOnly.explanationLabel": "Explanation",
+	"engine.textOnly.noExpectedAnswer": "No expected answer was provided.",
+
+	/* ── Auto-évaluation ── */
+	"engine.rating.understood": "Got it",
+	"engine.rating.partial": "Partly",
+	"engine.rating.review": "To review",
+
+	/* ── Slide de soumission ── */
+	"engine.submit.back": "Back",
+	"engine.submit.showScore": "See the score",
+	"engine.submit.showResults": "See the results",
+	"engine.submit.reviewList": "Go back to a question:",
+	"engine.submit.missingList": "Unanswered questions:",
+	"engine.submit.missingAnswers.one": "{count} answer is missing.",
+	"engine.submit.missingAnswers.other": "{count} answers are missing.",
+	"engine.submit.missingFreeAnswers.one": "{count} free-text answer is missing.",
+	"engine.submit.missingFreeAnswers.other": "{count} free-text answers are missing.",
+	"engine.submit.allFreeAnswered": "Every question has a free-text answer.",
+	"engine.submit.missingRatings.one": "{count} self-assessment is missing.",
+	"engine.submit.missingRatings.other": "{count} self-assessments are missing.",
+	"engine.submit.toRateList": "Questions to assess:",
+	"engine.submit.allRated": "Every question has been assessed.",
+
+	/* ── Slide de résultats ── */
+	"engine.result.title": "Results",
+	"engine.result.trainingTitle": "Practice results",
+	"engine.result.freeTextCorrection": "Free-text review",
+	"engine.result.correctionHint": "Go back through the questions to compare your answers, read the explanations and assess yourself.",
+	"engine.result.reviewAnswers": "Review my answers",
+	"engine.result.ratedLabel": "Self-assessed:",
+	"engine.result.correctLabel": "Correct answers:",
+	"engine.result.pending.one": "Not assessed",
+	"engine.result.pending.other": "Not assessed",
+	"engine.result.retry": "Start over",
+	"engine.result.takeExam": "Take the exam",
+	"engine.result.retakeExam": "Retake the exam",
+
+	/* ── Sauvegarde des résultats ── */
+	"engine.result.save": "Save my results",
+	"engine.result.saved": "Results saved",
+	"engine.result.saving": "Saving...",
+	"engine.result.savedIn": "Saved to {path}",
+	"engine.result.savedNotice": "Results saved: {path}",
+	"engine.result.saveError": "Could not save the results: {message}",
+	"engine.result.unknownError": "unknown error",
+	"engine.result.storageUnavailable": "Cannot reach the vault storage.",
+
+	/* ── Bouton ressource (pièce jointe) ── */
+	"engine.resource.missingName": "Missing file name.",
+	"engine.resource.notFound": "File not found in the vault: {name}",
+	"engine.resource.duplicate": "Several files are named {name}. Using the first match.",
+	"engine.resource.openedDefaultApp": "Opening with the default app: {name}",
+	"engine.resource.openedAndroid": "Opening with the Android system: {name}",
+	"engine.resource.openedInternal": "Opening inside Obsidian (fallback): {name}",
+	"engine.resource.noDefaultApp": "File found, but no default app is available for: {name}",
+	"engine.resource.openFailed": "Could not reveal or open the file: {name}",
+	"engine.resource.openError": "Something went wrong while opening the file.",
+
+	/* ── Clavier mathématique (MathLive) ── */
+	"engine.math.closeKeyboard": "Close the keyboard",
+	"engine.math.matrixTab": "Matrices and structures",
+	"engine.math.matrix2x2Paren": "2×2 matrix (parentheses)",
+	"engine.math.matrix3x3Paren": "3×3 matrix (parentheses)",
+	"engine.math.matrix2x2Bracket": "2×2 matrix (brackets)",
+	"engine.math.determinant2x2": "2×2 determinant",
+	"engine.math.equationSystem": "System of equations",
+	"engine.math.vector": "Vector",
+	"engine.math.overline": "Overline (conjugate / mean)",
+	"engine.math.addRow": "Add a row to the matrix",
+	"engine.math.addColumn": "Add a column to the matrix",
+} as const;

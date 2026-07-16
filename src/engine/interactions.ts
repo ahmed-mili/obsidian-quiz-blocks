@@ -1,5 +1,6 @@
 import type { EngineCtx } from "../types/engine-ctx";
 import type { OrderingQuestion, MatchingQuestion } from "../types/quiz";
+import { t } from "../i18n";
 
 /** Charge utile du drag-and-drop (ordering/matching), sérialisée en JSON dans le dataTransfer. */
 interface DragPayload {
@@ -366,22 +367,24 @@ export function createInteractionHandlers(ctx: EngineCtx): InteractionHandlers {
 			saveBtn.dataset.saving = "1";
 			saveBtn.disabled = true;
 			const previousText = saveBtn.textContent;
-			saveBtn.textContent = "Sauvegarde...";
+			saveBtn.textContent = t("engine.result.saving");
 
 			try {
 				const saved = await ctx.resultsSaver.saveCurrentResults();
 				ctx.quizState.savedResultsPath = saved.path;
 				if (typeof ctx.Notice === "function") {
-					new ctx.Notice(`Résultats sauvegardés : ${saved.path}`, 5000);
+					new ctx.Notice(t("engine.result.savedNotice", { path: saved.path }), 5000);
 				}
 				ctx.cards.refreshMetaSlides({ force: true });
 			} catch (error) {
 				console.error("Quiz results save error:", error);
 				saveBtn.disabled = false;
-				saveBtn.textContent = previousText || "Sauvegarder mes résultats";
+				saveBtn.textContent = previousText || t("engine.result.save");
 				delete saveBtn.dataset.saving;
 				if (typeof ctx.Notice === "function") {
-					new ctx.Notice(`Erreur sauvegarde résultats : ${(error as { message?: string })?.message || "erreur inconnue"}`, 6000);
+					new ctx.Notice(t("engine.result.saveError", {
+						message: (error as { message?: string })?.message || t("engine.result.unknownError")
+					}), 6000);
 				}
 			}
 		});
@@ -417,7 +420,7 @@ export function createInteractionHandlers(ctx: EngineCtx): InteractionHandlers {
 		const isTextOnly = mode === "text";
 		btn.classList.toggle("is-on", isTextOnly);
 		btn.setAttribute("aria-checked", isTextOnly ? "true" : "false");
-		btn.setAttribute("aria-label", isTextOnly ? "Désactiver le mode entraînement" : "Activer le mode entraînement");
+		btn.setAttribute("aria-label", t(isTextOnly ? "engine.mode.switchOff" : "engine.mode.switchOn"));
 		btn.dataset.quizMode = isTextOnly ? "qcm" : "text";
 	}
 
