@@ -14,6 +14,7 @@ export const FR_AI: Record<keyof typeof EN_AI, string> = {
 	"ai.add.files": "Ajouter des fichiers ou des images",
 	"ai.add.notes": "Ajouter des notes",
 	"ai.mention.noMatch": "Aucun fichier correspondant",
+	"ai.mention.truncated": "Trop de fichiers dans {roots} — la recherche peut être incomplète",
 
 	/* ── Options de génération ── */
 	"ai.options.tooltip": "{count} questions · {type}",

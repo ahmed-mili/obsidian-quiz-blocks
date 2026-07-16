@@ -16,6 +16,9 @@ export const EN_AI = {
 	"ai.add.notes": "Add notes",
 	/* Picker « @ » : aucune entrée pour le token tapé. */
 	"ai.mention.noMatch": "No matching file",
+	/* Pied du menu : une garde anti-explosion a coupé l'indexation d'une ou
+	   plusieurs racines externes — on ne tronque jamais en silence. */
+	"ai.mention.truncated": "Too many files in {roots} — search may be incomplete",
 
 	/* ── Options de génération ── */
 	"ai.options.tooltip": "{count} questions · {type}",

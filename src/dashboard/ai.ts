@@ -616,12 +616,17 @@ export function createAiHandlers(ctx: DashboardCtx): AiHandlers {
 
 		mentions = attachMentionPicker(ctx.app, composerInput, composer, {
 			onPickVaultFile: (path) => { void attachVaultPath(path); },
+			onPickExternalFile: (path) => { void attachExternalPath(path); },
 			onTextReplaced: (value) => {
 				composerText = value;
 				composerCaret = composerInput.selectionStart;
 				autoGrow();
 				updateGenerateBtn(generateBtnRef);
 			},
+			// Lu au rendu (le réglage peut changer sans rouvrir la vue).
+			// Accesseur vérifié le 2026-07-16 : ai.ts lit « ctx.plugin.settings.<clé> »
+			// (cf. ligne 171 par ex.), il n'existe PAS de ctx.settings() dans ce module.
+			getExtraRoots: () => ctx.plugin.settings.aiMentionExtraFolders || [],
 		});
 
 		// Rangée du bas : bouton « + » (gauche), puis à droite le modèle +
@@ -1250,6 +1255,29 @@ export function createAiHandlers(ctx: DashboardCtx): AiHandlers {
 			await addComposerFiles([file]);
 		} catch (e) {
 			new Notice(t("ai.notice.noteReadFailed", { name: f.name }));
+		}
+	}
+
+	/* Attache un fichier hors vault (picker « @ »). On fabrique un File à
+	   partir du disque pour réutiliser addComposerFiles tel quel : images,
+	   PDF et texte y sont déjà routés. Desktop uniquement (fs). */
+	async function attachExternalPath(path: string): Promise<void> {
+		if (!Platform.isDesktopApp) return;
+		const name = path.slice(Math.max(path.lastIndexOf("/"), path.lastIndexOf("\\")) + 1);
+		if (noteAttachments.some(n => n.name === name)) {
+			new Notice(t("ai.notice.noteAlreadyAttached", { name }));
+			return;
+		}
+		try {
+			const fs = require("fs") as typeof import("fs");
+			const buf = fs.readFileSync(path);
+			// mimeForName vient de la Task 2 : addComposerFiles teste file.type
+			// EN PREMIER pour les images, un File sans type finirait en chip
+			// texte au lieu d'une vignette.
+			const file = new File([new Uint8Array(buf)], name, { type: mimeForName(name) });
+			await addComposerFiles([file]);
+		} catch (e) {
+			new Notice(t("ai.notice.noteReadFailed", { name }));
 		}
 	}
 

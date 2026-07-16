@@ -1,6 +1,10 @@
 import { App } from "obsidian";
-import { FileEntry, listVaultFolder, searchVault } from "./file-sources";
+import {
+	FileEntry, listExternalFolder, listExternalRoots, listVaultFolder,
+	primeExternalIndex, searchExternal, searchVault,
+} from "./file-sources";
 import { MentionMenuHandle, MentionMenuItem, openMentionMenu } from "./ui-select";
+import { t } from "../i18n";
 
 export interface MentionToken {
 	/** Index du « @ » dans le texte. */
@@ -33,8 +37,12 @@ export function findMentionToken(text: string, caret: number): MentionToken | nu
 export interface MentionPickerOptions {
 	/** Attache un fichier du vault (→ attachNoteVaultFile dans ai.ts). */
 	onPickVaultFile(path: string): void;
+	/** Attache un fichier hors vault par chemin absolu. */
+	onPickExternalFile(path: string): void;
 	/** Le texte du textarea a été réécrit (token retiré / complété). */
 	onTextReplaced(value: string): void;
+	/** Racines configurées, lues au rendu (le réglage peut changer). */
+	getExtraRoots(): string[];
 }
 
 export interface MentionPickerHandle {
@@ -79,20 +87,40 @@ export function attachMentionPicker(
 		opts.onTextReplaced(next);
 	}
 
-	function entriesFor(query: string): FileEntry[] {
-		// Token vide ou finissant par « / » → on LISTE ce dossier.
-		// Sinon → recherche fuzzy TOUJOURS GLOBALE (jamais restreinte au
-		// dossier courant : décision d'Ahmed).
-		if (!query) return listVaultFolder(app, "");
-		if (query.endsWith("/")) return listVaultFolder(app, query.slice(0, -1));
-		return searchVault(app, query);
+	function entriesFor(query: string): { entries: FileEntry[]; footer?: string } {
+		const roots = opts.getExtraRoots();
+		// Token vide → racine du vault, puis les racines externes en fin de
+		// liste (elles ont leur icône propre).
+		if (!query) {
+			return { entries: [...listVaultFolder(app, ""), ...listExternalRoots(roots)] };
+		}
+		// Token finissant par « / » → on liste ce dossier.
+		if (query.endsWith("/")) {
+			const dir = query.slice(0, -1);
+			const external = roots.some(r => dir === r || dir.startsWith(r + "/"));
+			return { entries: external ? listExternalFolder(dir) : listVaultFolder(app, dir) };
+		}
+		// Sinon : recherche TOUJOURS globale, vault + toutes les racines.
+		const ext = searchExternal(roots, query);
+		const entries = [...searchVault(app, query), ...ext.entries];
+		const footer = ext.truncated.length
+			? t("ai.mention.truncated", { roots: ext.truncated.join(", ") })
+			: undefined;
+		return { entries, footer };
 	}
 
 	function itemsFor(token: MentionToken, entries: FileEntry[]): MentionMenuItem[] {
-		return entries.slice(0, 30).map(entry => ({
+		const shown = entries.slice(0, 30);
+		// Trait de séparation devant la PREMIÈRE entrée hors vault (la liste
+		// initiale place les racines externes en fin).
+		const firstExternal = shown.findIndex(e => e.source === "external");
+		return shown.map((entry, i) => ({
 			label: entry.isFolder ? entry.name + "/" : entry.name,
-			sub: entry.path.includes("/") ? entry.path.slice(0, entry.path.lastIndexOf("/")) : undefined,
-			icon: iconFor(entry),
+			sub: entry.source === "external"
+				? entry.rootLabel
+				: (entry.path.includes("/") ? entry.path.slice(0, entry.path.lastIndexOf("/")) : undefined),
+			icon: entry.source === "external" && entry.isFolder ? "corner-up-right" : iconFor(entry),
+			separatorBefore: i > 0 && i === firstExternal,
 			onChoose: () => {
 				if (entry.isFolder) {
 					// Dossier → on descend dedans, on n'attache jamais.
@@ -101,7 +129,8 @@ export function attachMentionPicker(
 					return;
 				}
 				replaceToken(token, "");
-				opts.onPickVaultFile(entry.path);
+				if (entry.source === "external") opts.onPickExternalFile(entry.path);
+				else opts.onPickVaultFile(entry.path);
 			},
 		}));
 	}
@@ -109,11 +138,14 @@ export function attachMentionPicker(
 	function refresh(): void {
 		const token = findMentionToken(textarea.value, textarea.selectionStart ?? 0);
 		if (!token) { close(); return; }
-		const entries = entriesFor(token.query);
+		const { entries, footer } = entriesFor(token.query);
 		// Un espace qui ne mène nulle part termine le token.
 		if (!entries.length && token.query.includes(" ")) { close(); return; }
-		if (!menu) menu = openMentionMenu(anchorEl, () => { menu = null; });
-		menu.setItems(itemsFor(token, entries));
+		if (!menu) {
+			primeExternalIndex(opts.getExtraRoots());
+			menu = openMentionMenu(anchorEl, () => { menu = null; });
+		}
+		menu.setItems(itemsFor(token, entries), footer);
 	}
 
 	function onInput(): void { refresh(); }
