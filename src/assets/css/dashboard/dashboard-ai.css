@@ -67,7 +67,9 @@
 .qbd-ai-stage--idle .qbd-ai-composer-input,
 .qbd-ai-stage--loading .qbd-ai-composer-input,
 .qbd-ai-stage--error .qbd-ai-composer-input {
-	min-height: 60px;
+	/* 58px : compense les +2px de la barre agrandie (contrôles 30→34)
+	   pour garder le composer aux 142px validés. */
+	min-height: 58px;
 	font-size: 15px;
 }
 
@@ -457,9 +459,9 @@
 /* Spécificité 0,3,0 : doit battre « .qbd-ai-composer-tools .qbd-select »
    (padding 4px 8px), déclaré plus bas — sinon le logo est rogné. */
 .qbd-ai-composer-tools .qbd-select.qbd-provider-trigger-logo {
-	width: 24px;
-	min-width: 24px;
-	height: 30px;
+	width: 28px;
+	min-width: 28px;
+	height: 34px;
 	padding: 0;
 	justify-content: center;
 	flex-shrink: 0;
@@ -467,6 +469,13 @@
 	   (l'espace visuel restant = padding gauche 7px du bouton modèle,
 	   soit ~11px du glyphe au texte — comme un logo intégré au label). */
 	margin-right: -6px;
+}
+
+/* Glyphe du trigger AGRANDI avec la barre (18px) — les logos des menus
+   déroulants gardent leur 15px de base. */
+.qbd-provider-trigger-logo .qbd-provider-logo svg {
+	width: 18px;
+	height: 18px;
 }
 
 .qbd-provider-trigger-logo .qbd-select-chevron {
@@ -772,8 +781,8 @@
 	display: inline-flex;
 	align-items: center;
 	justify-content: center;
-	width: 32px;
-	height: 32px;
+	width: 34px;
+	height: 34px;
 	padding: 0;
 	border-radius: 9px;
 	background: transparent !important;
@@ -791,8 +800,8 @@
 }
 
 .qbd-ai-composer-add svg {
-	width: 16px;
-	height: 16px;
+	width: 18px;
+	height: 18px;
 }
 
 /* Groupe droite du pied : modèle + effort puis bouton d'envoi. */
@@ -807,12 +816,12 @@
 /* Sélecteur modèle + effort dans le pied : look « texte » subtil façon
    claude.ai (« Fable 5 Max ⌄ »), pas le look champ bordé de la carte. */
 .qbd-ai-composer-tools .qbd-select {
-	min-height: 30px;
+	min-height: 34px;
 	padding: 4px 8px;
 	background: transparent !important;
 	border: 1px solid transparent;
 	border-radius: 8px;
-	font-size: 12px;
+	font-size: 13.5px;
 }
 
 .qbd-ai-composer-tools .qbd-select:hover {
@@ -832,8 +841,8 @@
 	display: none;
 	align-items: center;
 	justify-content: center;
-	width: 32px;
-	height: 32px;
+	width: 34px;
+	height: 34px;
 	padding: 0;
 	border: none;
 	border-radius: 9px;
@@ -875,8 +884,8 @@
 }
 
 .qbd-ai-composer-send-icon svg {
-	width: 17px;
-	height: 17px;
+	width: 18px;
+	height: 18px;
 }
 
 @keyframes qbd-send-in {
@@ -1080,10 +1089,10 @@
 	display: inline-flex;
 	align-items: center;
 	justify-content: center;
-	width: 30px;
-	height: 30px;
+	width: 34px;
+	height: 34px;
 	padding: 0;
-	border-radius: 8px;
+	border-radius: 9px;
 	background: transparent !important;
 	border: none;
 	box-shadow: none !important;
@@ -1099,8 +1108,8 @@
 }
 
 .qbd-ai-composer-opts svg {
-	width: 15px;
-	height: 15px;
+	width: 18px;
+	height: 18px;
 }
 
 .qbd-options-pop {
