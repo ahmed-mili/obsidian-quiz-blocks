@@ -8,4 +8,8 @@ export const FR_SETTINGS: Record<keyof typeof EN_SETTINGS, string> = {
 	"settings.language.auto": "Automatique (suivre Obsidian)",
 	"settings.language.en": "English",
 	"settings.language.fr": "Français",
+	"settings.ai.mentionFolders.name": "Dossiers hors du coffre",
+	"settings.ai.mentionFolders.desc": "Dossiers que le picker « @ » cherche en plus de votre coffre. Entrée pour ajouter. Ordinateur uniquement.",
+	"settings.ai.mentionFolders.remove": "Retirer ce dossier",
+	"settings.ai.mentionFolders.invalid": "Ce n'est pas un dossier : {dir}",
 };

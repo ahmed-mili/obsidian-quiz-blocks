@@ -1,6 +1,7 @@
 import {
 	MarkdownRenderChild,
 	Notice,
+	Platform,
 	Plugin,
 	PluginSettingTab,
 	Setting,
@@ -55,6 +56,8 @@ interface QuizBlocksSettings {
 	aiOllamaCatalog: OllamaCatalogEntry[] | null;
 	hotkeyAddFiles: Hotkey;
 	hotkeyAddNotes: Hotkey;
+	/** Dossiers hors vault proposés par le picker « @ » (desktop uniquement). */
+	aiMentionExtraFolders: string[];
 	voiceEnabled: boolean;
 	voiceBackend: VoiceBackend;
 	voiceModel: VoiceModelId;
@@ -96,6 +99,8 @@ const DEFAULT_SETTINGS: QuizBlocksSettings = {
 	// « recherche » partout ailleurs.
 	hotkeyAddFiles: { modifiers: ["Mod"], key: "u" },
 	hotkeyAddNotes: { modifiers: ["Mod"], key: "e" },
+	// Vide par défaut : le « @ » se limite au vault tant qu'Ahmed n'ajoute rien.
+	aiMentionExtraFolders: [],
 	// ── Saisie vocale (dictée locale whisper.cpp) — opt-in complet.
 	// Spec : docs/superpowers/specs/2026-07-10-voice-input-design.md
 	voiceEnabled: false,
@@ -700,6 +705,49 @@ class QuizBlocksSettingTab extends PluginSettingTab {
 				this.plugin.settings.aiOllamaCatalog = cat;
 				return this.plugin.saveSettings();
 			}).then(() => render()).catch(() => { /* hors-ligne → repli */ });
+		}
+
+		// Dossiers hors vault pour le picker « @ » (fs → desktop uniquement ;
+		// le plugin reste isDesktopOnly: false, la section disparaît juste).
+		if (Platform.isDesktopApp) {
+			new Setting(containerEl)
+				.setName(t("settings.ai.mentionFolders.name"))
+				.setDesc(t("settings.ai.mentionFolders.desc"));
+			const list = containerEl.createDiv({ cls: "qbd-settings-folder-list" });
+			const paint = () => {
+				list.empty();
+				for (const [i, dir] of this.plugin.settings.aiMentionExtraFolders.entries()) {
+					new Setting(list)
+						.setName(dir)
+						.addExtraButton(b => b
+							.setIcon("trash-2")
+							.setTooltip(t("settings.ai.mentionFolders.remove"))
+							.onClick(async () => {
+								this.plugin.settings.aiMentionExtraFolders.splice(i, 1);
+								await this.plugin.saveSettings();
+								paint();
+							}));
+				}
+			};
+			paint();
+			new Setting(containerEl)
+				.addText(txt => {
+					txt.setPlaceholder("C:\\Users\\...\\Downloads");
+					txt.inputEl.addEventListener("keydown", async (e) => {
+						if (e.key !== "Enter") return;
+						const dir = txt.getValue().trim();
+						if (!dir) return;
+						const fs = require("fs") as typeof import("fs");
+						let ok = false;
+						try { ok = fs.statSync(dir).isDirectory(); } catch (err) { ok = false; }
+						if (!ok) { new Notice(t("settings.ai.mentionFolders.invalid", { dir })); return; }
+						if (this.plugin.settings.aiMentionExtraFolders.includes(dir)) { txt.setValue(""); return; }
+						this.plugin.settings.aiMentionExtraFolders.push(dir);
+						await this.plugin.saveSettings();
+						txt.setValue("");
+						paint();
+					});
+				});
 		}
 
 		// ─── Contextual Tutorial ───

@@ -67,6 +67,7 @@ export interface AiSettings extends VoiceSettings {
 	aiOllamaCatalog?: OllamaCatalogEntry[] | null;
 	hotkeyAddFiles?: Hotkey | null;
 	hotkeyAddNotes?: Hotkey | null;
+	aiMentionExtraFolders?: string[];
 }
 
 /**
