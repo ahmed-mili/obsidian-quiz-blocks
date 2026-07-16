@@ -1430,3 +1430,144 @@ export function openNotePicker(anchorEl: HTMLElement, opts: OpenNotePickerOption
 
 	return { close: closeMenu };
 }
+
+/* ── openMentionMenu ──────────────────────────────────────── */
+
+export interface MentionMenuItem {
+	label: string;
+	/** Sous-titre discret : dossier parent, ou racine externe. */
+	sub?: string;
+	/** Nom d'icône Lucide (setIcon). */
+	icon: string;
+	/** Trait de séparation AVANT cette entrée (vault → racines hors vault). */
+	separatorBefore?: boolean;
+	onChoose: () => void;
+}
+
+export interface MentionMenuHandle extends MenuHandle {
+	setItems(items: MentionMenuItem[], footer?: string): void;
+	moveSelection(delta: number): void;
+	/** Valide l'entrée sélectionnée. false si la liste est vide. */
+	confirm(): boolean;
+}
+
+/*
+ * openMentionMenu(anchorEl, onClose)
+ * Menu du picker « @ ». Contrairement à openNotePicker, il n'a PAS de champ
+ * de recherche et ne prend JAMAIS le focus : la frappe reste dans le
+ * textarea, qui pilote le menu via setItems(). Ancré sur le composer (et
+ * non sur le caret), conformément à la référence Claude Code où la liste
+ * s'affiche au-dessus du prompt.
+ */
+export function openMentionMenu(anchorEl: HTMLElement, onClose?: () => void): MentionMenuHandle {
+	closeAllSelects();
+
+	const menuEl = document.body.createDiv({
+		cls: "qbd-select-menu qbd-model-menu qbd-note-picker qbd-mention-menu"
+	});
+	menuEl.setAttribute("role", "listbox");
+	const listEl = menuEl.createDiv({ cls: "qbd-model-menu-list" });
+	let footerEl: HTMLElement | null = null;
+
+	let items: MentionMenuItem[] = [];
+	let sel = 0;
+
+	function paint(): void {
+		listEl.empty();
+		items.forEach((item, i) => {
+			if (item.separatorBefore) listEl.createDiv({ cls: "qbd-mention-sep" });
+			const b = listEl.createEl("button", { cls: "qbd-select-option qbd-note-picker-item" });
+			b.type = "button";
+			b.setAttribute("role", "option");
+			if (i === sel) b.addClass("is-selected");
+			const ic = b.createSpan({ cls: "qbd-action-menu-icon" });
+			setIcon(ic, item.icon);
+			const body = b.createDiv({ cls: "qbd-action-menu-body" });
+			body.createSpan({ cls: "qbd-select-option-label", text: item.label });
+			if (item.sub) body.createSpan({ cls: "qbd-action-menu-sub", text: item.sub });
+			// mousedown, pas click : le textarea ne doit jamais perdre le focus.
+			b.addEventListener("mousedown", (e) => {
+				e.preventDefault();
+				closeMenu();
+				item.onChoose();
+			});
+			b.addEventListener("mouseenter", () => { sel = i; paintSelection(); });
+		});
+		if (!items.length) {
+			listEl.createDiv({ cls: "qbd-model-menu-empty", text: t("ai.mention.noMatch") });
+		}
+	}
+
+	function paintSelection(): void {
+		const opts = Array.from(listEl.querySelectorAll(".qbd-select-option"));
+		opts.forEach((el, i) => el.toggleClass("is-selected", i === sel));
+		const cur = opts[sel] as HTMLElement | undefined;
+		if (cur) cur.scrollIntoView({ block: "nearest" });
+	}
+
+	function position(): void {
+		const rect = anchorEl.getBoundingClientRect();
+		menuEl.style.visibility = "hidden";
+		menuEl.style.top = "0px";
+		menuEl.style.left = "0px";
+		const mr = menuEl.getBoundingClientRect();
+		const left = Math.min(Math.max(8, rect.left), window.innerWidth - mr.width - 8);
+		// Référence : la liste s'affiche AU-DESSUS du prompt. On ne bascule
+		// en dessous que si le haut manque de place.
+		const above = rect.top - 4 - mr.height;
+		const top = above >= 8 ? above : rect.bottom + 4;
+		menuEl.style.left = left + "px";
+		menuEl.style.top = top + "px";
+		menuEl.style.visibility = "";
+	}
+
+	function closeMenu(): void {
+		menuEl.remove();
+		openMenus.delete(closeMenu);
+		document.removeEventListener("mousedown", onDocDown, true);
+		window.removeEventListener("scroll", onScroll, true);
+		window.removeEventListener("resize", closeMenu);
+		if (onClose) onClose();
+	}
+
+	function onDocDown(e: MouseEvent): void {
+		const n = e.target as Node | null;
+		if ((n && anchorEl.contains(n)) || (n && menuEl.contains(n))) return;
+		closeMenu();
+	}
+
+	function onScroll(e: Event): void {
+		const n = e.target as Node | null;
+		if (n && menuEl.contains(n)) return;
+		closeMenu();
+	}
+
+	openMenus.add(closeMenu);
+	document.addEventListener("mousedown", onDocDown, true);
+	window.addEventListener("scroll", onScroll, true);
+	window.addEventListener("resize", closeMenu);
+
+	return {
+		close: closeMenu,
+		setItems(next: MentionMenuItem[], footer?: string) {
+			items = next;
+			sel = 0;
+			paint();
+			if (footerEl) { footerEl.remove(); footerEl = null; }
+			if (footer) footerEl = menuEl.createDiv({ cls: "qbd-mention-footer", text: footer });
+			position();
+		},
+		moveSelection(delta: number) {
+			if (!items.length) return;
+			sel = (sel + delta + items.length) % items.length;
+			paintSelection();
+		},
+		confirm(): boolean {
+			const item = items[sel];
+			if (!item) return false;
+			closeMenu();
+			item.onChoose();
+			return true;
+		},
+	};
+}

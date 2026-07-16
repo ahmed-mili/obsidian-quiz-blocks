@@ -14,6 +14,8 @@ export const EN_AI = {
 	"ai.composer.stop": "Stop",
 	"ai.add.files": "Add files or images",
 	"ai.add.notes": "Add notes",
+	/* Picker « @ » : aucune entrée pour le token tapé. */
+	"ai.mention.noMatch": "No matching file",
 
 	/* ── Options de génération ── */
 	"ai.options.tooltip": "{count} questions · {type}",

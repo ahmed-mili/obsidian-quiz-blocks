@@ -1,5 +1,5 @@
-import { setIcon, Notice, loadPdfJs, Platform, MarkdownRenderer } from "obsidian";
-import type { App, TFile, View } from "obsidian";
+import { setIcon, Notice, loadPdfJs, Platform, MarkdownRenderer, TFile } from "obsidian";
+import type { App, View } from "obsidian";
 import type { DashboardCtx } from "../types/dashboard-ctx";
 import type { EditorHostView } from "../types/editor-ctx";
 import * as aiProviders from "./ai-providers";
@@ -7,6 +7,8 @@ import { createSelect, closeAllSelects, openActionMenu, openModelMenu, openEffor
 import type { SelectHandle, SelectOption } from "./ui-select";
 import { formatHotkey } from "../hotkey-format";
 import * as voiceInput from "./voice-input";
+import { attachMentionPicker } from "./mention-picker";
+import type { MentionPickerHandle } from "./mention-picker";
 import type { AiClient, ImagePayload } from "./ai-client";
 import { t } from "../i18n";
 import type { TransKey } from "../i18n";
@@ -561,8 +563,11 @@ export function createAiHandlers(ctx: DashboardCtx): AiHandlers {
 		}
 
 		const composerInput = composer.createEl("textarea", { cls: "qbd-ai-composer-input" });
+		// Picker « @ » : déclaré avant la dictée pour que celle-ci puisse
+		// interroger son état (les deux écoutent le même textarea).
+		let mentions: MentionPickerHandle | null = null;
 		// Dictée vocale push-to-talk (opt-in — réglages « Saisie vocale »).
-		voiceInput.attach(ctx, composerInput);
+		voiceInput.attach(ctx, composerInput, { isBlocked: () => !!mentions && mentions.isOpen() });
 		composerInput.placeholder = t("ai.composer.placeholder");
 		composerInput.value = composerText;
 		composerInput.rows = 2;
@@ -588,10 +593,20 @@ export function createAiHandlers(ctx: DashboardCtx): AiHandlers {
 		// génération) ; isComposing protège la saisie IME.
 		composerInput.addEventListener("keydown", (e) => {
 			if (e.key !== "Enter" || e.shiftKey || e.isComposing) return;
+			if (mentions && mentions.isOpen()) return; // le picker gère Entrée
 			e.preventDefault();
 			if (phase !== "loading" && canGenerate()) startGeneration(containerRef);
 		});
 		requestAnimationFrame(autoGrow);
+
+		mentions = attachMentionPicker(ctx.app, composerInput, composer, {
+			onPickVaultFile: (path) => { void attachVaultPath(path); },
+			onTextReplaced: (value) => {
+				composerText = value;
+				autoGrow();
+				updateGenerateBtn(generateBtnRef);
+			},
+		});
 
 		// Rangée du bas : bouton « + » (gauche), puis à droite le modèle +
 		// effort (façon claude.ai) et le bouton d'envoi.
@@ -1182,6 +1197,36 @@ export function createAiHandlers(ctx: DashboardCtx): AiHandlers {
 			render(containerRef);
 		} catch (e) {
 			new Notice(t("ai.notice.noteReadFailed", { name: file.basename }));
+		}
+	}
+
+	/* MIME d'après l'extension. Nécessaire quand on fabrique un File depuis
+	   le disque ou le vault : addComposerFiles teste file.type EN PREMIER
+	   pour les images, et un File sans type finirait en chip texte. */
+	function mimeForName(name: string): string {
+		const ext = name.slice(name.lastIndexOf(".") + 1).toLowerCase();
+		if (ext === "pdf") return "application/pdf";
+		if (["png", "jpg", "jpeg", "gif", "webp", "bmp", "avif"].includes(ext)) {
+			return "image/" + (ext === "jpg" ? "jpeg" : ext);
+		}
+		return "text/plain";
+	}
+
+	/* Attache un fichier du VAULT choisi via « @ ». Les notes passent par
+	   attachNoteVaultFile (qui dédoublonne par path et garde le lien vers la
+	   note) ; les PDF et images passent par addComposerFiles, seule à savoir
+	   extraire un PDF et router une image vers la vision. */
+	async function attachVaultPath(path: string): Promise<void> {
+		const f = ctx.app.vault.getAbstractFileByPath(path);
+		if (!(f instanceof TFile)) return;
+		const ext = f.extension.toLowerCase();
+		if (ext === "md" || ext === "txt") { await attachNoteVaultFile(f); return; }
+		try {
+			const buf = await ctx.app.vault.readBinary(f);
+			const file = new File([new Uint8Array(buf)], f.name, { type: mimeForName(f.name) });
+			await addComposerFiles([file]);
+		} catch (e) {
+			new Notice(t("ai.notice.noteReadFailed", { name: f.name }));
 		}
 	}
 

@@ -1556,6 +1556,27 @@
 	margin-top: 4px;
 }
 
+/* ── Picker de mentions « @ » ── */
+/* Menu du picker « @ » : pas de champ de recherche interne, la frappe
+   reste dans le composer. Largeur alignée sur le composer. */
+.qbd-mention-menu {
+	max-height: 280px;
+	overflow-y: auto;
+	min-width: 320px;
+}
+.qbd-mention-footer {
+	padding: 6px 10px;
+	font-size: 11px;
+	color: var(--text-muted);
+	border-top: 1px solid var(--background-modifier-border);
+}
+/* Frontière vault ↔ dossiers hors vault dans la liste initiale. */
+.qbd-mention-sep {
+	height: 1px;
+	margin: 4px 8px;
+	background: var(--background-modifier-border);
+}
+
 /* ── Responsive ── */
 @media (max-width: 900px) {
 	.qbd-ai-result-list {

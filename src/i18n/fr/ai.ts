@@ -13,6 +13,7 @@ export const FR_AI: Record<keyof typeof EN_AI, string> = {
 	"ai.composer.stop": "Arrêter",
 	"ai.add.files": "Ajouter des fichiers ou des images",
 	"ai.add.notes": "Ajouter des notes",
+	"ai.mention.noMatch": "Aucun fichier correspondant",
 
 	/* ── Options de génération ── */
 	"ai.options.tooltip": "{count} questions · {type}",

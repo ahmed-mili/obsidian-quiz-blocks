@@ -21,6 +21,11 @@ export interface VoiceInputHandle {
 	detach(): void;
 }
 
+export interface VoiceInputOptions {
+	/** Vrai quand un autre consommateur (picker « @ ») possède le clavier. */
+	isBlocked?: () => boolean;
+}
+
 /* WAV PCM16 mono : header RIFF 44 octets + échantillons clampés.
    16 kHz mono = l'entrée native de whisper.cpp — aucune conversion. */
 export function encodeWav(chunks: Float32Array[], sampleRate: number): Buffer {
@@ -67,7 +72,11 @@ type VoiceInputState = "idle" | "armed" | "recording" | "transcribing";
 /* Machine d'états : idle → armed (Espace enfoncé < seuil) → recording
    → transcribing → idle. Tout chemin d'erreur/annulation retombe sur
    idle avec les ressources libérées. */
-export function attach(ctx: DashboardCtx, textarea: HTMLTextAreaElement): VoiceInputHandle {
+export function attach(
+	ctx: DashboardCtx,
+	textarea: HTMLTextAreaElement,
+	opts: VoiceInputOptions = {}
+): VoiceInputHandle {
 	let state: VoiceInputState = "idle";
 	let holdTimer = 0, maxTimer = 0, pillTick = 0;
 	let armedPos = 0;
@@ -253,6 +262,9 @@ export function attach(ctx: DashboardCtx, textarea: HTMLTextAreaElement): VoiceI
 	}
 
 	function onKeyDown(e: KeyboardEvent): void {
+		// Picker de mentions ouvert : la frappe lui appartient (un espace
+		// dans « @Cours Java » ne doit pas armer la dictée).
+		if (opts.isBlocked && opts.isBlocked()) return;
 		if (e.key === "Escape" && (state === "recording" || state === "transcribing")) {
 			if (state === "recording") cancelRecording();
 			return;
