@@ -95,6 +95,12 @@
 	border-radius: 10px;
 	box-shadow: 0 14px 28px -6px rgba(0, 0, 0, 0.4), 0 2px 6px -1px rgba(0, 0, 0, 0.22);
 	scrollbar-width: thin;
+	/* Sans scrollbar-color, Electron peint la barre native CLAIRE, qui jure
+	   avec le menu sombre. Variables natives d'Obsidian → suit le thème.
+	   NB : depuis Chromium 121, « scrollbar-width » fait ignorer les règles
+	   ::-webkit-scrollbar (Obsidian tourne sur Chromium 142) — c'est donc
+	   bien ici que ça se règle, pas en webkit. */
+	scrollbar-color: var(--scrollbar-thumb-bg) transparent;
 	animation: qbd-select-in 0.12s ease-out;
 }
 
@@ -326,6 +332,10 @@
 	flex-direction: column;
 	gap: 1px;
 	scrollbar-width: thin;
+	/* Liste des modèles (Ollama, Codex…) : elle défile dans son propre
+	   conteneur, elle a donc besoin de sa règle, la barre du menu parent ne
+	   la couvre pas. */
+	scrollbar-color: var(--scrollbar-thumb-bg) transparent;
 }
 
 .qbd-model-menu-empty {
