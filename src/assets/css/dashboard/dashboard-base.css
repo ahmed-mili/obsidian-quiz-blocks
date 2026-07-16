@@ -23,10 +23,14 @@
 	overflow: hidden;
 }
 
+/* Rail iconique étroit (référence StudySmarter) — une seule largeur
+   desktop, plus de variante 56px : le rail est déjà compact. */
 .qbd-sidebar {
-	width: 220px;
-	min-width: 220px;
-	background: var(--background-secondary);
+	width: 88px;
+	min-width: 88px;
+	/* Transparent : laisse traverser le fond du thème (wallpaper) —
+	   un pavé opaque jure sur les thèmes à image (demande 2026-07-16). */
+	background: transparent;
 	border-right: 1px solid var(--background-modifier-border);
 	display: flex;
 	flex-direction: column;
@@ -73,48 +77,6 @@
 
 /* ── Responsive tablet ── */
 @media (max-width: 900px) {
-	.qbd-sidebar {
-		width: 56px;
-		min-width: 56px;
-	}
-
-	.qbd-nav-brand-title,
-	.qbd-nav-brand-sub,
-	.qbd-nav-label,
-	.qbd-nav-badge {
-		display: none;
-	}
-
-	.qbd-nav-brand {
-		padding: 10px 0;
-		justify-content: center;
-		align-items: center;
-		border-bottom: 1px solid var(--background-modifier-border);
-	}
-
-	.qbd-nav-item {
-		justify-content: center;
-		padding: 10px 0;
-		border-left: none !important;
-		border-right: 2px solid transparent;
-	}
-
-	.qbd-nav-item--active {
-		border-right-color: var(--interactive-accent);
-		border-left: none !important;
-		background: var(--background-modifier-hover, rgba(255,255,255,0.06));
-	}
-
-	.qbd-nav-icon {
-		width: 20px;
-		height: 20px;
-	}
-
-	.qbd-nav-icon svg {
-		width: 18px;
-		height: 18px;
-	}
-
 	.qbd-content {
 		padding: 20px 16px;
 	}
@@ -163,17 +125,11 @@
 		width: 100%;
 	}
 
+	/* Tab bar : la carte inversée reste l'indicateur d'actif, pas de
+	   soulignement — les items gardent leur layout colonne du rail. */
 	.qbd-nav-item {
-		border-right: none !important;
-		border-bottom: 2px solid transparent !important;
-		padding: 8px 12px !important;
+		padding: 6px 10px !important;
 		flex: 1;
-		justify-content: center;
-	}
-
-	.qbd-nav-item--active {
-		border-bottom-color: var(--interactive-accent) !important;
-		border-right: none !important;
 	}
 
 	.qbd-content {
@@ -236,7 +192,6 @@
 }
 
 .is-mobile .qbd-nav-brand,
-.is-mobile .qbd-nav-sep,
 .is-mobile .qbd-nav-badge {
 	display: none;
 }
@@ -246,6 +201,9 @@
 	gap: 2px;
 	padding: 4px 6px;
 	width: 100%;
+	/* Tablette/paysage : les items flex:1 s'étireraient démesurément —
+	   le groupe reste centré, chaque onglet borné. */
+	justify-content: center;
 }
 
 /* Onglets façon tab bar : icône au-dessus d'un petit label, chaque
@@ -254,6 +212,7 @@
 .is-mobile .qbd-nav-item {
 	flex: 1 1 0;
 	min-width: 0;
+	max-width: 200px;
 	width: auto;
 	flex-direction: column;
 	gap: 3px;
@@ -271,18 +230,6 @@
 	overflow: hidden;
 	text-overflow: ellipsis;
 	text-align: center;
-}
-
-/* Indicateur d'onglet actif : soulignement en bas (pas de barre à
-   gauche, qui n'a pas de sens dans une barre horizontale). */
-.is-mobile .qbd-nav-item--active::before {
-	left: 8px;
-	right: 8px;
-	top: auto;
-	bottom: 0;
-	width: auto;
-	height: 2px;
-	border-radius: 2px 2px 0 0;
 }
 
 .is-mobile .qbd-content {

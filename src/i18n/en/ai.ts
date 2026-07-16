@@ -7,7 +7,7 @@ export const EN_AI = {
 	"ai.page.title": "Generate a quiz",
 
 	/* ── Composer ── */
-	"ai.composer.placeholder": "What should the quiz be about?",
+	"ai.composer.placeholder": "What should the quiz be about ?",
 	"ai.composer.addContent": "Add content",
 	"ai.composer.quizOptions": "Quiz options",
 	"ai.composer.generate": "Generate quiz",

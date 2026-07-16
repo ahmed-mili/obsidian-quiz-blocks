@@ -35,15 +35,11 @@ export function createNavHandlers(ctx: DashboardCtx): NavHandlers {
 	function render(container: HTMLElement): void {
 		container.empty();
 
-		// Brand header
+		// Brand : logo NU centré, sans libellé ni séparateur (rail iconique
+		// façon StudySmarter — le nom du plugin est déjà dans l'onglet).
 		const brand = container.createDiv({ cls: "qbd-nav-brand" });
-		const brandRow = brand.createDiv({ cls: "qbd-nav-brand-row" });
-		const brandIcon = brandRow.createSpan({ cls: "qbd-nav-brand-icon" });
+		const brandIcon = brand.createSpan({ cls: "qbd-nav-brand-icon" });
 		setIcon(brandIcon, "graduation-cap");
-		brandRow.createEl("span", { cls: "qbd-nav-brand-title", text: "Quiz Blocks" });
-
-		// Separator
-		container.createDiv({ cls: "qbd-nav-sep" });
 
 		// Nav items
 		const navList = container.createDiv({ cls: "qbd-nav-items" });

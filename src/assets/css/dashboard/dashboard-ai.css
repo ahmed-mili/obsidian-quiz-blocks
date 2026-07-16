@@ -41,9 +41,9 @@
 .qbd-ai-stage--idle .qbd-ai-composer,
 .qbd-ai-stage--loading .qbd-ai-composer,
 .qbd-ai-stage--error .qbd-ai-composer {
-	margin-top: 10px;
+	margin-top: 18px;
 	padding: 22px 24px 16px;
-	border-radius: 18px;
+	border-radius: 22px;
 }
 
 .qbd-ai-stage--idle .qbd-ai-composer-input,
@@ -51,29 +51,6 @@
 .qbd-ai-stage--error .qbd-ai-composer-input {
 	min-height: 48px;
 	font-size: 15px;
-}
-
-/* Titre à l'échelle de la référence (grand, proche du composer) —
-   la pastille d'icône suit. */
-.qbd-ai-stage--idle .qbd-ai-title,
-.qbd-ai-stage--loading .qbd-ai-title,
-.qbd-ai-stage--error .qbd-ai-title {
-	font-size: 27px;
-}
-
-.qbd-ai-stage--idle .qbd-ai-title-icon,
-.qbd-ai-stage--loading .qbd-ai-title-icon,
-.qbd-ai-stage--error .qbd-ai-title-icon {
-	width: 36px;
-	height: 36px;
-	border-radius: 10px;
-}
-
-.qbd-ai-stage--idle .qbd-ai-title-icon svg,
-.qbd-ai-stage--loading .qbd-ai-title-icon svg,
-.qbd-ai-stage--error .qbd-ai-title-icon svg {
-	width: 20px;
-	height: 20px;
 }
 
 .qbd-ai-stage .qbd-ai-model-hint {
@@ -110,37 +87,39 @@
 	flex-direction: column;
 }
 
-/* ── Page header ── */
+/* ── Page header — échelle de la référence claude.ai (cap height ≈ 4,5 %
+   de la largeur du composer → ~46px pour 732px), serif régulière façon
+   display, glyphe de marque NU (sans pastille) à hauteur des capitales. */
 .qbd-ai-title-row {
 	display: flex;
 	align-items: center;
-	gap: 10px;
-	margin-bottom: 2px;
+	gap: 14px;
 }
 
 .qbd-ai-title-icon {
 	display: flex;
 	align-items: center;
 	justify-content: center;
-	width: 28px;
-	height: 28px;
-	border-radius: var(--radius-m, 8px);
-	background: color-mix(in srgb, var(--interactive-accent) 14%, transparent);
 	color: var(--interactive-accent);
 	flex-shrink: 0;
 }
 
 .qbd-ai-title-icon svg {
-	width: 16px;
-	height: 16px;
+	/* 38px pour un rendu effectif ≈ hauteur des capitales (le path Lucide
+	   ne remplit pas sa viewBox). */
+	width: 38px;
+	height: 38px;
 }
 
 .qbd-ai-title {
-	font-size: 20px;
-	font-weight: 800;
+	/* Palatino retenu sur banc comparatif (2026-07-16) — Book Antiqua est
+	   son jumeau Monotype (repli macOS/Linux). */
+	font-family: "Palatino Linotype", "Book Antiqua", Palatino, Georgia, serif;
+	font-size: 46px;
+	font-weight: 400;
 	color: var(--text-normal);
 	margin: 0;
-	letter-spacing: -0.03em;
+	letter-spacing: -0.01em;
 }
 
 /* ── Sélecteur de fournisseur (logos + statut) ── */
@@ -699,13 +678,15 @@
 	transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
+/* Hover/focus DISCRETS (référence claude.ai) : accent atténué mêlé à la
+   bordure, pas de ring vif — le composer reste calme au focus. */
 .qbd-ai-composer:hover:not(.qbd-ai-composer--dragover) {
-	border-color: var(--interactive-accent);
+	border-color: color-mix(in srgb, var(--interactive-accent) 35%, var(--background-modifier-border));
 }
 
 .qbd-ai-composer:focus-within {
-	border-color: var(--interactive-accent);
-	box-shadow: 0 0 0 2px color-mix(in srgb, var(--interactive-accent) 16%, transparent);
+	border-color: color-mix(in srgb, var(--interactive-accent) 55%, var(--background-modifier-border));
+	box-shadow: 0 0 0 1px color-mix(in srgb, var(--interactive-accent) 8%, transparent);
 }
 
 .qbd-ai-composer--dragover {
@@ -1554,7 +1535,12 @@
 
 @media (max-width: 600px) {
 	.qbd-ai-title {
-		font-size: 17px;
+		font-size: 28px;
+	}
+
+	.qbd-ai-title-icon svg {
+		width: 24px;
+		height: 24px;
 	}
 
 	/* Étroit : le bouton passe sous le texte (aligné sur lui), le bloc code

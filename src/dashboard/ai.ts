@@ -198,6 +198,8 @@ export function createAiHandlers(ctx: DashboardCtx): AiHandlers {
 		if (phase !== "result") {
 			const titleRow = formCol.createDiv({ cls: "qbd-ai-title-row" });
 			const titleIcon = titleRow.createSpan({ cls: "qbd-ai-title-icon" });
+			// Glyphe de marque NU à côté du titre serif, comme l'astérisque de
+			// claude.ai — « sparkles » retenu sur planche comparative (2026-07-16).
 			setIcon(titleIcon, "sparkles");
 			titleRow.createEl("h2", { cls: "qbd-ai-title", text: t("ai.page.title") });
 		}
