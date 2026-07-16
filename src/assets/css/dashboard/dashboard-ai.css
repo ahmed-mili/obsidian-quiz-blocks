@@ -27,9 +27,10 @@
 }
 
 /* Le composer garde une largeur de lecture, quel que soit l'état —
-   732px MESURÉS sur l'accueil claude.ai (2026-07-10). */
+   élargi 732 → 800px (claude.ai 2026 est plus large que la mesure
+   initiale du 2026-07-10 ; « trop fin » constaté le 2026-07-16). */
 .qbd-ai-stage .qbd-ai-composer {
-	width: min(732px, 100%);
+	width: min(800px, 100%);
 	flex-shrink: 0;
 	text-align: left;
 }
@@ -54,7 +55,7 @@
 }
 
 .qbd-ai-stage .qbd-ai-model-hint {
-	width: min(732px, 100%);
+	width: min(800px, 100%);
 	text-align: left;
 }
 
@@ -69,7 +70,7 @@
 .qbd-ai-stage .qbd-ai-preview-loading,
 .qbd-ai-stage .qbd-ai-preview-error {
 	flex: none;
-	width: min(732px, 100%);
+	width: min(800px, 100%);
 	min-height: 200px;
 }
 
@@ -88,7 +89,8 @@
 }
 
 /* ── Page header — échelle de la référence claude.ai (cap height ≈ 4,5 %
-   de la largeur du composer → ~46px pour 732px), serif régulière façon
+   de la largeur du composer ; 46px VALIDÉ par Ahmed sur banc — conservé
+   tel quel lors de l'élargissement 732→800), serif régulière façon
    display, glyphe de marque NU (sans pastille) à hauteur des capitales. */
 .qbd-ai-title-row {
 	display: flex;
