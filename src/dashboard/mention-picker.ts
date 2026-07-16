@@ -1,7 +1,7 @@
 import { App } from "obsidian";
 import {
 	FileEntry, listExternalFolder, listExternalRoots, listVaultFolder,
-	primeExternalIndex, searchExternal, searchVault,
+	primeExternalIndex, searchAll,
 } from "./file-sources";
 import { MentionMenuHandle, MentionMenuItem, openMentionMenu } from "./ui-select";
 import { t } from "../i18n";
@@ -100,13 +100,14 @@ export function attachMentionPicker(
 			const external = roots.some(r => dir === r || dir.startsWith(r + "/"));
 			return { entries: external ? listExternalFolder(dir) : listVaultFolder(app, dir) };
 		}
-		// Sinon : recherche TOUJOURS globale, vault + toutes les racines.
-		const ext = searchExternal(roots, query);
-		const entries = [...searchVault(app, query), ...ext.entries];
-		const footer = ext.truncated.length
-			? t("ai.mention.truncated", { roots: ext.truncated.join(", ") })
+		// Sinon : recherche TOUJOURS globale, vault + toutes les racines,
+		// fusionnées et triées par score commun (searchAll) — jamais une
+		// simple concaténation qui évincerait les résultats externes.
+		const result = searchAll(app, roots, query);
+		const footer = result.truncated.length
+			? t("ai.mention.truncated", { roots: result.truncated.join(", ") })
 			: undefined;
-		return { entries, footer };
+		return { entries: result.entries, footer };
 	}
 
 	function itemsFor(token: MentionToken, entries: FileEntry[]): MentionMenuItem[] {
