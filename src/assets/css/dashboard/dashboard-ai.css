@@ -143,13 +143,6 @@
 	letter-spacing: -0.03em;
 }
 
-.qbd-ai-subtitle {
-	font-size: 13px;
-	color: var(--text-muted);
-	margin: 0;
-	line-height: 1.4;
-}
-
 /* ── Sélecteur de fournisseur (logos + statut) ── */
 .qbd-provider-logo {
 	display: inline-flex;
@@ -1562,10 +1555,6 @@
 @media (max-width: 600px) {
 	.qbd-ai-title {
 		font-size: 17px;
-	}
-
-	.qbd-ai-subtitle {
-		font-size: 12px;
 	}
 
 	/* Étroit : le bouton passe sous le texte (aligné sur lui), le bloc code

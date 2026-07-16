@@ -200,7 +200,6 @@ export function createAiHandlers(ctx: DashboardCtx): AiHandlers {
 			const titleIcon = titleRow.createSpan({ cls: "qbd-ai-title-icon" });
 			setIcon(titleIcon, "sparkles");
 			titleRow.createEl("h2", { cls: "qbd-ai-title", text: t("ai.page.title") });
-			formCol.createEl("p", { cls: "qbd-ai-subtitle", text: t("ai.page.subtitle") });
 		}
 
 		// Zone du loader de génération : AU-DESSUS du composer (demande

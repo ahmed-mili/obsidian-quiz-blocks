@@ -5,10 +5,9 @@
 export const EN_AI = {
 	/* ── Page « Générer » ── */
 	"ai.page.title": "Generate a quiz",
-	"ai.page.subtitle": "Create a quiz from a topic, images or text.",
 
 	/* ── Composer ── */
-	"ai.composer.placeholder": "Describe the quiz topic, or paste your content…",
+	"ai.composer.placeholder": "What should the quiz be about?",
 	"ai.composer.addContent": "Add content",
 	"ai.composer.quizOptions": "Quiz options",
 	"ai.composer.generate": "Generate quiz",

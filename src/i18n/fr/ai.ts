@@ -4,10 +4,9 @@ import type { EN_AI } from "../en/ai";
 export const FR_AI: Record<keyof typeof EN_AI, string> = {
 	/* ── Page « Générer » ── */
 	"ai.page.title": "Générer un quiz",
-	"ai.page.subtitle": "Créez un quiz à partir d'un sujet, d'images ou d'un texte.",
 
 	/* ── Composer ── */
-	"ai.composer.placeholder": "Décrivez le sujet du quiz, ou collez votre contenu…",
+	"ai.composer.placeholder": "Sur quoi portera le quiz ?",
 	"ai.composer.addContent": "Ajouter du contenu",
 	"ai.composer.quizOptions": "Options du quiz",
 	"ai.composer.generate": "Générer le quiz",
