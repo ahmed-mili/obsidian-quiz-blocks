@@ -51,7 +51,7 @@
 .qbd-ai-stage--idle .qbd-ai-composer-input,
 .qbd-ai-stage--loading .qbd-ai-composer-input,
 .qbd-ai-stage--error .qbd-ai-composer-input {
-	min-height: 56px;
+	min-height: 60px;
 	font-size: 15px;
 }
 
