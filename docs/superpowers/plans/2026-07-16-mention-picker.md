@@ -409,9 +409,10 @@ export interface MentionToken {
 /* Token « @… » actif juste avant le caret, ou null.
    Le « @ » doit être en DÉBUT DE MOT (début du champ, ou précédé d'un
    espace / tabulation / saut de ligne) : « ahmed@gmail.com » n'ouvre donc
-   rien. Les espaces sont autorisés DANS le token (410 des 443 notes du
-   vault Personal ont un espace dans leur chemin) ; c'est l'absence de
-   résultat qui ferme le menu, pas l'espace. Remontée bornée à 200
+   rien. Les espaces sont autorisés DANS le token : les noms de notes
+   Obsidian en contiennent massivement (452 des 455 notes du vault de test
+   en ont un dans leur chemin), donc « @Mon cours de Java » doit rester
+   cherchable. C'est l'absence de résultat qui ferme le token, pas l'espace. Remontée bornée à 200
    caractères pour ne pas scanner un prompt entier à chaque frappe. */
 export function findMentionToken(text: string, caret: number): MentionToken | null {
 	for (let i = caret - 1; i >= 0 && caret - i <= 200; i--) {
@@ -1337,14 +1338,20 @@ git diff --stat main..feat/mention-picker
 ```
 Attendu : typecheck vert, commits lisibles, aucun fichier hors périmètre touché.
 
-- [ ] **Step 4: Confirmer que les vaults d'Ahmed sont intacts**
+- [ ] **Step 4: Confirmer que le déploiement a bien eu lieu**
+
+L'isolation n'a plus lieu d'être (Fable 5 a fini) : le build DOIT au contraire avoir
+déployé dans les vaults. Vérifier que le `main.js` d'`Efrei` porte bien le code du picker :
 
 ```bash
-git -C C:/dev/obsidian-quiz-blocks status --short
+grep -c "qbd-mention-menu" C:/obsidian-vaults/Efrei/.obsidian/plugins/quiz-blocks/main.js
 ```
-Attendu : uniquement `?? CLAUDE.md` (pas de nous). Vérifier que le `main.js` déployé dans
-Efrei / Personal / Troubleshooting / الإسلام n'a pas notre code (mtime inchangé depuis le
-build de Fable 5).
+Attendu : au moins 1. Et le repo reste propre :
+
+```bash
+git status --short
+```
+Attendu : aucun fichier de build ou artefact traînant (la sortie va dans `dist/`, ignoré).
 
 - [ ] **Step 5: Rapport à Ahmed**
 
