@@ -15,6 +15,7 @@ export const EN_DASHBOARD = {
 	"dashboard.nav.home": "Home",
 	"dashboard.nav.quizzes": "My quizzes",
 	"dashboard.nav.generate": "Generate",
+	"dashboard.nav.settings": "Settings",
 
 	/* ── Accueil ── */
 	"dashboard.home.subtitleResume": "Resume a quiz in progress, or generate a new one.",

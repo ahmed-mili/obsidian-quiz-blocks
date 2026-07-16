@@ -1,4 +1,4 @@
-import { setIcon } from "obsidian";
+import { setIcon, type App } from "obsidian";
 import { t } from "../i18n";
 import type { TransKey } from "../i18n";
 import type { DashboardCtx, DashboardViewName } from "../types/dashboard-ctx";
@@ -65,6 +65,19 @@ export function createNavHandlers(ctx: DashboardCtx): NavHandlers {
 			});
 		}
 
+		// Réglages : en PIED de rail (pattern StudySmarter), hors de la liste
+		// de navigation — ouvre l'onglet du plugin dans les réglages Obsidian
+		// (même API interne que openPluginSettings de dashboard/ai.ts).
+		const footer = container.createDiv({ cls: "qbd-nav-footer" });
+		const settingsBtn = footer.createEl("button", { cls: "qbd-nav-item" });
+		const settingsIcon = settingsBtn.createSpan({ cls: "qbd-nav-icon" });
+		setIcon(settingsIcon, "settings");
+		settingsBtn.createSpan({ cls: "qbd-nav-label", text: t("dashboard.nav.settings") });
+		settingsBtn.addEventListener("click", () => {
+			const setting = (ctx.app as App & { setting: { open(): void; openTabById(id: string): void } }).setting;
+			setting.open();
+			setting.openTabById(ctx.plugin.manifest.id);
+		});
 	}
 
 	function setActive(key: DashboardViewName): void {

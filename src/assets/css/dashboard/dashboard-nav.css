@@ -104,6 +104,14 @@
 	text-overflow: ellipsis;
 }
 
+/* ── Pied de rail : bouton Réglages ── */
+.qbd-nav-footer {
+	margin-top: auto; /* pousse au pied du rail */
+	padding: 10px 10px 14px;
+	display: flex;
+	flex-direction: column;
+}
+
 /* Badge : collé au coin haut-droit de l'icône (l'icône est centrée
    dans le rail → on part du centre). */
 .qbd-nav-badge {

@@ -121,7 +121,17 @@
 		flex-direction: row !important;
 		gap: 0 !important;
 		padding: 0 4px;
-		width: 100%;
+		width: auto;
+		flex: 1 1 auto;
+		min-width: 0;
+	}
+
+	/* Réglages : onglet à droite de la rangée, plus de pied de rail. */
+	.qbd-nav-footer {
+		margin: 0;
+		padding: 0 4px 0 0;
+		flex-direction: row;
+		align-items: stretch;
 	}
 
 	/* Tab bar : la carte inversée reste l'indicateur d'actif, pas de
@@ -199,10 +209,24 @@
 	flex-direction: row;
 	gap: 2px;
 	padding: 4px 6px;
-	width: 100%;
+	width: auto;
+	flex: 1 1 auto;
+	min-width: 0;
 	/* Tablette/paysage : les items flex:1 s'étireraient démesurément —
 	   le groupe reste centré, chaque onglet borné. */
 	justify-content: center;
+}
+
+/* Réglages : onglet à droite de la tab bar, plus de pied de rail. */
+.is-mobile .qbd-nav-footer {
+	margin: 0;
+	padding: 4px 6px 4px 0;
+	flex-direction: row;
+	align-items: stretch;
+}
+
+.is-mobile .qbd-nav-footer .qbd-nav-item {
+	min-height: 48px;
 }
 
 /* Onglets façon tab bar : icône au-dessus d'un petit label, chaque
