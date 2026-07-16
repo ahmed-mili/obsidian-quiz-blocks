@@ -18,9 +18,11 @@ Ces contraintes s'appliquent à **toutes** les tâches, sans être répétées �
   `npm run check` (`tsc --noEmit`). Le cycle TDD habituel ne s'applique pas : chaque tâche
   se termine par `npm run check` **plus** un test manuel décrit explicitement. Ne pas
   ajouter de framework de test (hors périmètre, non demandé).
-- **Ne jamais lancer `npm run build` sans `VAULT_PLUGIN_DIR`.** Un build nu déploie dans
-  les 4 vaults d'Ahmed et écraserait le travail de Fable 5. Toujours :
-  `VAULT_PLUGIN_DIR="C:/obsidian-vaults/QuizTest/.obsidian/plugins/quiz-blocks" npm run build`
+- **`npm run build` normal** (déploie dans les vaults d'Ahmed : c'est voulu). La contrainte
+  d'isolation par `VAULT_PLUGIN_DIR` est LEVÉE depuis le 2026-07-17 : Fable 5 a fini de
+  travailler, il n'y a plus de déploiement concurrent à protéger. Le vault de test
+  `QuizTest` n'est plus requis ; les tests manuels se font dans le vault **`Personal`**
+  (443 notes réelles, dont 410 avec un espace dans le chemin).
 - **`isDesktopOnly` reste `false`.** Aucune API Node au chargement ni sur un chemin
   atteignable sur mobile. `require("fs")` **paresseux**, dans la fonction, gardé par
   `if (!Platform.isDesktopApp)` avec repli propre. Pattern de référence :
@@ -35,7 +37,9 @@ Ces contraintes s'appliquent à **toutes** les tâches, sans être répétées �
 - **Ne pas modifier `ai-client.ts`** : le contenu attaché passe déjà par `notesBlock`.
 - **Ne pas traduire** les clés du format quiz, les `id:` de commandes, les logs, les classes CSS.
 - Travail dans le worktree `C:\dev\obsidian-quiz-blocks\.claude\worktrees\mention-picker`,
-  branche `feat/mention-picker`. Ne jamais `git push` (règle d'Ahmed).
+  branche `feat/mention-picker`. **Les tâches committent, elles ne poussent JAMAIS.** Le
+  merge sur `main` et le `git push` final sont faits une seule fois, par le contrôleur, à
+  la toute fin (demandé explicitement par Ahmed le 2026-07-17).
 
 ## File Structure
 
@@ -99,7 +103,7 @@ Y déposer un `.pdf` avec du texte, un `.md`, et un `.exe` bidon (qui devra rest
 - [ ] **Step 4: Vérifier le déploiement isolé**
 
 ```bash
-VAULT_PLUGIN_DIR="C:/obsidian-vaults/QuizTest/.obsidian/plugins/quiz-blocks" npm run build
+npm run build
 ```
 Attendu : build OK, et `git -C C:/dev/obsidian-quiz-blocks status --short` inchangé côté
 vaults d'Ahmed. Vérifier que `C:/obsidian-vaults/Efrei/.obsidian/plugins/quiz-blocks/main.js`
@@ -706,26 +710,26 @@ Expected: exit 0.
 - [ ] **Step 8: Build vers le vault de test UNIQUEMENT**
 
 ```bash
-VAULT_PLUGIN_DIR="C:/obsidian-vaults/QuizTest/.obsidian/plugins/quiz-blocks" npm run build
+npm run build
 ```
 
 - [ ] **Step 9: Test manuel dans Obsidian (le vrai gate)**
 
-Recharger : `obsidian plugin:reload id=quiz-blocks vault=QuizTest` (préciser `vault=` :
+Recharger : `obsidian plugin:reload id=quiz-blocks vault=Personal` (préciser `vault=` :
 Ahmed a plusieurs vaults ouverts, sinon le reload cible la mauvaise fenêtre). Ouvrir le
 dashboard, page « Générer », puis vérifier **chaque** ligne :
 
 | Cas | Attendu |
 |---|---|
-| Taper `@` | Menu au-dessus du composer, racine de QuizTest, `Cours/` `Guides/` `Dashboard.md` `schema.png` mélangés en ordre alphabétique |
-| `archive.zip` | **Absent** de la liste |
+| Taper `@` | Menu au-dessus du composer, racine du vault `Personal`, fichiers et dossiers mélangés en ordre alphabétique |
+| Un fichier non attachable (`.zip`, `.canvas`…) | **Absent** de la liste |
 | Taper `ahmed@gmail.com` | Aucun menu |
 | Flèches haut/bas | La sélection bouge, la liste défile |
-| `@Cours/` | Descend : `Java/`, `Reseaux/` |
-| `@Cours/ja` puis `TD3` | Trouve `Cours/Java/TD3 avec espaces.md` (recherche globale) |
-| `@TD3 avec` (avec espace) | Trouve la note, **et le micro ne se déclenche pas** |
+| `@<un dossier>/` | Descend : le menu liste le contenu de ce dossier |
+| `@<dossier>/<lettres>` | Trouve la note même si elle est plus profonde (recherche globale) |
+| Un nom AVEC ESPACE (410/443 notes de `Personal` en ont) | Trouve la note, **et le micro ne se déclenche pas** |
 | Entrée sur un fichier `.md` | Chip ajoutée, `@…` retiré du texte, **prompt non envoyé** |
-| Attacher `schema.png` (image DU VAULT) | **Vignette d'image**, pas une chip texte : la preuve que `attachVaultPath` route par type au lieu de faire un `vault.read()` binaire |
+| Attacher une IMAGE du vault | **Vignette d'image**, pas une chip texte : la preuve que `attachVaultPath` route par type au lieu de faire un `vault.read()` binaire |
 | Entrée sans menu ouvert | Le prompt part (comportement d'origine intact) |
 | Échap | Ferme le menu, le texte reste |
 | Clic sur une entrée | Attache sans que le composer perde le focus |
@@ -810,9 +814,9 @@ Expected: exit 0.
 - [ ] **Step 5: Test manuel**
 
 ```bash
-VAULT_PLUGIN_DIR="C:/obsidian-vaults/QuizTest/.obsidian/plugins/quiz-blocks" npm run build
+npm run build
 ```
-Puis `obsidian plugin:reload id=quiz-blocks vault=QuizTest`.
+Puis `obsidian plugin:reload id=quiz-blocks vault=Personal`.
 
 | Cas | Attendu |
 |---|---|
@@ -945,7 +949,7 @@ Expected: exit 0. Une clé française manquante casserait la compilation (typage
 - [ ] **Step 5: Test manuel**
 
 ```bash
-VAULT_PLUGIN_DIR="C:/obsidian-vaults/QuizTest/.obsidian/plugins/quiz-blocks" npm run build
+npm run build
 ```
 
 | Cas | Attendu |
@@ -1258,7 +1262,7 @@ Expected: exit 0.
 - [ ] **Step 6: Test manuel**
 
 ```bash
-VAULT_PLUGIN_DIR="C:/obsidian-vaults/QuizTest/.obsidian/plugins/quiz-blocks" npm run build
+npm run build
 ```
 Réglages → ajouter `C:\Users\Ahmed\Downloads\quiz-test-externe`.
 
@@ -1317,8 +1321,7 @@ grep -n "require(" src/dashboard/file-sources.ts
 Attendu : **aucun `require` au niveau module**, tous à l'intérieur de fonctions gardées par
 `Platform.isDesktopApp`.
 
-Test réel : ouvrir QuizTest sur le Xiaomi (Obsidian Android, vault synchronisé) ou à défaut
-émuler. Attendu : le plugin **se charge**, le `@` liste le vault, aucune racine externe,
+Test réel : ouvrir un vault sur le Xiaomi (Obsidian Android) ou à défaut émuler. Attendu : le plugin **se charge**, le `@` liste le vault, aucune racine externe,
 aucune erreur en console.
 
 - [ ] **Step 3: Vérification finale (skill `superpowers:verification-before-completion`)**
@@ -1341,9 +1344,9 @@ build de Fable 5).
 
 - [ ] **Step 5: Rapport à Ahmed**
 
-Résumer : ce qui marche (avec la preuve du test manuel), les écarts assumés vs la référence
-(tableau de la spec), et le fait que la branche est prête pour que Fable 5 la fusionne.
-Ne jamais `git push`.
+Résumer : ce qui marche (avec la preuve du test manuel) et les écarts assumés vs la
+référence (tableau de la spec). Le merge sur `main` et le push sont faits par le
+contrôleur après cette tâche, pas par toi.
 
 ## Notes d'exécution
 
@@ -1352,5 +1355,5 @@ Ne jamais `git push`.
   aux lignes citées ici.
 - **`render()` reconstruit tout le composer** : ne jamais garder de référence DOM entre
   deux rendus. Le picker est réattaché à chaque `render`, c'est voulu.
-- Après un build, recharger via `obsidian plugin:reload id=quiz-blocks vault=QuizTest` en
+- Après un build, recharger via `obsidian plugin:reload id=quiz-blocks vault=Personal` en
   précisant **toujours** `vault=` (plusieurs vaults ouverts chez Ahmed).
