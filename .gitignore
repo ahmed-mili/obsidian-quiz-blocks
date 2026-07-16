@@ -31,6 +31,7 @@ desktop.ini
 
 # AI tools
 .claude/
+.superpowers/
 
 # Local temp files
 temp/
