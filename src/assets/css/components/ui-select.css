@@ -558,6 +558,25 @@
 .qbd-note-picker-item {
 	align-items: center;
 	gap: 10px;
+	/* Une entrée = UNE ligne, quel que soit le nom du fichier.
+	   Deux règles du socle se liguaient contre ça :
+	   - « .qbd-model-menu .qbd-select-option » impose white-space: normal
+	     (les MODÈLES ont des descriptions qui s'enroulent) → un nom long
+	     comme « Ahmed MILI - Fiche de mission - Technico commercial.pdf »
+	     passait sur deux lignes ;
+	   - dans une liste flex column à hauteur contrainte, flex-shrink vaut 1
+	     par défaut → l'option était écrasée à min-height (36px) alors que son
+	     contenu en réclamait 49, et le sous-titre débordait SUR l'entrée
+	     suivante.
+	   Un nom trop long se tronque (ellipsis), il ne s'enroule pas. */
+	flex-shrink: 0;
+	white-space: nowrap;
+}
+
+.qbd-note-picker-item .qbd-select-option-label {
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
 }
 
 .qbd-note-picker-item .qbd-action-menu-sub {
