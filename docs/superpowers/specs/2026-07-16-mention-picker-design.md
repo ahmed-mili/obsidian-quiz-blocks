@@ -97,6 +97,13 @@ images, texte brut (`.csv`, `.json`…). Les autres (`.zip`, `.docx`, `.pptx`, `
 ### Vault (toutes plateformes)
 
 API Obsidian, arbre déjà en mémoire. Aucun accès disque, aucune indexation à écrire.
+Tout est natif, rien à réimplémenter (vérifié dans `obsidian.d.ts` le 2026-07-16) :
+
+- Listing : `vault.getRoot()` puis `TFolder.children` (`TAbstractFile[]`, discriminé par
+  `instanceof TFolder`).
+- Recherche : `getAllLoadedFiles()` pour l'ensemble, filtré par **`prepareFuzzySearch(query)`**
+  (`obsidian.d.ts:5252`), qui renvoie un `SearchResult` scoré. Le tri des résultats suit ce
+  score. Aucun algorithme de fuzzy maison.
 
 ### Racines externes (desktop uniquement)
 
@@ -153,8 +160,15 @@ Deux modules neufs, deux greffes ciblées. Cible < 350 lignes par module (règle
   `MenuHandle` avec `setItems` / `moveSelection` / `confirm`. Motif : la règle projet
   impose `ui-select.ts` comme seul dropdown, et le positionnement portalé (flip, clamp,
   fermeture sur scroll/resize/Échap) y est déjà résolu. Le fichier est déjà gros (57 Ko),
-  mais réimplémenter un menu autonome dupliquerait ce socle. L'ancrage doit accepter un
-  `DOMRect` (position du caret) en plus d'un `HTMLElement`.
+  mais réimplémenter un menu autonome dupliquerait ce socle.
+- **Ancrage : le composer, pas le caret.** La référence le montre (capture du 2026-07-16) :
+  la liste s'affiche au-dessus du prompt, alignée à gauche, et ne suit pas le curseur. Le
+  paramètre `anchorEl: HTMLElement` d'`openNotePicker` convient donc tel quel, avec son flip
+  et son clamp. Aucun miroir de textarea, aucun calcul de rectangle de caret.
+- **Différence avec `openNotePicker`** : ce dernier possède son propre champ de recherche et
+  vole le focus (`setTimeout(() => input.focus(), 0)`). Pour les mentions, la frappe doit
+  rester dans le textarea. `openMentionMenu` est donc sans champ interne, piloté de
+  l'extérieur par `setItems`, et ne prend jamais le focus.
 - **`src/dashboard/ai.ts`** (greffe minimale). Attache le picker au textarea, garde le
   handler d'envoi, restaure le caret. Surface volontairement réduite : Fable 5 travaille
   dans ce fichier en parallèle.
