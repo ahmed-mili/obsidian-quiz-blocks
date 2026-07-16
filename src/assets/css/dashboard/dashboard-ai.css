@@ -740,7 +740,9 @@
 .qbd-ai-composer-bottom {
 	display: flex;
 	align-items: center;
-	justify-content: space-between;
+	/* PAS de space-between : « + » et Options forment le groupe gauche
+	   (gap), le groupe droite se pousse seul via son margin-left: auto. */
+	gap: 6px;
 }
 
 /* Bouton « + » — ajouter fichiers/images ou notes (menu d'actions).

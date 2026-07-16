@@ -601,15 +601,10 @@ export function createAiHandlers(ctx: DashboardCtx): AiHandlers {
 		addBtn.setAttribute("aria-label", t("ai.composer.addContent"));
 		setIcon(addBtn, "plus");
 
-		// Groupe droite : logo fournisseur, sélecteur modèle + effort, puis
-		// bouton options et bouton d'envoi.
-		const composerTools = composerBottom.createDiv({ cls: "qbd-ai-composer-tools" });
-		buildProviderControl(composerTools);
-		if (buildModelControl) buildModelControl(composerTools);
-
-		// Bouton Options (questions + type) : remplace l'ancienne carte
-		// « Options » du formulaire — popover à la demande, tooltip d'état.
-		const optsBtn = composerTools.createEl("button", { cls: "qbd-ai-composer-opts" });
+		// Bouton Options (questions + type) : JUSTE à droite du « + » (façon
+		// pills gauche de claude.ai, demande 2026-07-16) — popover à la
+		// demande, tooltip d'état.
+		const optsBtn = composerBottom.createEl("button", { cls: "qbd-ai-composer-opts" });
 		optsBtn.type = "button";
 		optsBtn.setAttribute("aria-label", t("ai.composer.quizOptions"));
 		setIcon(optsBtn, "sliders-horizontal");
@@ -645,6 +640,12 @@ export function createAiHandlers(ctx: DashboardCtx): AiHandlers {
 			optsBtn.addEventListener("mouseleave", hide);
 			optsBtn.addEventListener("click", hide);
 		}
+
+		// Groupe droite : logo fournisseur, sélecteur modèle + effort, puis
+		// bouton d'envoi.
+		const composerTools = composerBottom.createDiv({ cls: "qbd-ai-composer-tools" });
+		buildProviderControl(composerTools);
+		if (buildModelControl) buildModelControl(composerTools);
 
 		// Bouton générer dans le composer (façon bouton d'envoi claude.ai) :
 		// caché tant que le champ est vide, flèche ↑ blanche sur fond accent.
