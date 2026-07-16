@@ -118,6 +118,10 @@ export interface AiHandlers {
 
 export function createAiHandlers(ctx: DashboardCtx): AiHandlers {
 	let composerText = "";
+	/* Caret du composer, préservé à travers les render() : render détruit et
+	   recrée le textarea, et sans ça tout attachement (chip, image, mention)
+	   renvoie le curseur en fin de texte. */
+	let composerCaret: number | null = null;
 	// Sources texte attachées (PLUSIEURS — maquette 2026-07-11 231626) :
 	// notes du vault (path) et fichiers texte du disque (.md/.txt).
 	let noteAttachments: NoteAttachment[] = []; // [{ name, content, path? }]
@@ -576,10 +580,21 @@ export function createAiHandlers(ctx: DashboardCtx): AiHandlers {
 			composerInput.style.height = Math.min(composerInput.scrollHeight, 220) + "px";
 		};
 		composerInput.addEventListener("input", (e) => {
-			composerText = (e.target as HTMLTextAreaElement).value;
+			const ta = e.target as HTMLTextAreaElement;
+			composerText = ta.value;
+			composerCaret = ta.selectionStart;
 			autoGrow();
 			updateGenerateBtn(generateBtnRef);
 		});
+		// Un simple déplacement du caret (clic souris, flèches) ne déclenche
+		// PAS d'événement "input" (la valeur ne change pas) : sans ce filet,
+		// repositionner le curseur puis attacher via le menu « + » ou un
+		// glisser-déposer (aucune frappe entre les deux) le renvoyait quand
+		// même en fin de texte, composerCaret restant figé sur la dernière
+		// frappe.
+		const captureCaret = () => { composerCaret = composerInput.selectionStart; };
+		composerInput.addEventListener("keyup", captureCaret);
+		composerInput.addEventListener("click", captureCaret);
 		// Coller une image directement dans le champ
 		composerInput.addEventListener("paste", (e) => {
 			const files = Array.from(e.clipboardData?.files || []).filter(f => f.type.startsWith("image/"));
@@ -603,6 +618,7 @@ export function createAiHandlers(ctx: DashboardCtx): AiHandlers {
 			onPickVaultFile: (path) => { void attachVaultPath(path); },
 			onTextReplaced: (value) => {
 				composerText = value;
+				composerCaret = composerInput.selectionStart;
 				autoGrow();
 				updateGenerateBtn(generateBtnRef);
 			},
@@ -730,6 +746,7 @@ export function createAiHandlers(ctx: DashboardCtx): AiHandlers {
 			const len = composerInput.value.length;
 			composerInput.focus();
 			composerInput.setSelectionRange(len, len);
+			composerCaret = len;
 		});
 
 		// Glisser-déposer de fichiers (images, .md, .txt) sur tout le composer
@@ -788,7 +805,13 @@ export function createAiHandlers(ctx: DashboardCtx): AiHandlers {
 		// à chaque re-render.
 		if (phase === "idle" || phase === "error") {
 			requestAnimationFrame(() => {
-				if (composerInput.isConnected) composerInput.focus({ preventScroll: true });
+				if (composerInput.isConnected) {
+					composerInput.focus({ preventScroll: true });
+					if (composerCaret !== null) {
+						const p = Math.min(composerCaret, composerInput.value.length);
+						composerInput.setSelectionRange(p, p);
+					}
+				}
 			});
 		}
 	}
