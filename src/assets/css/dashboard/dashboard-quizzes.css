@@ -239,6 +239,14 @@
 	transform: translateY(-1px);
 }
 
+/* La carte de module a un padding 18/20 (plus grand que la carte de quiz, 16) :
+   le liseré, dont la marge négative par défaut suppose 16px, se retrouverait
+   décalé de ~2px en haut et ~4px sur les côtés. On aligne sa marge sur le
+   padding réel pour qu'il coiffe la carte pleine largeur, coins compris. */
+.qbd-module-card .qbd-quiz-card-accent {
+	margin: -18px -20px 14px;
+}
+
 .qbd-module-card-accent--done { background: var(--color-green, #4ade80); }
 .qbd-module-card-accent--partial { background: var(--interactive-accent); }
 

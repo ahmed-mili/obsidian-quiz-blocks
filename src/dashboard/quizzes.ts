@@ -23,6 +23,11 @@ import type { GroupingKey } from "./quizzes-render";
 
 export interface QuizzesHandlers {
 	render(container: HTMLElement): void;
+	/** Referme le drill-down d'un module (état d'interface non persisté).
+	    Appelé par le dashboard quand on (re)navigue vers « Mes quiz » via le
+	    rail : sans ça, entrer dans un module puis revenir par le rail rouvrirait
+	    le module au lieu de la grille (le fil d'Ariane, lui, le remet déjà). */
+	resetDrilldown(): void;
 }
 
 /* Le filtre actif est une CLÉ stable, plus le libellé affiché : celui-ci
@@ -268,5 +273,8 @@ export function createQuizzesHandlers(ctx: DashboardCtx): QuizzesHandlers {
 		renderContent(treeEl, quizzes, stats);
 	}
 
-	return { render };
+	return {
+		render,
+		resetDrilldown() { openModuleFolder = null; },
+	};
 }

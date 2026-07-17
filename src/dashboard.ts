@@ -167,6 +167,14 @@ export class QuizDashboardView extends ItemView implements DashboardView {
 		if (view === "detail") {
 			this.previousView = this.currentView;
 		}
+		// Naviguer VERS « Mes quiz » (rail, retour depuis le détail…) referme
+		// tout drill-down de module : la grille est le point d'entrée attendu.
+		// C'est une navigation ENTRANTE, pas un re-render interne (filtre,
+		// recherche, drill) qui, lui, passe par le render() capturé du handler
+		// et doit conserver le module ouvert.
+		if (view === "quizzes" && this.quizzes) {
+			this.quizzes.resetDrilldown();
+		}
 		this.currentView = view;
 		this.nav.setActive(view);
 		this.renderSidebar();
