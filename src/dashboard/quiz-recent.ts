@@ -1,6 +1,6 @@
 import type { QuizIndexEntry } from "./scanner";
 import type { QuizStatRecord } from "./stats-store";
-import { MASTERY_THRESHOLD } from "./quiz-tree";
+import { MASTERY_THRESHOLD } from "./quiz-mastery";
 
 /* ══════════════════════════════════════════════════════════
    QUIZ RECENT — regroupement des quiz par DERNIÈRE ACTIVITÉ

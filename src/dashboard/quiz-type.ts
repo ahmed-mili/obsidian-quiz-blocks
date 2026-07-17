@@ -1,6 +1,6 @@
 import type { QuizIndexEntry, QuizTypeTag } from "./scanner";
 import type { QuizStatRecord } from "./stats-store";
-import { MASTERY_THRESHOLD } from "./quiz-tree";
+import { MASTERY_THRESHOLD } from "./quiz-mastery";
 
 /* ══════════════════════════════════════════════════════════
    QUIZ TYPE — regroupement des quiz par TYPE
