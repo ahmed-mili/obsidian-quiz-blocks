@@ -272,11 +272,19 @@
 	transition: width 0.4s ease;
 }
 
+/* Filet de séparation avant le pied (StudySmarter) : thémable via la variable
+   native (visible clair ET sombre), discret (1px). `margin-top` ajoute un
+   minimum d'air au-dessus même quand l'élément précédent n'a presque pas de
+   `margin-bottom` (carte sans dossier parent, racine du vault) ; `padding-top`
+   écarte le filet du contenu du pied lui-même. */
 .qbd-quiz-card-meta {
 	display: flex;
 	align-items: center;
 	gap: 8px;
 	flex-wrap: wrap;
+	margin-top: 6px;
+	padding-top: 10px;
+	border-top: 1px solid var(--background-modifier-border);
 }
 
 .qbd-quiz-card-meta-item {
