@@ -200,10 +200,15 @@
 	transform: translateY(0) scale(0.985);
 }
 
+/* Épaissi à 4px (StudySmarter : barre nette, pas un filet) ; le
+   `border-radius` ici ne sert qu'à éviter une arête vive à l'anti-aliasing,
+   le clip réel des coins vient de `overflow: hidden` + `border-radius` sur
+   `.qbd-quiz-card` — la marge négative égale au padding (16px) fait déjà
+   courir la barre sur toute la largeur intérieure de la carte. */
 .qbd-quiz-card-accent {
-	height: 3px;
+	height: 4px;
 	background: var(--interactive-accent);
-	border-radius: 3px 3px 0 0;
+	border-radius: 4px 4px 0 0;
 	margin: -16px -16px 14px;
 }
 
