@@ -32,7 +32,12 @@ export function renderQuizCard(
 	container: HTMLElement,
 	quiz: QuizIndexEntry,
 	stats: QuizStatRecord | null | undefined,
-	onOpen?: (quiz: QuizIndexEntry) => void
+	onOpen?: (quiz: QuizIndexEntry) => void,
+	/* showPath: false quand l'appelant affiche DÉJÀ le dossier au-dessus des
+	   cartes (arbre de « Mes quiz ») — la ligne serait une redondance pure.
+	   L'accueil, lui, rend une grille plate : le chemin y est la seule
+	   indication d'où sort un quiz, d'où le défaut à true. */
+	opts?: { showPath?: boolean }
 ): HTMLDivElement {
 	const card = container.createDiv({ cls: "qbd-quiz-card" });
 	card.dataset.path = quiz.path;
@@ -72,9 +77,11 @@ export function renderQuizCard(
 	// Titre
 	body.createEl("p", { cls: "qbd-quiz-card-title", text: quiz.title });
 
-	// Chemin
-	const pathEl = body.createEl("p", { cls: "qbd-quiz-card-path" });
-	pathEl.createSpan({ text: quiz.path });
+	// Chemin — omis (pas masqué en CSS) quand l'appelant l'affiche déjà.
+	if (opts?.showPath !== false) {
+		const pathEl = body.createEl("p", { cls: "qbd-quiz-card-path" });
+		pathEl.createSpan({ text: quiz.path });
+	}
 
 	// Barre de progression — seulement quand c'est en cours (sinon bruit)
 	if (state === "progress") {
