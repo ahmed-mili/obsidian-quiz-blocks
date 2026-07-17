@@ -64,15 +64,19 @@ export const EN_DASHBOARD = {
 	"dashboard.quizzes.folderMasteredOther": "{count} mastered",
 
 	/* ── Regroupement (sélecteur au-dessus des pastilles de filtre) ──
-	   Libellés volontairement explicites : « By activity » répond exactement
-	   au critère utilisé (max(dernière partie jouée, dernière modification)),
-	   pas un jargon du type « Recent » qui laisserait deviner de quoi. */
+	   Le SÉLECTEUR nomme l'axe (« By activity » = max(dernière partie jouée,
+	   dernière modification)) — pas un jargon du type « Recent » qui
+	   laisserait deviner de quoi. Les libellés de GROUPES ne le répètent
+	   donc pas : sous « By activity », « Last 7 days » est déjà sans
+	   ambiguïté, et les trois restent parallèles et neutres. « Inactive for
+	   over a month » sonnait comme un reproche là où les deux autres étaient
+	   positifs — un groupe décrit un intervalle, il ne juge pas. */
 	"dashboard.quizzes.groupByFolder": "By folder",
 	"dashboard.quizzes.groupByActivity": "By activity",
 	"dashboard.quizzes.groupByType": "By type",
-	"dashboard.quizzes.recentWeek": "Active in the last 7 days",
-	"dashboard.quizzes.recentMonth": "Active in the last 30 days",
-	"dashboard.quizzes.recentOlder": "Inactive for over a month",
+	"dashboard.quizzes.recentWeek": "Last 7 days",
+	"dashboard.quizzes.recentMonth": "Last 30 days",
+	"dashboard.quizzes.recentOlder": "Older",
 
 	/* ── Carte de quiz (état) ── */
 	"dashboard.card.mastered": "Mastered",
