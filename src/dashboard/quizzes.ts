@@ -56,11 +56,11 @@ export function createQuizzesHandlers(ctx: DashboardCtx): QuizzesHandlers {
 	   l'IDÉE du sélecteur de StudySmarter, pas son exécution (leur libellé
 	   « Récents » est ambigu — quoi, ouvert ? modifié ? joué ? — d'où des
 	   clés i18n qui répondent d'elles-mêmes : cf. dashboard.ts i18n). */
-	type GroupingKey = "folder" | "recent" | "type";
+	type GroupingKey = "module" | "ue" | "recent" | "type";
 
 	function currentGrouping(): GroupingKey {
 		const g = ctx.plugin.settings.quizzesGrouping;
-		return g === "recent" || g === "type" ? g : "folder";
+		return g === "recent" || g === "type" || g === "ue" || g === "module" ? g : "module";
 	}
 
 	function setGrouping(g: GroupingKey): void {
@@ -86,10 +86,11 @@ export function createQuizzesHandlers(ctx: DashboardCtx): QuizzesHandlers {
 	];
 
 	// Ordre FIXE d'affichage dans le menu du sélecteur (pas alphabétique, pas
-	// par usage) : « folder » reste en tête car c'est le défaut prévisible.
-	const GROUPING_ORDER: GroupingKey[] = ["folder", "recent", "type"];
+	// par usage) : « module » est le nouveau défaut prévisible (cf. spec).
+	const GROUPING_ORDER: GroupingKey[] = ["module", "ue", "recent", "type"];
 	const GROUPING_LABEL_KEYS: Record<GroupingKey, TransKey> = {
-		folder: "dashboard.quizzes.groupByFolder",
+		module: "dashboard.quizzes.groupByModule",
+		ue: "dashboard.quizzes.groupByUE",
 		recent: "dashboard.quizzes.groupByActivity",
 		type: "dashboard.quizzes.groupByType"
 	};

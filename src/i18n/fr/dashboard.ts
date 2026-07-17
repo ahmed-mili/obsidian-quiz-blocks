@@ -60,7 +60,8 @@ export const FR_DASHBOARD: Record<keyof typeof EN_DASHBOARD, string> = {
 	"dashboard.quizzes.folderMasteredOther": "{count} maîtrisés",
 
 	/* ── Regroupement ── */
-	"dashboard.quizzes.groupByFolder": "Par dossier",
+	"dashboard.quizzes.groupByModule": "Par module",
+	"dashboard.quizzes.groupByUE": "Par UE",
 	"dashboard.quizzes.groupByActivity": "Par activité",
 	"dashboard.quizzes.groupByType": "Par type",
 	"dashboard.quizzes.recentWeek": "7 derniers jours",

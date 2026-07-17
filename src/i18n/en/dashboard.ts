@@ -71,7 +71,8 @@ export const EN_DASHBOARD = {
 	   ambiguïté, et les trois restent parallèles et neutres. « Inactive for
 	   over a month » sonnait comme un reproche là où les deux autres étaient
 	   positifs — un groupe décrit un intervalle, il ne juge pas. */
-	"dashboard.quizzes.groupByFolder": "By folder",
+	"dashboard.quizzes.groupByModule": "By module",
+	"dashboard.quizzes.groupByUE": "By course",
 	"dashboard.quizzes.groupByActivity": "By activity",
 	"dashboard.quizzes.groupByType": "By type",
 	"dashboard.quizzes.recentWeek": "Last 7 days",

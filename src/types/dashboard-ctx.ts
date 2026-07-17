@@ -74,9 +74,11 @@ export interface AiSettings extends VoiceSettings {
 	   travail à part (plugin.js n'est pas encore converti), à signaler au
 	   rapport plutôt qu'à faire ici. */
 	quizzesExpandedFolders?: string[];
-	/** Axe de regroupement de « Mes quiz » (folder/recent/type) — même remarque
+	/** Axe de regroupement de « Mes quiz » (module/ue/recent/type) — même remarque
 	    que ci-dessus, aucun rapport avec l'IA. Cf. plugin.ts DEFAULT_SETTINGS. */
-	quizzesGrouping?: "folder" | "recent" | "type";
+	quizzesGrouping?: "module" | "ue" | "recent" | "type";
+	/** Note de correspondance UE → module. Cf. plugin.ts DEFAULT_SETTINGS. */
+	quizzesModuleMapNote?: string;
 }
 
 /**

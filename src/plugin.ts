@@ -67,10 +67,13 @@ interface QuizBlocksSettings {
 	    tout déplier d'office reproduit le mur qu'on cherche à éviter (cf.
 	    défaut n°1 relevé par Ahmed à l'écran, 2026-07-17). */
 	quizzesExpandedFolders: string[];
-	/** Axe de regroupement de « Mes quiz ». Défaut « folder » (l'arbre existant,
-	    prévisible). « recent »/« type » sont les deux axes ajoutés (StudySmarter
-	    est la source d'inspiration, pas un contrat : cf. quiz-recent.ts/quiz-type.ts). */
-	quizzesGrouping: "folder" | "recent" | "type";
+	/** Axe de regroupement de « Mes quiz ». Défaut « module » (cartes par module,
+	    cf. spec). « ue »/« recent »/« type » sont les axes ajoutés. */
+	quizzesGrouping: "module" | "ue" | "recent" | "type";
+	/** Note de correspondance UE → module (encadrés `[!portals]`). Nom de
+	    linkpath (résolu comme un lien Obsidian), défaut « Dashboard ». Absente
+	    ou sans encadré → cartes au nom de dossier, sans UE (dégradation propre). */
+	quizzesModuleMapNote: string;
 	voiceEnabled: boolean;
 	voiceBackend: VoiceBackend;
 	voiceModel: VoiceModelId;
@@ -117,7 +120,9 @@ const DEFAULT_SETTINGS: QuizBlocksSettings = {
 	// Vide : au premier usage, tout est replié — la structure reste visible
 	// (2 titres, pas un mur de cartes) et un clic déplie ce qu'on veut voir.
 	quizzesExpandedFolders: [],
-	quizzesGrouping: "folder",
+	// « module » : le défaut prévisible — une carte par module, cf. spec.
+	quizzesGrouping: "module",
+	quizzesModuleMapNote: "Dashboard",
 	// ── Saisie vocale (dictée locale whisper.cpp) — opt-in complet.
 	// Spec : docs/superpowers/specs/2026-07-10-voice-input-design.md
 	voiceEnabled: false,
