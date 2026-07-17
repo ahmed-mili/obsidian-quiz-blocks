@@ -138,6 +138,9 @@ export function createAiHandlers(ctx: DashboardCtx): AiHandlers {
 	// Listener « focus fenêtre » du re-check des statuts CLI (remplacé à
 	// chaque render, retiré quand la zone de hint disparaît).
 	let __focusRecheck: (() => void) | null = null;
+	// ResizeObserver de la carte composer (mesure du text-indent des chips) :
+	// déconnecté et recréé à chaque render (composer recréé) — cf. layoutChipsRow.
+	let composerResizeObserver: ResizeObserver | null = null;
 	let phase: Phase = "idle"; // idle | loading | result | error
 	// Client IA de la génération en cours — permet au bouton stop (et à
 	// la touche Esc) d'annuler réellement (kill du CLI / abort du fetch).
@@ -190,6 +193,10 @@ export function createAiHandlers(ctx: DashboardCtx): AiHandlers {
 		// Tooltips portalés au <body> (stop, effort) : un re-render détruit
 		// leur ancre sans mouseleave → purge pour éviter les orphelins.
 		document.querySelectorAll(".qbd-hover-tip").forEach(t => t.remove());
+		// Le composer (et son ResizeObserver) est détruit par container.empty() :
+		// déconnecter AVANT, sinon l'ancien observer continue de viser un élément
+		// détaché (fuite silencieuse, un de plus à chaque render).
+		if (composerResizeObserver) { composerResizeObserver.disconnect(); composerResizeObserver = null; }
 		container.empty();
 
 		// ── Scène unique (le layout 2 colonnes est supprimé — maquette
@@ -578,14 +585,19 @@ export function createAiHandlers(ctx: DashboardCtx): AiHandlers {
 				const chip = chipsRow.createDiv({ cls: "qbd-ai-note-chip" });
 				const chipIcon = chip.createSpan({ cls: "qbd-ai-note-chip-icon" });
 				setIcon(chipIcon, "file-text");
-				chip.createSpan({
+				const chipName = chip.createSpan({
 					cls: "qbd-ai-note-chip-name",
 					text: (note.expanded && note.path) ? note.path : note.name
 				});
+				// Tooltip natif = le chemin ENTIER, toujours, y compris replié :
+				// `max-width` + ellipsis peuvent tronquer même le chemin déplié
+				// (mesuré : scrollWidth > clientWidth dès un chemin un peu long),
+				// et déplier sert précisément à le lire.
+				chipName.title = note.path || note.name;
 				// Bascule nom+extension ⇄ chemin complet — seulement si un
-				// chemin est connu (une pièce venant d'un drop ou d'un
-				// fichier hors vault peut ne pas en avoir : alors rien à
-				// déplier, la chip ne réagit pas au clic).
+				// chemin est connu (un fichier déposé/choisi SANS origine
+				// connue — ni vault ni racine externe — n'en a pas : alors rien
+				// à déplier, la chip ne réagit pas au clic).
 				if (note.path) {
 					chip.addClass("qbd-ai-note-chip--toggle");
 					chip.addEventListener("click", (e) => {
@@ -626,22 +638,85 @@ export function createAiHandlers(ctx: DashboardCtx): AiHandlers {
 			composerInput.style.height = "auto";
 			composerInput.style.height = Math.min(composerInput.scrollHeight, 220) + "px";
 		};
+		// Fait suivre la rangée de chips au défilement interne du textarea
+		// (max-height: 220px, overflow-y: auto) : sans ça, la rangée reste
+		// ancrée au CADRE (top: 0 de .qbd-ai-composer-textzone) pendant que
+		// le texte défile dessous, et une chip au fond opaque vient amputer
+		// le début des lignes qui défilent sous elle. En appliquant le MÊME
+		// décalage que le scroll interne, la rangée se comporte comme si elle
+		// faisait partie de la ligne 0 : elle défile et disparaît avec elle.
+		// `overflow: hidden` sur .qbd-ai-composer-textzone (CSS) l'empêche de
+		// déborder du cadre une fois remontée. Rien à faire en mode --stacked
+		// (flux normal, ne chevauche jamais le texte) : transform vidé.
+		const syncChipsScroll = () => {
+			if (!chipsRow) return;
+			const stacked = chipsRow.classList.contains("qbd-ai-composer-chips--stacked");
+			chipsRow.style.transform = stacked ? "" : "translateY(-" + composerInput.scrollTop + "px)";
+		};
+		composerInput.addEventListener("scroll", syncChipsScroll);
 		// Mesure la rangée de chips (superposée à la 1ʳᵉ ligne) et pose le
 		// text-indent en conséquence — RECALCULÉ à chaque appel (jamais codé
 		// en dur : police, contenu et nombre de chips varient). Au-delà de
 		// ~55 % de la largeur du composer, la rangée ne tient plus à côté du
 		// texte : repli en flux normal au-dessus (classe --stacked), sans
-		// text-indent — cf. brief tâche 9 (le dépliement du chemin complet,
-		// point 2, peut lui-même déclencher ce repli).
+		// text-indent. Ça arrive avec PLUSIEURS chips (chaque chip est
+		// plafonnée à 240px de large) — JAMAIS avec une seule, même dépliée
+		// sur son chemin complet : à 240px de max-width, une chip seule ne
+		// peut pas dépasser 0,55 × largeur usuelle du composer (~732px) =
+		// ~402px. (Ce commentaire promettait l'inverse — corrigé : ce projet
+		// s'est déjà fait piéger deux fois par un commentaire qui annonce
+		// autre chose que ce que fait le code.)
 		const layoutChipsRow = () => {
 			if (!chipsRow || !chipsRow.isConnected) return;
 			const composerWidth = composer.getBoundingClientRect().width;
-			const chipsWidth = chipsRow.getBoundingClientRect().width;
+			// Largeur NATURELLE de la rangée = somme des chips + gaps, jamais
+			// chipsRow.getBoundingClientRect().width directement : une fois en
+			// --stacked (position: static, flex-wrap: wrap), la rangée est un
+			// conteneur flex de niveau bloc SANS largeur déclarée → elle
+			// s'étire à la largeur de son PARENT (textZone, quasi la carte
+			// entière), pas à celle de son contenu. Mesurer cette largeur
+			// gonflée aurait empêché tout retour en mode non-replié une fois
+			// basculé (hystérésis : rétrécir puis ragrandir le composer
+			// restait bloqué en --stacked — trouvé en testant le
+			// ResizeObserver ci-dessous, qui rend ce recalcul répété au lieu
+			// d'unique). Les chips elles-mêmes gardent leur taille propre
+			// quel que soit le mode de la rangée : les additionner est fiable
+			// dans les deux sens.
+			const chips = Array.from(chipsRow.children) as HTMLElement[];
+			const gap = parseFloat(getComputedStyle(chipsRow).columnGap) || 0;
+			const chipsWidth = chips.reduce((sum, el) => sum + el.getBoundingClientRect().width, 0)
+				+ gap * Math.max(0, chips.length - 1);
 			const GUTTER = 10;
 			const fits = composerWidth > 0 && chipsWidth <= composerWidth * 0.55;
 			chipsRow.classList.toggle("qbd-ai-composer-chips--stacked", !fits);
 			composerInput.style.textIndent = fits ? (chipsWidth + GUTTER) + "px" : "";
+			// Le passage en --stacked change immédiatement la transform (sinon
+			// elle resterait décalée d'un ancien scroll jusqu'au prochain
+			// événement "scroll", qui peut ne jamais venir en mode replié).
+			syncChipsScroll();
 		};
+		// Re-mesure quand la carte change de largeur (pane redimensionné, zoom
+		// Obsidian) : sans ça, la valeur de text-indent posée au premier
+		// render reste périmée — pattern repris de engine/viewport.ts
+		// (bindViewportResizeObserver) : ResizeObserver + comparaison de
+		// largeur pour ignorer les callbacks qui ne changent rien (un
+		// changement de HAUTEUR de la carte, ex. bascule --stacked, redéclenche
+		// l'observer sans que la largeur ait bougé). Déconnecté au prochain
+		// render (cf. le début de render()) — jamais réutilisé tel quel : ce
+		// n'est pas le MÊME domaine (pas de piste de slides ici), seulement la
+		// même technique.
+		if (chipsRow && typeof ResizeObserver !== "undefined") {
+			let lastComposerWidth = Math.round(composer.getBoundingClientRect().width || 0);
+			composerResizeObserver = new ResizeObserver((entries) => {
+				const entry = entries[0];
+				if (!entry) return;
+				const width = Math.round(entry.contentRect.width || composer.getBoundingClientRect().width || 0);
+				if (width === lastComposerWidth) return;
+				lastComposerWidth = width;
+				layoutChipsRow();
+			});
+			composerResizeObserver.observe(composer);
+		}
 		composerInput.addEventListener("input", (e) => {
 			const ta = e.target as HTMLTextAreaElement;
 			composerText = ta.value;

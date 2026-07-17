@@ -981,9 +981,15 @@
 
 /* Zone de texte : conteneur relatif partagé par la rangée de chips
    « notes » et le textarea — la rangée s'y positionne en absolu (cf.
-   .qbd-ai-composer-chips) pour se superposer à la 1ʳᵉ ligne du texte. */
+   .qbd-ai-composer-chips) pour se superposer à la 1ʳᵉ ligne du texte.
+   `overflow: hidden` : la rangée suit le défilement interne du textarea
+   (translateY négatif posé en JS, cf. syncChipsScroll dans ai.ts) — sans
+   ce clip, elle déborderait du cadre de la carte en remontant. Le menu
+   « @ » est portalé à <body> (openMentionMenu, ui-select.ts), donc hors de
+   ce conteneur : ce clip ne le touche pas. */
 .qbd-ai-composer-textzone {
 	position: relative;
+	overflow: hidden;
 }
 
 /* Rangée de chips « notes », superposée à la 1ʳᵉ ligne du texte (état par
