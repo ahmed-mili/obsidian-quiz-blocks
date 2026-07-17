@@ -78,9 +78,20 @@ export function renderQuizCard(
 	body.createEl("p", { cls: "qbd-quiz-card-title", text: quiz.title });
 
 	// Chemin — omis (pas masqué en CSS) quand l'appelant l'affiche déjà.
+	// N'affiche que le DOSSIER PARENT (dernier segment), jamais le chemin
+	// complet ni l'extension : le nom de fichier est déjà le titre juste
+	// au-dessus, et le préfixe de dossiers commun à toutes les cartes
+	// n'apprend rien — seul le dernier dossier identifie « d'où ça sort »
+	// (défaut relevé par Ahmed à l'écran, 2026-07-17 : 3 lignes de
+	// monospace, préfixe répété sur chaque carte). Racine du vault → aucun
+	// dossier parent, donc aucune ligne (pas de texte vide, pas de placeholder).
 	if (opts?.showPath !== false) {
-		const pathEl = body.createEl("p", { cls: "qbd-quiz-card-path" });
-		pathEl.createSpan({ text: quiz.path });
+		const segs = quiz.path.split("/").slice(0, -1).filter(Boolean);
+		const parentFolder = segs.length > 0 ? segs[segs.length - 1] : null;
+		if (parentFolder) {
+			const pathEl = body.createEl("p", { cls: "qbd-quiz-card-path" });
+			pathEl.createSpan({ text: parentFolder });
+		}
 	}
 
 	// Barre de progression — seulement quand c'est en cours (sinon bruit)

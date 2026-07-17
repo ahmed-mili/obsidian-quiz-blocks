@@ -225,15 +225,20 @@
 	line-height: 1.3;
 }
 
+/* Une seule ligne, jamais trois : la carte n'affiche plus que le dossier
+   parent (cf. quiz-card.ts), mais un nom de dossier long doit s'élider,
+   pas retourner à la ligne. Pas de `display: flex` ici (il n'y a plus
+   d'icône dans ce bloc depuis ce défaut) : un flex-item texte ne rétrécit
+   pas sous sa largeur de contenu par défaut, ce qui casserait l'ellipse. */
 .qbd-quiz-card-path {
 	font-size: 10px;
 	color: var(--text-faint);
 	font-family: var(--font-monospace, monospace);
-	display: flex;
-	align-items: center;
-	gap: 4px;
 	margin: 0 0 10px;
 	opacity: 0.8;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
 }
 
 .qbd-quiz-card-path svg {
