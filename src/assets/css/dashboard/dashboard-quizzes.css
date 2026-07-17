@@ -177,11 +177,15 @@
 	color: var(--text-faint);
 }
 
+/* Pas de `margin-left: auto` : ça poussait la barre à l'extrême droite de la
+   ligne (~1000 px du libellé sur un large panneau), l'œil devant faire le
+   trajet pour la relier au dossier qu'elle décrit. Elle suit désormais
+   immédiatement le compte et l'agrégat de maîtrise, tous groupés à gauche
+   (défaut relevé par Ahmed à l'écran, 2026-07-17). */
 .qbd-quizzes-node-bar {
 	flex-shrink: 0;
 	width: 64px;
 	height: 4px;
-	margin-left: auto;
 	border-radius: 2px;
 	background: var(--background-modifier-border);
 	overflow: hidden;
