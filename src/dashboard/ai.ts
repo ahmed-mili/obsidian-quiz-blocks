@@ -22,13 +22,37 @@ import type { TransKey } from "../i18n";
 
 type Phase = "idle" | "loading" | "result" | "error";
 
+/** Origine d'une pièce jointe texte : note/fichier du VAULT (chemin relatif
+    connu), fichier hors vault résolu via le picker « @ » (chemin absolu
+    connu), ou fichier choisi/déposé SANS origine connue (menu « + »,
+    glisser-déposer — on ne sait dire que son nom). Sert de dédoublonnage
+    (cf. attachmentKey) : deux fichiers de même NOM mais d'origine ou de
+    chemin différents (« AGENTS.md » du vault vs déposé, deux
+    « Styling Coiffure.pdf » de deux dossiers) restent deux pièces jointes
+    distinctes. */
+type AttachmentSource = "vault" | "external" | "file";
+
+/** Clé d'identité d'une pièce jointe : origine + chemin quand il existe, nom
+    sinon. Calculée en UN SEUL endroit et réutilisée à tous les points
+    d'ajout (addComposerFiles, attachNoteVaultFile, attachExternalPath) —
+    la régression corrigée ici venait précisément d'un dédoublonnage recopié
+    à la main à chaque appelant, divergent entre `path` et `name`. */
+function attachmentKey(a: { source: AttachmentSource; path?: string; name: string }): string {
+	return a.source + ":" + (a.path || a.name);
+}
+
 /** Source texte attachée (note du vault ou fichier .md/.txt/PDF). */
 interface NoteAttachment {
 	name: string;
 	content: string;
+	/** Vault → chemin relatif au vault. Externe → chemin ABSOLU (résolu par
+	    le picker « @ » juste avant l'attachement). Absent seulement pour un
+	    fichier choisi/déposé sans origine connue. */
 	path?: string;
+	source: AttachmentSource;
 	/** Chip dépliée (chemin complet) ou repliée (nom+extension) — bascule
-	    au clic ; ignoré si `path` est absent (drop / fichier hors vault). */
+	    au clic ; ignoré si `path` est absent (fichier déposé sans origine
+	    connue : ni vault ni racine externe, rien de plus à montrer). */
 	expanded?: boolean;
 }
 
@@ -1322,10 +1346,21 @@ export function createAiHandlers(ctx: DashboardCtx): AiHandlers {
 	/* Route les fichiers du picker/drop : images → vignettes (vision),
 	   texte (.md/.txt) et PDF (texte extrait localement) → sources texte
 	   (mêmes chips que les notes). Autres formats : refusés avec
-	   explication. */
-	async function addComposerFiles(files: File[]): Promise<void> {
+	   explication.
+	   `origin` : connu SEULEMENT quand l'appelant sait d'où vient le fichier
+	   (attachVaultPath / attachExternalPath, toujours UN seul fichier à la
+	   fois) — sinon (menu « + », glisser-déposer, plusieurs fichiers
+	   possibles) la pièce est de source « file », dédoublonnée par nom
+	   seul faute de chemin connu. Dédoublonnage centralisé via
+	   attachmentKey : un doublon ignoré produit une Notice EXACTE (jamais
+	   un skip silencieux — régression corrigée ici). */
+	async function addComposerFiles(
+		files: File[],
+		origin?: { source: "vault" | "external"; path: string }
+	): Promise<void> {
 		const imgs: File[] = [];
 		const rejected: string[] = [];
+		const source: AttachmentSource = origin?.source ?? "file";
 		for (const file of files) {
 			if (file.type.startsWith("image/")) {
 				imgs.push(file);
@@ -1334,8 +1369,13 @@ export function createAiHandlers(ctx: DashboardCtx): AiHandlers {
 					const content = await extractPdfText(file);
 					if (!content.trim()) {
 						new Notice(t("ai.notice.pdfNoText", { name: file.name }));
-					} else if (!noteAttachments.some(n => n.name === file.name)) {
-						noteAttachments.push({ name: file.name, content });
+					} else {
+						const key = attachmentKey({ source, path: origin?.path, name: file.name });
+						if (noteAttachments.some(n => attachmentKey(n) === key)) {
+							new Notice(t("ai.notice.noteAlreadyAttached", { name: file.name }));
+						} else {
+							noteAttachments.push({ name: file.name, content, path: origin?.path, source });
+						}
 					}
 				} catch (e) {
 					rejected.push(file.name);
@@ -1343,8 +1383,11 @@ export function createAiHandlers(ctx: DashboardCtx): AiHandlers {
 			} else if (/\.(md|txt)$/i.test(file.name) || file.type.startsWith("text/")) {
 				try {
 					const content = await file.text();
-					if (!noteAttachments.some(n => n.name === file.name)) {
-						noteAttachments.push({ name: file.name, content });
+					const key = attachmentKey({ source, path: origin?.path, name: file.name });
+					if (noteAttachments.some(n => attachmentKey(n) === key)) {
+						new Notice(t("ai.notice.noteAlreadyAttached", { name: file.name }));
+					} else {
+						noteAttachments.push({ name: file.name, content, path: origin?.path, source });
 					}
 				} catch (e) {
 					rejected.push(file.name);
@@ -1383,7 +1426,12 @@ export function createAiHandlers(ctx: DashboardCtx): AiHandlers {
 	/* Attache une note du vault comme source du quiz (menu « Ajouter des
 	   notes » et raccourci — remplace l'ancienne « note active »). */
 	async function attachNoteVaultFile(file: TFile): Promise<void> {
-		if (noteAttachments.some(n => n.path === file.path)) {
+		// Dédoublonnage par attachmentKey (source « vault » + path), PAS par
+		// name seul : sinon un « AGENTS.md » du vault percute à tort un
+		// « AGENTS.md » externe/déposé de contenu différent (régression
+		// corrigée ici — cf. rapport de tâche).
+		const key = attachmentKey({ source: "vault", path: file.path, name: file.name });
+		if (noteAttachments.some(n => attachmentKey(n) === key)) {
 			new Notice(t("ai.notice.noteAlreadyAttached", { name: file.basename }));
 			return;
 		}
@@ -1391,9 +1439,8 @@ export function createAiHandlers(ctx: DashboardCtx): AiHandlers {
 			const content = await ctx.app.vault.read(file);
 			// file.name (PAS file.basename) : la chip affiche le nom complet
 			// AVEC son extension, comme les fichiers .md/.txt/PDF attachés via
-			// addComposerFiles (déjà sur file.name) — dédoublonnage inchangé
-			// (par path, pas par name).
-			noteAttachments.push({ name: file.name, content, path: file.path });
+			// addComposerFiles (déjà sur file.name).
+			noteAttachments.push({ name: file.name, content, path: file.path, source: "vault" });
 			render(containerRef);
 		} catch (e) {
 			new Notice(t("ai.notice.noteReadFailed", { name: file.basename }));
@@ -1413,9 +1460,13 @@ export function createAiHandlers(ctx: DashboardCtx): AiHandlers {
 	}
 
 	/* Attache un fichier du VAULT choisi via « @ ». Les notes passent par
-	   attachNoteVaultFile (qui dédoublonne par path et garde le lien vers la
-	   note) ; les PDF et images passent par addComposerFiles, seule à savoir
-	   extraire un PDF et router une image vers la vision. */
+	   attachNoteVaultFile (qui dédoublonne par attachmentKey et garde le
+	   lien vers la note) ; les PDF et images passent par addComposerFiles,
+	   seule à savoir extraire un PDF et router une image vers la vision —
+	   origin: { source: "vault", path } transmis pour que CE fichier
+	   partage le même dédoublonnage cohérent (source « vault » + chemin),
+	   pas un dédoublonnage par nom seul qui le confondrait avec un fichier
+	   externe homonyme. */
 	async function attachVaultPath(path: string): Promise<void> {
 		const f = ctx.app.vault.getAbstractFileByPath(path);
 		if (!(f instanceof TFile)) return;
@@ -1424,7 +1475,7 @@ export function createAiHandlers(ctx: DashboardCtx): AiHandlers {
 		try {
 			const buf = await ctx.app.vault.readBinary(f);
 			const file = new File([new Uint8Array(buf)], f.name, { type: mimeForName(f.name) });
-			await addComposerFiles([file]);
+			await addComposerFiles([file], { source: "vault", path: f.path });
 		} catch (e) {
 			new Notice(t("ai.notice.noteReadFailed", { name: f.name }));
 		}
@@ -1432,11 +1483,18 @@ export function createAiHandlers(ctx: DashboardCtx): AiHandlers {
 
 	/* Attache un fichier hors vault (picker « @ »). On fabrique un File à
 	   partir du disque pour réutiliser addComposerFiles tel quel : images,
-	   PDF et texte y sont déjà routés. Desktop uniquement (fs). */
+	   PDF et texte y sont déjà routés. Desktop uniquement (fs).
+	   Dédoublonnage par attachmentKey (source « external » + chemin ABSOLU),
+	   PAS par nom seul : deux fichiers homonymes de dossiers différents
+	   (ex. deux « Styling Coiffure.pdf ») restent deux pièces jointes
+	   distinctes, joignables ENSEMBLE — c'était impossible avant (régression
+	   corrigée ici, cf. rapport de tâche). Vérifié AVANT la lecture disque :
+	   pas de fs.readFileSync pour un doublon détecté à l'avance. */
 	async function attachExternalPath(path: string): Promise<void> {
 		if (!Platform.isDesktopApp) return;
 		const name = path.slice(Math.max(path.lastIndexOf("/"), path.lastIndexOf("\\")) + 1);
-		if (noteAttachments.some(n => n.name === name)) {
+		const key = attachmentKey({ source: "external", path, name });
+		if (noteAttachments.some(n => attachmentKey(n) === key)) {
 			new Notice(t("ai.notice.noteAlreadyAttached", { name }));
 			return;
 		}
@@ -1447,7 +1505,7 @@ export function createAiHandlers(ctx: DashboardCtx): AiHandlers {
 			// EN PREMIER pour les images, un File sans type finirait en chip
 			// texte au lieu d'une vignette.
 			const file = new File([new Uint8Array(buf)], name, { type: mimeForName(name) });
-			await addComposerFiles([file]);
+			await addComposerFiles([file], { source: "external", path });
 		} catch (e) {
 			new Notice(t("ai.notice.noteReadFailed", { name }));
 		}
