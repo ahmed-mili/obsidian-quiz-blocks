@@ -118,6 +118,15 @@
 .qbd-root .qbd-quizzes-node-head {
 	display: flex;
 	align-items: center;
+	/* Obsidian centre le contenu de ses `button` (justify-content: center) :
+	   sans ce reset, le contenu d'un en-tête se centrait dans un bouton
+	   pourtant large de 1068 px, donc deux nœuds FRÈRES ne commençaient pas
+	   à la même abscisse — l'alignement dépendait de la longueur du libellé
+	   (mesuré : chevrons à x=749 et x=931). Un arbre dont les frères ne sont
+	   pas alignés ne se lit pas comme un arbre. Même famille de piège que le
+	   fond gris ci-dessous : le chrome natif des `button` gagne tant qu'on ne
+	   le neutralise pas explicitement. */
+	justify-content: flex-start;
 	gap: 8px;
 	width: 100%;
 	padding: 6px 8px;

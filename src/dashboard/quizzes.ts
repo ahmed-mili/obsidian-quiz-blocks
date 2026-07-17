@@ -246,9 +246,14 @@ export function createQuizzesHandlers(ctx: DashboardCtx): QuizzesHandlers {
 		});
 		// Barre d'avancement : c'est elle qui rend un nœud REPLIÉ encore
 		// informatif — sinon replier reviendrait à cacher.
-		const bar = head.createDiv({ cls: "qbd-quizzes-node-bar" });
-		const fill = bar.createDiv({ cls: "qbd-quizzes-node-bar-fill" });
-		fill.style.width = (total > 0 ? Math.round(mastered / total * 100) : 0) + "%";
+		// Omise quand rien n'est maîtrisé : une piste vide à 0 % n'apprend rien
+		// de plus que le « 0 mastered » écrit juste à côté, et elle attire
+		// l'œil pour rien. Le compte, lui, reste toujours affiché.
+		if (mastered > 0) {
+			const bar = head.createDiv({ cls: "qbd-quizzes-node-bar" });
+			const fill = bar.createDiv({ cls: "qbd-quizzes-node-bar-fill" });
+			fill.style.width = Math.round(mastered / total * 100) + "%";
+		}
 	}
 
 	/* Bascule de repli partagée par un nœud de dossier ET un groupe plat
