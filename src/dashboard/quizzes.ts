@@ -7,6 +7,8 @@ import type { DashboardCtx } from "../types/dashboard-ctx";
 import type { QuizIndexEntry } from "./scanner";
 import type { QuizStatRecord } from "./stats-store";
 import { renderQuizCard } from "./quiz-card";
+import { buildQuizTree, MASTERY_THRESHOLD } from "./quiz-tree";
+import type { QuizTreeNode } from "./quiz-tree";
 
 /* ══════════════════════════════════════════════════════════
    QUIZZES VIEW — Dashboard
@@ -26,6 +28,14 @@ export function createQuizzesHandlers(ctx: DashboardCtx): QuizzesHandlers {
 	let currentFilter: FilterKey = "all";
 	let searchQuery = "";
 
+	/* Le conteneur du dernier rendu. `renderNode` est défini HORS de
+	   `render`, donc `container` n'y est pas dans sa portée : sans cette
+	   référence, le clic d'un chevron ne pourrait pas re-rendre. Même
+	   patron qu'ai.ts:179/215. Réassigné à chaque rendu — ne JAMAIS
+	   capturer un nœud DOM d'un rendu précédent, `render` fait
+	   `container.empty()`. */
+	let containerRef: HTMLElement | null = null;
+
 	// Clés de traduction (pas de libellés) : la liste est construite à
 	// l'ouverture de la vue, les libellés sont résolus à chaque rendu.
 	const FILTERS: Array<{ key: FilterKey; labelKey: TransKey }> = [
@@ -36,6 +46,7 @@ export function createQuizzesHandlers(ctx: DashboardCtx): QuizzesHandlers {
 	];
 
 	function render(container: HTMLElement): void {
+		containerRef = container;
 		container.empty();
 
 		const quizzes: QuizIndexEntry[] = ctx.scanner ? ctx.scanner.getQuizzes() : [];
@@ -75,7 +86,7 @@ export function createQuizzesHandlers(ctx: DashboardCtx): QuizzesHandlers {
 		searchInput.value = searchQuery;
 		searchInput.addEventListener("input", (e) => {
 			searchQuery = (e.target as HTMLInputElement).value;
-			renderQuizGrid(gridEl, quizzes, stats);
+			renderQuizGrid(treeEl, quizzes, stats);
 		});
 
 		// ── Filters ──
@@ -91,36 +102,94 @@ export function createQuizzesHandlers(ctx: DashboardCtx): QuizzesHandlers {
 			});
 		}
 
-		// ── Grid ──
-		const gridEl = container.createDiv({ cls: "qbd-home-grid" });
-		renderQuizGrid(gridEl, quizzes, stats);
+		// ── Arbre ──
+		const treeEl = container.createDiv({ cls: "qbd-quizzes-tree" });
+		renderQuizGrid(treeEl, quizzes, stats);
 	}
 
-	function renderQuizGrid(gridEl: HTMLElement, quizzes: QuizIndexEntry[], stats: Record<string, QuizStatRecord>): void {
-		gridEl.empty();
+	/* Indentation : la compaction des chaînes supprime déjà les niveaux
+	   creux, mais une hiérarchie réellement profonde ne doit pas écraser
+	   les cartes à 360 px de large (Obsidian Android). D'où le plafond. */
+	const INDENT_PX = 16;
+	const MAX_INDENT_LEVELS = 4;
+
+	function renderQuizGrid(treeEl: HTMLElement, quizzes: QuizIndexEntry[], stats: Record<string, QuizStatRecord>): void {
+		treeEl.empty();
 
 		const filtered = quizzes.filter(q => {
-			// Search filter
 			if (searchQuery && !q.title.toLowerCase().includes(searchQuery.toLowerCase()) && !q.path.toLowerCase().includes(searchQuery.toLowerCase())) {
 				return false;
 			}
-
 			const s = stats[q.path];
 			if (currentFilter === "progress") return s && s.questionsDone > 0 && s.questionsDone < q.questions;
-			if (currentFilter === "mastered") return s && s.bestScore >= 80;
+			if (currentFilter === "mastered") return s && s.bestScore >= MASTERY_THRESHOLD;
 			if (currentFilter === "fresh") return !s || s.questionsDone === 0;
 			return true;
 		});
 
 		if (filtered.length === 0) {
-			gridEl.createDiv({ cls: "qbd-empty-state" }, el => {
+			treeEl.createDiv({ cls: "qbd-empty-state" }, el => {
 				el.createEl("p", { text: t("dashboard.quizzes.empty") });
 			});
 			return;
 		}
 
-		for (const quiz of filtered) {
-			renderQuizCard(gridEl, quiz, stats[quiz.path], (q) => ctx.navigate("detail", { quiz: q }));
+		// L'arbre est construit sur les quiz RETENUS : un dossier vide après
+		// filtrage n'existe pas, et les comptes affichés sont donc honnêtes.
+		for (const node of buildQuizTree(filtered, stats)) {
+			renderNode(treeEl, node, stats, 0);
+		}
+	}
+
+	function renderNode(parent: HTMLElement, node: QuizTreeNode, stats: Record<string, QuizStatRecord>, depth: number): void {
+		const nodeEl = parent.createDiv({ cls: "qbd-quizzes-node" });
+
+		// Un bouton, pas un div : focusable et actionnable au clavier sans
+		// réimplémenter le rôle.
+		const head = nodeEl.createEl("button", { cls: "qbd-quizzes-node-head" });
+		head.type = "button";
+		head.style.paddingLeft = (Math.min(depth, MAX_INDENT_LEVELS) * INDENT_PX) + "px";
+		head.setAttribute("aria-label", t("dashboard.quizzes.folderToggle"));
+
+		const chev = head.createSpan({ cls: "qbd-quizzes-node-chevron" });
+		// « path: "" » = les quiz posés à la racine du vault ; le libellé est
+		// traduit ICI (au rendu), jamais figé dans la donnée.
+		head.createSpan({
+			cls: "qbd-quizzes-node-label",
+			text: node.path === "" ? t("dashboard.quizzes.noFolder") : node.label,
+		});
+		head.createSpan({
+			cls: "qbd-quizzes-node-count",
+			text: t(node.total === 1 ? "dashboard.quizzes.folderCountOne" : "dashboard.quizzes.folderCountOther", { count: node.total }),
+		});
+		head.createSpan({
+			cls: "qbd-quizzes-node-mastered",
+			text: t(node.mastered === 1 ? "dashboard.quizzes.folderMasteredOne" : "dashboard.quizzes.folderMasteredOther", { count: node.mastered }),
+		});
+
+		// Barre d'avancement : c'est elle qui rend un nœud REPLIÉ encore
+		// informatif — sinon replier reviendrait à cacher.
+		const bar = head.createDiv({ cls: "qbd-quizzes-node-bar" });
+		const fill = bar.createDiv({ cls: "qbd-quizzes-node-bar-fill" });
+		fill.style.width = (node.total > 0 ? Math.round(node.mastered / node.total * 100) : 0) + "%";
+
+		// Repli : câblé en Task 4. Pour l'instant tout est déplié.
+		const collapsed = false;
+		setIcon(chev, collapsed ? "chevron-right" : "chevron-down");
+		head.setAttribute("aria-expanded", String(!collapsed));
+		if (collapsed) return;
+
+		const body = nodeEl.createDiv({ cls: "qbd-quizzes-node-body" });
+		// Sous-dossiers d'abord, cartes ensuite : convention de tout
+		// explorateur de fichiers, y compris celui d'Obsidian.
+		for (const child of node.children) renderNode(body, child, stats, depth + 1);
+		if (node.quizzes.length > 0) {
+			const grid = body.createDiv({ cls: "qbd-home-grid" });
+			grid.style.paddingLeft = (Math.min(depth + 1, MAX_INDENT_LEVELS) * INDENT_PX) + "px";
+			for (const quiz of node.quizzes) {
+				// showPath: false — le dossier est écrit juste au-dessus.
+				renderQuizCard(grid, quiz, stats[quiz.path], (q) => ctx.navigate("detail", { quiz: q }), { showPath: false });
+			}
 		}
 	}
 

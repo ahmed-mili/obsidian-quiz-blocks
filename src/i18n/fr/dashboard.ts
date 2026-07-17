@@ -53,6 +53,12 @@ export const FR_DASHBOARD: Record<keyof typeof EN_DASHBOARD, string> = {
 	"dashboard.quizzes.filterMastered": "Maîtrisés",
 	"dashboard.quizzes.filterFresh": "Non commencés",
 	"dashboard.quizzes.empty": "Aucun quiz trouvé",
+	"dashboard.quizzes.noFolder": "Sans dossier",
+	"dashboard.quizzes.folderCountOne": "{count} quiz",
+	"dashboard.quizzes.folderCountOther": "{count} quiz",
+	"dashboard.quizzes.folderMasteredOne": "{count} maîtrisé",
+	"dashboard.quizzes.folderMasteredOther": "{count} maîtrisés",
+	"dashboard.quizzes.folderToggle": "Replier ou déplier ce dossier",
 
 	/* ── Carte de quiz ── */
 	"dashboard.card.mastered": "Maîtrisé",

@@ -98,3 +98,64 @@
 	color: var(--text-on-accent);
 	box-shadow: 0 1px 4px color-mix(in srgb, var(--interactive-accent) 25%, transparent);
 }
+
+/* Arbre des dossiers de « Mes quiz ». Les nœuds restent DISCRETS : ce sont
+   les cartes qui portent le poids visuel (référence StudySmarter, maquettes
+   SS_UI_2/SS_UI_3 analysées le 2026-07-17). */
+.qbd-quizzes-node-head {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	width: 100%;
+	padding: 6px 8px;
+	background: transparent;
+	border: none;
+	box-shadow: none;
+	cursor: pointer;
+	color: var(--text-muted);
+	font-size: 12.5px;
+	text-align: left;
+}
+
+.qbd-quizzes-node-head:hover {
+	background: var(--background-modifier-hover);
+	color: var(--text-normal);
+}
+
+.qbd-quizzes-node-chevron {
+	display: flex;
+	flex-shrink: 0;
+	color: var(--text-faint);
+}
+
+.qbd-quizzes-node-label {
+	font-weight: 600;
+	color: var(--text-normal);
+	/* Un libellé de chaîne compactée peut être long : il s'élide, il ne
+	   pousse jamais le compte hors de la ligne. */
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.qbd-quizzes-node-count,
+.qbd-quizzes-node-mastered {
+	flex-shrink: 0;
+	color: var(--text-faint);
+}
+
+.qbd-quizzes-node-bar {
+	flex-shrink: 0;
+	width: 64px;
+	height: 4px;
+	margin-left: auto;
+	border-radius: 2px;
+	background: var(--background-modifier-border);
+	overflow: hidden;
+}
+
+.qbd-quizzes-node-bar-fill {
+	height: 100%;
+	border-radius: 2px;
+	background: var(--interactive-accent);
+}
