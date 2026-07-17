@@ -62,7 +62,6 @@ export const EN_DASHBOARD = {
 	"dashboard.quizzes.folderCountOther": "{count} quizzes",
 	"dashboard.quizzes.folderMasteredOne": "{count} mastered",
 	"dashboard.quizzes.folderMasteredOther": "{count} mastered",
-	"dashboard.quizzes.folderToggle": "Collapse or expand this folder",
 
 	/* ── Carte de quiz (état) ── */
 	"dashboard.card.mastered": "Mastered",

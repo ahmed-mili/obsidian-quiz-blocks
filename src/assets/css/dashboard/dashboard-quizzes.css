@@ -101,8 +101,14 @@
 
 /* Arbre des dossiers de « Mes quiz ». Les nœuds restent DISCRETS : ce sont
    les cartes qui portent le poids visuel (référence StudySmarter, maquettes
-   SS_UI_2/SS_UI_3 analysées le 2026-07-17). */
-.qbd-quizzes-node-head {
+   SS_UI_2/SS_UI_3 analysées le 2026-07-17).
+   `.qbd-root` préfixe chaque règle pour passer devant le chrome natif
+   `button:not(.clickable-icon){background:var(--interactive-normal)}`
+   d'Obsidian (spécificité 0,1,1 > notre 0,1,0 au repos, sinon le nœud
+   s'affiche comme une barre grise pleine largeur) — même patron que
+   .qbd-btn (dashboard-components.css) et .qbd-quizzes-search-input
+   plus haut dans ce fichier. */
+.qbd-root .qbd-quizzes-node-head {
 	display: flex;
 	align-items: center;
 	gap: 8px;
@@ -117,7 +123,7 @@
 	text-align: left;
 }
 
-.qbd-quizzes-node-head:hover {
+.qbd-root .qbd-quizzes-node-head:hover {
 	background: var(--background-modifier-hover);
 	color: var(--text-normal);
 }
@@ -126,7 +132,7 @@
    quizzes.ts) : le curseur doit le dire, sans quoi le bouton reste lisible
    comme cliquable alors qu'il ne l'est plus. Compte/agrégat/barre restent
    sinon inchangés — le nœud doit rester informatif. */
-.qbd-quizzes-node-head:disabled {
+.qbd-root .qbd-quizzes-node-head:disabled {
 	cursor: default;
 }
 
@@ -134,8 +140,10 @@
    visuel (l'utilisateur pense que c'est cliquable). On neutralise le survol
    en revenant au style de repos : fond transparent, texte neutre. Ne pas
    utiliser opacity/filter (comme action-buttons.css) car le nœud doit rester
-   INFORMATIF pendant la recherche (compte/agrégat/barre lisibles). */
-.qbd-quizzes-node-head:disabled:hover {
+   INFORMATIF pendant la recherche (compte/agrégat/barre lisibles). Préfixée
+   comme les règles ci-dessus pour rester devant :hover en cas de réordonnancement
+   futur, plutôt que de compter sur l'ordre des règles à spécificité égale. */
+.qbd-root .qbd-quizzes-node-head:disabled:hover {
 	background: transparent;
 	color: var(--text-muted);
 }

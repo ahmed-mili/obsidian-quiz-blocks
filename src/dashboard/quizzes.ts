@@ -165,8 +165,11 @@ export function createQuizzesHandlers(ctx: DashboardCtx): QuizzesHandlers {
 		const head = nodeEl.createEl("button", { cls: "qbd-quizzes-node-head" });
 		head.type = "button";
 		head.style.paddingLeft = (Math.min(depth, MAX_INDENT_LEVELS) * INDENT_PX) + "px";
-		head.setAttribute("aria-label", t("dashboard.quizzes.folderToggle"));
-
+		// Pas d'aria-label ici : Obsidian en fait un tooltip natif qui flotterait
+		// au milieu de la page (cf. ai.ts). Le bouton contient déjà du texte
+		// (libellé, compte, agrégat) : son nom accessible en découle
+		// naturellement, plus utile qu'un libellé générique identique partout.
+		// aria-expanded reste : il porte l'état, pas un intitulé redondant.
 		const chev = head.createSpan({ cls: "qbd-quizzes-node-chevron" });
 		// « path: "" » = les quiz posés à la racine du vault ; le libellé est
 		// traduit ICI (au rendu), jamais figé dans la donnée.
