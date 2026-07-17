@@ -73,7 +73,7 @@ export interface AiSettings extends VoiceSettings {
 	   ne suit plus. Le champ ci-dessous n'a rien d'IA ; le renommage est un
 	   travail à part (plugin.js n'est pas encore converti), à signaler au
 	   rapport plutôt qu'à faire ici. */
-	quizzesCollapsedFolders?: string[];
+	quizzesExpandedFolders?: string[];
 	/** Axe de regroupement de « Mes quiz » (folder/recent/type) — même remarque
 	    que ci-dessus, aucun rapport avec l'IA. Cf. plugin.ts DEFAULT_SETTINGS. */
 	quizzesGrouping?: "folder" | "recent" | "type";

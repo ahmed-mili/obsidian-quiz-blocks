@@ -60,10 +60,13 @@ interface QuizBlocksSettings {
 	hotkeyAddNotes: Hotkey;
 	/** Dossiers hors vault proposés par le picker « @ » (desktop uniquement). */
 	aiMentionExtraFolders: string[];
-	/** Chemins COMPLETS des dossiers repliés dans « Mes quiz ». État
+	/** Chemins COMPLETS des groupes DÉPLIÉS dans « Mes quiz » (dossiers, et
+	    clés préfixées « recent: »/« type: » pour les deux autres axes). État
 	    d'interface, pas une préférence : aucune section dans l'onglet de
-	    réglages. Seuls les REPLIÉS sont listés (déplié = défaut). */
-	quizzesCollapsedFolders: string[];
+	    réglages. Seuls les DÉPLIÉS sont listés (replié = défaut) : à 200 quiz,
+	    tout déplier d'office reproduit le mur qu'on cherche à éviter (cf.
+	    défaut n°1 relevé par Ahmed à l'écran, 2026-07-17). */
+	quizzesExpandedFolders: string[];
 	/** Axe de regroupement de « Mes quiz ». Défaut « folder » (l'arbre existant,
 	    prévisible). « recent »/« type » sont les deux axes ajoutés (StudySmarter
 	    est la source d'inspiration, pas un contrat : cf. quiz-recent.ts/quiz-type.ts). */
@@ -111,8 +114,9 @@ const DEFAULT_SETTINGS: QuizBlocksSettings = {
 	hotkeyAddNotes: { modifiers: ["Mod"], key: "e" },
 	// Vide par défaut : le « @ » se limite au vault tant qu'Ahmed n'ajoute rien.
 	aiMentionExtraFolders: [],
-	// Vide : au premier usage, tout est déplié — l'utilisateur voit ce qu'il a.
-	quizzesCollapsedFolders: [],
+	// Vide : au premier usage, tout est replié — la structure reste visible
+	// (2 titres, pas un mur de cartes) et un clic déplie ce qu'on veut voir.
+	quizzesExpandedFolders: [],
 	quizzesGrouping: "folder",
 	// ── Saisie vocale (dictée locale whisper.cpp) — opt-in complet.
 	// Spec : docs/superpowers/specs/2026-07-10-voice-input-design.md

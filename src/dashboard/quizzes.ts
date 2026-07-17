@@ -34,15 +34,17 @@ export function createQuizzesHandlers(ctx: DashboardCtx): QuizzesHandlers {
 
 	/* L'accès réel aux réglages est `ctx.plugin.settings.<clé>` (même patron
 	   qu'ai.ts). Lu à CHAQUE rendu : le réglage peut changer sous nos pieds
-	   (autre appareil, rechargement). */
-	function collapsedSet(): Set<string> {
-		return new Set(ctx.plugin.settings.quizzesCollapsedFolders || []);
+	   (autre appareil, rechargement). Le réglage liste les groupes DÉPLIÉS
+	   (replié = défaut) : à 200 quiz, tout déplier d'office reproduit le mur
+	   qu'on cherche à éviter — cf. défaut n°1, Ahmed 2026-07-17. */
+	function expandedSet(): Set<string> {
+		return new Set(ctx.plugin.settings.quizzesExpandedFolders || []);
 	}
 
-	function toggleCollapsed(path: string): void {
-		const set = collapsedSet();
+	function toggleExpanded(path: string): void {
+		const set = expandedSet();
 		if (set.has(path)) set.delete(path); else set.add(path);
-		ctx.plugin.settings.quizzesCollapsedFolders = [...set];
+		ctx.plugin.settings.quizzesExpandedFolders = [...set];
 		// Même canal que quizStats (stats-store.ts) ; l'échec d'écriture ne
 		// doit pas casser le rendu.
 		ctx.plugin.saveSettings().catch(() => {});
@@ -250,21 +252,22 @@ export function createQuizzesHandlers(ctx: DashboardCtx): QuizzesHandlers {
 	}
 
 	/* Bascule de repli partagée par un nœud de dossier ET un groupe plat
-	   (activité/type) : même mécanique — état lu dans quizzesCollapsedFolders,
-	   forcé ouvert pendant une recherche (elle ne doit pas reconfigurer la
-	   page dans le dos de l'utilisateur), bouton désactivé pendant la
-	   recherche pour ne pas laisser un clic muet modifier un état invisible
-	   (ne PAS retirer ce disabled : ce n'est pas une gêne mais la garde qui
-	   manquait dans la spec). Seule la CLÉ change selon l'appelant : un
-	   chemin de dossier réel pour renderNode, ou une clé préfixée « recent: »/
-	   « type: » pour renderFlatGroup. */
+	   (activité/type) : même mécanique — état lu dans quizzesExpandedFolders
+	   (replié tant que la clé n'y figure pas), forcé ouvert pendant une
+	   recherche (elle ne doit pas reconfigurer la page dans le dos de
+	   l'utilisateur, ET ne doit rien écrire dans le réglage), bouton désactivé
+	   pendant la recherche pour ne pas laisser un clic muet modifier un état
+	   invisible (ne PAS retirer ce disabled : ce n'est pas une gêne mais la
+	   garde qui manquait dans la spec). Seule la CLÉ change selon l'appelant :
+	   un chemin de dossier réel pour renderNode, ou une clé préfixée
+	   « recent: »/« type: » pour renderFlatGroup. */
 	function wireCollapseToggle(head: HTMLButtonElement, chev: HTMLElement, key: string): boolean {
-		const collapsed = !searchQuery && collapsedSet().has(key);
+		const collapsed = !searchQuery && !expandedSet().has(key);
 		setIcon(chev, collapsed ? "chevron-right" : "chevron-down");
 		head.setAttribute("aria-expanded", String(!collapsed));
 		head.disabled = searchQuery.length > 0;
 		head.addEventListener("click", () => {
-			toggleCollapsed(key);
+			toggleExpanded(key);
 			if (containerRef) render(containerRef);
 		});
 		return collapsed;

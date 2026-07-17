@@ -14,8 +14,8 @@ import { MASTERY_THRESHOLD } from "./quiz-tree";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
-/** Clé stable d'un groupe — sert aussi de clé de repli dans
- *  settings.quizzesCollapsedFolders (préfixe « recent: », sûr par
+/** Clé stable d'un groupe — sert aussi de clé de dépliage dans
+ *  settings.quizzesExpandedFolders (préfixe « recent: », sûr par
  *  construction : cf. le commentaire complet dans quizzes.ts). */
 export type RecentGroupKey = "recent:7d" | "recent:30d" | "recent:older";
 
