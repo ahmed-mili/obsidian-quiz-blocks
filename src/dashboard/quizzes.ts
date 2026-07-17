@@ -8,8 +8,9 @@ import type { QuizIndexEntry } from "./scanner";
 import type { QuizStatRecord } from "./stats-store";
 import { renderQuizCard, quizTypeLabel } from "./quiz-card";
 import { openQuizForPlay } from "./quiz-open";
-import { buildQuizTree, MASTERY_THRESHOLD } from "./quiz-tree";
-import type { QuizTreeNode } from "./quiz-tree";
+import { MASTERY_THRESHOLD } from "./quiz-mastery";
+import { buildModuleGroups } from "./quiz-modules";
+import type { ModuleMap } from "./quiz-modules";
 import { buildRecentGroups } from "./quiz-recent";
 import type { RecentGroupKey } from "./quiz-recent";
 import { buildTypeGroups } from "./quiz-type";
@@ -186,12 +187,6 @@ export function createQuizzesHandlers(ctx: DashboardCtx): QuizzesHandlers {
 		renderQuizGrid(treeEl, quizzes, stats);
 	}
 
-	/* Indentation : la compaction des chaînes supprime déjà les niveaux
-	   creux, mais une hiérarchie réellement profonde ne doit pas écraser
-	   les cartes à 360 px de large (Obsidian Android). D'où le plafond. */
-	const INDENT_PX = 16;
-	const MAX_INDENT_LEVELS = 4;
-
 	function renderQuizGrid(treeEl: HTMLElement, quizzes: QuizIndexEntry[], stats: Record<string, QuizStatRecord>): void {
 		treeEl.empty();
 
@@ -227,10 +222,16 @@ export function createQuizzesHandlers(ctx: DashboardCtx): QuizzesHandlers {
 				renderFlatGroup(treeEl, `type:${g.type}`, quizTypeLabel(g.type), g.total, g.mastered, g.quizzes, stats);
 			}
 		} else {
-			// L'arbre est construit sur les quiz RETENUS : un dossier vide après
-			// filtrage n'existe pas, et les comptes affichés sont donc honnêtes.
-			for (const node of buildQuizTree(filtered, stats)) {
-				renderNode(treeEl, node, stats, 0);
+			// INTÉRIMAIRE (relief immédiat demandé par Ahmed, 2026-07-17) :
+			// regroupement PAR MODULE via les noms de dossier (map vide) plutôt
+			// que l'arbre à chemins bruts, qu'Ahmed a rejeté à l'écran. Les quiz
+			// sous « syncthing/XTI201 - CCNA 1/ » rejoignent le module
+			// « XTI201 - CCNA 1 » (moduleForQuiz remonte l'ancêtre) : ni chemin
+			// brut, ni « syncthing ». La grille de cartes de module + UE +
+			// drill-down (avec les noms de Dashboard.md) remplace ceci en Task 4.
+			const emptyMap: ModuleMap = { byFolder: new Map(), ueOrder: [] };
+			for (const g of buildModuleGroups(filtered, stats, emptyMap)) {
+				renderFlatGroup(treeEl, `module:${g.folder}`, g.name || t("dashboard.quizzes.noFolder"), g.total, g.mastered, g.quizzes, stats);
 			}
 		}
 	}
@@ -278,50 +279,6 @@ export function createQuizzesHandlers(ctx: DashboardCtx): QuizzesHandlers {
 			if (containerRef) render(containerRef);
 		});
 		return collapsed;
-	}
-
-	function renderNode(parent: HTMLElement, node: QuizTreeNode, stats: Record<string, QuizStatRecord>, depth: number): void {
-		const nodeEl = parent.createDiv({ cls: "qbd-quizzes-node" });
-
-		// Un bouton, pas un div : focusable et actionnable au clavier sans
-		// réimplémenter le rôle.
-		const head = nodeEl.createEl("button", { cls: "qbd-quizzes-node-head" });
-		head.type = "button";
-		head.style.paddingLeft = (Math.min(depth, MAX_INDENT_LEVELS) * INDENT_PX) + "px";
-		// Pas d'aria-label ici : Obsidian en fait un tooltip natif qui flotterait
-		// au milieu de la page (cf. ai.ts). Le bouton contient déjà du texte
-		// (libellé, compte, agrégat) : son nom accessible en découle
-		// naturellement, plus utile qu'un libellé générique identique partout.
-		// aria-expanded reste : il porte l'état, pas un intitulé redondant.
-		const chev = head.createSpan({ cls: "qbd-quizzes-node-chevron" });
-		// « path: "" » = les quiz posés à la racine du vault ; le libellé est
-		// traduit ICI (au rendu), jamais figé dans la donnée.
-		head.createSpan({
-			cls: "qbd-quizzes-node-label",
-			text: node.path === "" ? t("dashboard.quizzes.noFolder") : node.label,
-		});
-		fillNodeHeadStats(head, node.total, node.mastered);
-
-		const collapsed = wireCollapseToggle(head, chev, node.path);
-		if (collapsed) return;
-
-		const body = nodeEl.createDiv({ cls: "qbd-quizzes-node-body" });
-		// Sous-dossiers d'abord, cartes ensuite : convention de tout
-		// explorateur de fichiers, y compris celui d'Obsidian.
-		for (const child of node.children) renderNode(body, child, stats, depth + 1);
-		if (node.quizzes.length > 0) {
-			const grid = body.createDiv({ cls: "qbd-home-grid" });
-			grid.style.paddingLeft = (Math.min(depth + 1, MAX_INDENT_LEVELS) * INDENT_PX) + "px";
-			for (const quiz of node.quizzes) {
-				// showPath toujours affiché (défaut true) même si le dossier est
-				// déjà écrit juste au-dessus : redondance assumée, StudySmarter
-				// affiche systématiquement le sous-titre sur ses cartes (Ahmed,
-				// 2026-07-17).
-				renderQuizCard(grid, quiz, stats[quiz.path], (q) => ctx.navigate("detail", { quiz: q }), {
-					onPlay: (q) => openQuizForPlay(ctx.app, q)
-				});
-			}
-		}
 	}
 
 	/* Rendu partagé des modes « recent » et « type » : groupes PLATS (pas de
