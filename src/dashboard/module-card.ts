@@ -23,7 +23,9 @@ export function renderModuleCard(
 	// UE en petite étiquette (au-dessus du nom, discrète). Omise si non résolue.
 	if (group.ue) body.createEl("p", { cls: "qbd-module-card-ue", text: group.ue });
 
-	body.createEl("p", { cls: "qbd-quiz-card-title", text: group.name });
+	// Fallback : un quiz sans ancêtre reconnu (ex. à la racine du vault) donne
+	// un nom vide (moduleForQuiz) — jamais de carte au titre blanc.
+	body.createEl("p", { cls: "qbd-quiz-card-title", text: group.name || t("dashboard.quizzes.noFolder") });
 
 	// Barre d'avancement — omise si rien n'est maîtrisé (une piste vide
 	// n'apprend rien de plus que le « 0 » du compte, cf. quizzes.ts).

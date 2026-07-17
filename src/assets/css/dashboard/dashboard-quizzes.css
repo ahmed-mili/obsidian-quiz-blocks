@@ -238,3 +238,46 @@
 	letter-spacing: 0.06em;
 	margin: 0 0 4px;
 }
+
+/* Grille de cartes de module : mêmes colonnes responsives que .qbd-home-grid
+   (mode « module » et corps d'un groupe d'UE). */
+.qbd-module-grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+	gap: 12px;
+}
+
+/* ── Fil d'Ariane du drill-down (« Tous les quiz » › nom du module) ── */
+.qbd-quizzes-breadcrumb {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	margin-bottom: 12px;
+	font-size: 13px;
+}
+
+/* `.qbd-root` préfixe : c'est un `button`, sinon `button:not(.clickable-icon)`
+   d'Obsidian (spécificité 0,1,1) regrise le fond et recentre le contenu —
+   même piège que `.qbd-quizzes-search-input` plus haut dans ce fichier. */
+.qbd-root .qbd-quizzes-crumb-back {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	background: transparent;
+	border: none;
+	box-shadow: none;
+	padding: 4px 6px;
+	border-radius: var(--radius-s, 6px);
+	color: var(--text-muted);
+	cursor: pointer;
+}
+
+.qbd-root .qbd-quizzes-crumb-back:hover {
+	background: var(--background-modifier-hover);
+	color: var(--text-normal);
+}
+
+.qbd-quizzes-crumb-current {
+	font-weight: 600;
+	color: var(--text-normal);
+}
