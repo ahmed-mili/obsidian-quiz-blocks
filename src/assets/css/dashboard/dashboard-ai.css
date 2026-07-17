@@ -969,12 +969,54 @@
 	background: var(--background-primary);
 }
 
-/* Attachements dans le composer */
+/* Attachements dans le composer — vignettes d'images (rangée normale,
+   au-dessus du champ). Les chips « notes » vivent dans .qbd-ai-composer-
+   chips (ci-dessous), superposées à la 1ʳᵉ ligne du texte. */
 .qbd-ai-composer-attachments {
 	display: flex;
 	gap: 8px;
 	flex-wrap: wrap;
 	align-items: center;
+}
+
+/* Zone de texte : conteneur relatif partagé par la rangée de chips
+   « notes » et le textarea — la rangée s'y positionne en absolu (cf.
+   .qbd-ai-composer-chips) pour se superposer à la 1ʳᵉ ligne du texte. */
+.qbd-ai-composer-textzone {
+	position: relative;
+}
+
+/* Rangée de chips « notes », superposée à la 1ʳᵉ ligne du texte (état par
+   défaut — mesuré puis éventuellement basculé en repli par
+   layoutChipsRow, cf. ai.ts). `text-indent` posé en JS sur le textarea
+   pousse le texte après la rangée ; les lignes suivantes reviennent à
+   gauche puisque text-indent ne touche QUE la 1ʳᵉ ligne. Le conteneur
+   laisse passer les clics hors des chips (vers le textarea dessous) ;
+   seuls les chips eux-mêmes sont cliquables. */
+.qbd-ai-composer-chips {
+	position: absolute;
+	top: 0;
+	left: 0;
+	z-index: 1;
+	display: flex;
+	flex-wrap: nowrap;
+	align-items: center;
+	gap: 6px;
+	pointer-events: none;
+}
+
+.qbd-ai-composer-chips .qbd-ai-note-chip {
+	pointer-events: auto;
+}
+
+/* Repli : la rangée est trop large pour laisser de la place au texte sur
+   la 1ʳᵉ ligne (plusieurs fichiers, nom déplié en chemin complet…) —
+   retour en flux normal AU-DESSUS du champ, comme les vignettes
+   d'image ; text-indent est alors remis à vide côté JS. */
+.qbd-ai-composer-chips--stacked {
+	position: static;
+	flex-wrap: wrap;
+	margin-bottom: 6px;
 }
 
 .qbd-ai-note-chip {
@@ -988,6 +1030,17 @@
 	font-size: 11.5px;
 	color: var(--text-normal);
 	max-width: 240px;
+	cursor: default;
+}
+
+/* Chip avec chemin connu : bascule nom+extension ⇄ chemin complet au clic
+   (le × garde son rôle de suppression, cf. e.stopPropagation en JS). */
+.qbd-ai-note-chip--toggle {
+	cursor: pointer;
+}
+
+.qbd-ai-note-chip--toggle:hover {
+	border-color: color-mix(in srgb, var(--interactive-accent) 35%, var(--background-modifier-border));
 }
 
 .qbd-ai-note-chip-icon {

@@ -27,6 +27,9 @@ interface NoteAttachment {
 	name: string;
 	content: string;
 	path?: string;
+	/** Chip dépliée (chemin complet) ou repliée (nom+extension) — bascule
+	    au clic ; ignoré si `path` est absent (drop / fichier hors vault). */
+	expanded?: boolean;
 }
 
 /** Image jointe (vignette + objet fichier). */
@@ -535,11 +538,14 @@ export function createAiHandlers(ctx: DashboardCtx): AiHandlers {
 
 		const composer = formCol.createDiv({ cls: "qbd-ai-composer" });
 
-		// Attachements : vignettes d'images + notes/fichiers texte attachés
-		if (images.length > 0 || noteAttachments.length > 0) {
-			const attachRow = composer.createDiv({ cls: "qbd-ai-composer-attachments" });
+		// Vignettes d'images : rangée à PART, au-dessus du champ — ~40px de
+		// haut, les mêler à une ligne de texte de 13,5px les déformerait.
+		// Seules les chips « notes » passent en superposition sur la 1ʳᵉ
+		// ligne du texte (cf. textZone ci-dessous).
+		if (images.length > 0) {
+			const imagesRow = composer.createDiv({ cls: "qbd-ai-composer-attachments" });
 			for (let i = 0; i < images.length; i++) {
-				const thumb = attachRow.createDiv({ cls: "qbd-ai-image-thumb" });
+				const thumb = imagesRow.createDiv({ cls: "qbd-ai-image-thumb" });
 				const imgEl = thumb.createEl("img", { cls: "qbd-ai-image-thumb-img" });
 				imgEl.src = images[i].url;
 				const removeBtn = thumb.createEl("button", { cls: "qbd-ai-image-remove" });
@@ -551,33 +557,90 @@ export function createAiHandlers(ctx: DashboardCtx): AiHandlers {
 					render(containerRef);
 				});
 			}
+		}
+
+		// Zone de texte : le textarea et la rangée de chips « notes »
+		// partagent ce conteneur (position relative). La rangée se
+		// superpose en absolu sur la PREMIÈRE ligne du texte — un
+		// <textarea> ne pouvant contenir aucun élément, c'est la seule
+		// façon de les mettre « sur la ligne » sans passer en
+		// contenteditable (interdit : casserait dictée/caret/auto-grow/
+		// collage). `layoutChipsRow` (posé après la création du textarea)
+		// mesure la largeur réelle de la rangée et pose `text-indent` en
+		// conséquence — ou bascule en repli (rangée au-dessus, en flux
+		// normal) si elle est trop large pour laisser de la place au texte.
+		const textZone = composer.createDiv({ cls: "qbd-ai-composer-textzone" });
+		let chipsRow: HTMLElement | null = null;
+		if (noteAttachments.length > 0) {
+			chipsRow = textZone.createDiv({ cls: "qbd-ai-composer-chips" });
 			for (let i = 0; i < noteAttachments.length; i++) {
-				const chip = attachRow.createDiv({ cls: "qbd-ai-note-chip" });
+				const note = noteAttachments[i];
+				const chip = chipsRow.createDiv({ cls: "qbd-ai-note-chip" });
 				const chipIcon = chip.createSpan({ cls: "qbd-ai-note-chip-icon" });
 				setIcon(chipIcon, "file-text");
-				chip.createSpan({ cls: "qbd-ai-note-chip-name", text: noteAttachments[i].name });
+				chip.createSpan({
+					cls: "qbd-ai-note-chip-name",
+					text: (note.expanded && note.path) ? note.path : note.name
+				});
+				// Bascule nom+extension ⇄ chemin complet — seulement si un
+				// chemin est connu (une pièce venant d'un drop ou d'un
+				// fichier hors vault peut ne pas en avoir : alors rien à
+				// déplier, la chip ne réagit pas au clic).
+				if (note.path) {
+					chip.addClass("qbd-ai-note-chip--toggle");
+					chip.addEventListener("click", (e) => {
+						if ((e.target as HTMLElement).closest(".qbd-ai-note-chip-remove")) return;
+						note.expanded = !note.expanded;
+						render(containerRef);
+					});
+				}
 				const chipRemove = chip.createEl("button", { cls: "qbd-ai-note-chip-remove" });
 				setIcon(chipRemove, "x");
 				const idx = i;
-				chipRemove.addEventListener("click", () => {
+				chipRemove.addEventListener("click", (e) => {
+					e.stopPropagation(); // ne déclenche pas le basculement du chip
 					noteAttachments.splice(idx, 1);
 					render(containerRef);
 				});
 			}
 		}
 
-		const composerInput = composer.createEl("textarea", { cls: "qbd-ai-composer-input" });
+		const composerInput = textZone.createEl("textarea", { cls: "qbd-ai-composer-input" });
 		// Picker « @ » : déclaré avant la dictée pour que celle-ci puisse
 		// interroger son état (les deux écoutent le même textarea).
 		let mentions: MentionPickerHandle | null = null;
 		// Dictée vocale push-to-talk (opt-in — réglages « Saisie vocale »).
 		voiceInput.attach(ctx, composerInput, { isBlocked: () => !!mentions && mentions.isOpen() });
-		composerInput.placeholder = t("ai.composer.placeholder");
+		// Au moins une pièce jointe (chip note/PDF ou vignette image) : la
+		// question d'origine n'a plus de sens (le fichier EST le sujet) — le
+		// placeholder invite alors à des instructions facultatives. Recalculé
+		// à chaque render (composerInput est recréé à chaque fois) : repasse
+		// à la question dès la dernière pièce retirée (×, Backspace au
+		// caret 0, ou remove d'image), même chemin de rendu.
+		composerInput.placeholder = (images.length > 0 || noteAttachments.length > 0)
+			? t("ai.composer.placeholderAttached")
+			: t("ai.composer.placeholder");
 		composerInput.value = composerText;
 		composerInput.rows = 2;
 		const autoGrow = () => {
 			composerInput.style.height = "auto";
 			composerInput.style.height = Math.min(composerInput.scrollHeight, 220) + "px";
+		};
+		// Mesure la rangée de chips (superposée à la 1ʳᵉ ligne) et pose le
+		// text-indent en conséquence — RECALCULÉ à chaque appel (jamais codé
+		// en dur : police, contenu et nombre de chips varient). Au-delà de
+		// ~55 % de la largeur du composer, la rangée ne tient plus à côté du
+		// texte : repli en flux normal au-dessus (classe --stacked), sans
+		// text-indent — cf. brief tâche 9 (le dépliement du chemin complet,
+		// point 2, peut lui-même déclencher ce repli).
+		const layoutChipsRow = () => {
+			if (!chipsRow || !chipsRow.isConnected) return;
+			const composerWidth = composer.getBoundingClientRect().width;
+			const chipsWidth = chipsRow.getBoundingClientRect().width;
+			const GUTTER = 10;
+			const fits = composerWidth > 0 && chipsWidth <= composerWidth * 0.55;
+			chipsRow.classList.toggle("qbd-ai-composer-chips--stacked", !fits);
+			composerInput.style.textIndent = fits ? (chipsWidth + GUTTER) + "px" : "";
 		};
 		composerInput.addEventListener("input", (e) => {
 			const ta = e.target as HTMLTextAreaElement;
@@ -607,12 +670,26 @@ export function createAiHandlers(ctx: DashboardCtx): AiHandlers {
 		// Enter nu n'insère JAMAIS de retour (même champ vide / pendant une
 		// génération) ; isComposing protège la saisie IME.
 		composerInput.addEventListener("keydown", (e) => {
+			// Le menu « @ » a le clavier tant qu'il est ouvert (recherche) :
+			// ni Entrée (le picker gère sa propre sélection) ni Backspace
+			// (sinon effacer une lettre de sa recherche supprimerait une
+			// pièce jointe) ne doivent lui être volés.
+			if (mentions && mentions.isOpen()) return;
+			// Backspace en tout début de champ (rien à gauche du caret,
+			// aucune sélection) : retire la DERNIÈRE pièce jointe —
+			// convention chips (Gmail, Slack). Un Backspace avec du texte à
+			// gauche du caret garde son comportement normal.
+			if (e.key === "Backspace" && composerInput.selectionStart === 0 && composerInput.selectionEnd === 0
+				&& (noteAttachments.length > 0 || images.length > 0)) {
+				e.preventDefault();
+				removeLastAttachment();
+				return;
+			}
 			if (e.key !== "Enter" || e.shiftKey || e.isComposing) return;
-			if (mentions && mentions.isOpen()) return; // le picker gère Entrée
 			e.preventDefault();
 			if (phase !== "loading" && canGenerate()) startGeneration(containerRef);
 		});
-		requestAnimationFrame(autoGrow);
+		requestAnimationFrame(() => { autoGrow(); layoutChipsRow(); });
 
 		mentions = attachMentionPicker(ctx.app, composerInput, composer, {
 			onPickVaultFile: (path) => { void attachVaultPath(path); },
@@ -1151,6 +1228,22 @@ export function createAiHandlers(ctx: DashboardCtx): AiHandlers {
 		render(containerRef);
 	}
 
+	/* Retire la dernière pièce jointe (bonus Backspace, cf. keydown du
+	   composer). Priorité à la dernière NOTE : c'est elle qui vit
+	   visuellement contre le caret (chip superposée à la 1ʳᵉ ligne, ou
+	   repliée juste au-dessus) ; à défaut, la dernière image. */
+	function removeLastAttachment(): void {
+		if (noteAttachments.length > 0) {
+			noteAttachments.pop();
+		} else if (images.length > 0) {
+			const removed = images.pop();
+			if (removed) URL.revokeObjectURL(removed.url);
+		} else {
+			return;
+		}
+		render(containerRef);
+	}
+
 	/* Route les fichiers du picker/drop : images → vignettes (vision),
 	   texte (.md/.txt) et PDF (texte extrait localement) → sources texte
 	   (mêmes chips que les notes). Autres formats : refusés avec
@@ -1221,7 +1314,11 @@ export function createAiHandlers(ctx: DashboardCtx): AiHandlers {
 		}
 		try {
 			const content = await ctx.app.vault.read(file);
-			noteAttachments.push({ name: file.basename, content, path: file.path });
+			// file.name (PAS file.basename) : la chip affiche le nom complet
+			// AVEC son extension, comme les fichiers .md/.txt/PDF attachés via
+			// addComposerFiles (déjà sur file.name) — dédoublonnage inchangé
+			// (par path, pas par name).
+			noteAttachments.push({ name: file.name, content, path: file.path });
 			render(containerRef);
 		} catch (e) {
 			new Notice(t("ai.notice.noteReadFailed", { name: file.basename }));

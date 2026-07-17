@@ -7,6 +7,7 @@ export const FR_AI: Record<keyof typeof EN_AI, string> = {
 
 	/* ── Composer ── */
 	"ai.composer.placeholder": "Sur quoi portera le quiz ?",
+	"ai.composer.placeholderAttached": "Instructions (facultatif)",
 	"ai.composer.addContent": "Ajouter du contenu",
 	"ai.composer.quizOptions": "Options du quiz",
 	"ai.composer.generate": "Générer le quiz",
