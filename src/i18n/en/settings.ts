@@ -12,4 +12,5 @@ export const EN_SETTINGS = {
 	"settings.ai.mentionFolders.remove": "Remove this folder",
 	"settings.ai.mentionFolders.invalid": "Not a folder: {dir}",
 	"settings.ai.mentionFolders.placeholder": "Folder path",
+	"settings.ai.mentionFolders.vaultCollision": "Your vault already has a top-level folder named “{name}”. In the “@” picker, browsing into “{name}/” will always open the vault one — this folder stays findable by typing a search, just not by browsing.",
 } as const;

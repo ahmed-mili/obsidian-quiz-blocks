@@ -106,12 +106,20 @@ export function attachMentionPicker(
 		// cf. FileEntry.path) : jamais de chemin absolu dans le texte tapé.
 		if (query.endsWith("/")) {
 			const dir = query.slice(0, -1);
-			// Priorité au vault : si un dossier RÉEL du vault existe à ce
-			// chemin, il l'emporte. Un dossier du vault et une racine
-			// externe peuvent partager le même nom de base (ex. tous deux
-			// « Cours ») depuis que le token externe porte un chemin relatif
-			// (plus de préfixe absolu pour les distinguer) — cf. rapport de
-			// tâche, doute sur l'ambiguïté des homonymes.
+			// RÈGLE ASSUMÉE — « le vault gagne » : si un dossier RÉEL du
+			// vault existe à ce chemin, il l'emporte TOUJOURS sur une racine
+			// externe de même nom de base (ex. un vault avec un dossier
+			// top-level « Documents » face à une racine externe
+			// « C:/Users/…/Documents » ajoutée dans les réglages — cas réel
+			// d'Ahmed). La racine externe devient alors innavigable par CE
+			// chemin (mais reste trouvable par recherche : searchAll
+			// couvre les deux, cf. plus bas). Choix délibéré plutôt qu'un
+			// token cryptique pour lever l'ambiguïté (le token doit rester
+			// lisible) : la collision est signalée à la SOURCE — au moment
+			// où l'utilisateur AJOUTE la racine dans les réglages, une
+			// Notice l'avertit si le nom percute un dossier du vault (cf.
+			// plugin.ts, section « Dossiers hors vault »). Ici, silencieux
+			// par design, pas par oubli.
 			const vaultFolder = app.vault.getAbstractFileByPath(dir);
 			if (vaultFolder instanceof TFolder) return { entries: listVaultFolder(app, dir) };
 			const resolved = resolveExternalPath(roots, dir);

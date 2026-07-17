@@ -6,6 +6,7 @@ import {
 	PluginSettingTab,
 	Setting,
 	setIcon,
+	TFolder,
 } from "obsidian";
 import type {
 	App,
@@ -755,6 +756,17 @@ class QuizBlocksSettingTab extends PluginSettingTab {
 						await this.plugin.saveSettings();
 						txt.setValue("");
 						paint();
+						// « Le vault gagne » (cf. mention-picker.ts, entriesFor) : un
+						// dossier du VAULT de même nom de base l'emportera TOUJOURS
+						// sur cette racine externe dans le picker « @ » — elle devient
+						// alors innavigable par ce chemin (mais reste trouvable par
+						// recherche). Signalé ICI, au moment où l'utilisateur choisit
+						// d'ajouter la racine, plutôt que de le laisser découvrir en
+						// silence un dossier qui ne répond pas.
+						const label = dir.split("/").pop() || dir;
+						if (this.app.vault.getAbstractFileByPath(label) instanceof TFolder) {
+							new Notice(t("settings.ai.mentionFolders.vaultCollision", { name: label }));
+						}
 					});
 				});
 		}

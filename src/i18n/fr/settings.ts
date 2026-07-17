@@ -13,4 +13,5 @@ export const FR_SETTINGS: Record<keyof typeof EN_SETTINGS, string> = {
 	"settings.ai.mentionFolders.remove": "Retirer ce dossier",
 	"settings.ai.mentionFolders.invalid": "Ce n'est pas un dossier : {dir}",
 	"settings.ai.mentionFolders.placeholder": "Chemin du dossier",
+	"settings.ai.mentionFolders.vaultCollision": "Votre coffre a déjà un dossier de premier niveau nommé « {name} ». Dans le picker « @ », descendre dans « {name}/ » ouvrira toujours celui du coffre — ce dossier reste trouvable en tapant une recherche, pas en descendant dedans.",
 };
