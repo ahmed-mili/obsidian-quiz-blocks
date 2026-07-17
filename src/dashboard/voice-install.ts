@@ -1,5 +1,4 @@
-import * as path from "path";
-import * as fs from "fs";
+import { Platform } from "obsidian";
 import { t } from "../i18n";
 
 /* ══════════════════════════════════════════════════════════
@@ -9,6 +8,25 @@ import { t } from "../i18n";
    voice-input.js). Windows uniquement (v1).
    Assets vérifiés le 2026-07-10 (spec 2026-07-10-voice-input).
 ══════════════════════════════════════════════════════════ */
+
+/* ⚠️ AUCUN import statique de module Node ici (« fs », « path », …).
+   Le plugin doit rester `isDesktopOnly: false` et se CHARGER sur Obsidian
+   Android, où Node n'existe pas. esbuild hisse un `import * as fs from "fs"`
+   en `var fs = __toESM(require("fs"))` au niveau supérieur du bundle : le
+   require s'exécute alors à l'évaluation du bundle, donc AU CHARGEMENT du
+   plugin — pas à l'usage de la dictée. Sur mobile il lève, et le plugin
+   ENTIER meurt avant son premier écran (le module est atteint depuis
+   plugin.ts, qui l'importe pour l'onglet de réglages).
+   Les accesseurs ci-dessous chargent Node PARESSEUSEMENT, à l'appel. Tous
+   les chemins qui y mènent passent par isSupported(), qui rend la dictée
+   inerte hors desktop. Même patron que expandZip() plus bas et que
+   file-sources.ts. Ne pas « simplifier » en réintroduisant un import. */
+function nodeFs(): typeof import("fs") {
+	return require("fs");
+}
+function nodePath(): typeof import("path") {
+	return require("path");
+}
 
 /** Backend d'accélération whisper.cpp (dropdown réglages, plugin.js DEFAULT_SETTINGS). */
 export type VoiceBackend = "cpu" | "cuda";
@@ -78,6 +96,11 @@ export const MODELS: Record<VoiceModelId, VoiceModelAsset> = {
 };
 
 export function isSupported(): boolean {
+	// Platform.isDesktopApp AVANT toute lecture de `process` : sur mobile ce
+	// global Node n'existe pas et `process.platform` lèverait un
+	// ReferenceError. C'est cette garde qui rend toute la dictée inerte hors
+	// desktop — les accesseurs nodeFs()/nodePath() ne sont jamais atteints.
+	if (!Platform.isDesktopApp) return false;
 	return process.platform === "win32" && !!process.env.LOCALAPPDATA;
 }
 
@@ -87,27 +110,29 @@ export function voiceDir(): string {
 	// garantit LOCALAPPDATA défini avant tout appel ; non-null assertion plutôt
 	// que dupliquer la garde ici (comportement runtime inchangé : path.join
 	// lèverait de toute façon sur undefined).
-	return path.join(process.env.LOCALAPPDATA!, "quiz-blocks", "whisper");
+	return nodePath().join(process.env.LOCALAPPDATA!, "quiz-blocks", "whisper");
 }
 
 export function binDir(backend: VoiceBackend): string {
-	return path.join(voiceDir(), "bin-" + backend);
+	return nodePath().join(voiceDir(), "bin-" + backend);
 }
 
 export function modelPath(model: VoiceModelId): string | null {
 	const m = MODELS[model];
-	return m ? path.join(voiceDir(), "models", m.file) : null;
+	return m ? nodePath().join(voiceDir(), "models", m.file) : null;
 }
 
 /* whisper-cli.exe vit à une profondeur variable selon le zip (CPU :
    Release\ ; CUDA : à plat ou autre) → scan récursif tolérant. */
 export function findCli(dir: string): string | null {
+	const fs = nodeFs();
+	const path = nodePath();
 	if (!fs.existsSync(dir)) return null;
 	const stack: string[] = [dir];
 	while (stack.length) {
 		const d = stack.pop();
 		if (!d) continue; // stack.length garantit un élément ; garde TS strict
-		let entries: fs.Dirent[];
+		let entries: import("fs").Dirent[];
 		try { entries = fs.readdirSync(d, { withFileTypes: true }); } catch (e) { continue; }
 		for (const en of entries) {
 			const p = path.join(d, en.name);
@@ -122,7 +147,7 @@ export function getStatus(settings: VoiceSettings): VoiceStatus {
 	if (!isSupported()) return { supported: false, cliPath: null, modelFile: null, ready: false };
 	const cliPath = findCli(binDir(settings.voiceBackend || "cpu"));
 	const mp = modelPath(settings.voiceModel || "small-q5_1");
-	const modelFile = mp && fs.existsSync(mp) ? mp : null;
+	const modelFile = mp && nodeFs().existsSync(mp) ? mp : null;
 	return { supported: true, cliPath, modelFile, ready: !!(cliPath && modelFile) };
 }
 
@@ -131,7 +156,8 @@ export function getStatus(settings: VoiceSettings): VoiceStatus {
    chunks → WriteStream sur <dest>.part → rename à la fin (jamais
    d'install à moitié). */
 export async function downloadFile(url: string, dest: string, onProgress?: VoiceProgressCallback): Promise<void> {
-	fs.mkdirSync(path.dirname(dest), { recursive: true });
+	const fs = nodeFs();
+	fs.mkdirSync(nodePath().dirname(dest), { recursive: true });
 	const part = dest + ".part";
 	const res = await fetch(url);
 	if (!res.ok || !res.body) throw new Error("HTTP " + res.status + " — " + url);
@@ -175,8 +201,9 @@ export function expandZip(zip: string, destDir: string): Promise<void> {
 export async function installBinary(backend: VoiceBackend, onProgress?: VoiceProgressCallback): Promise<string> {
 	const asset = BIN_ASSETS[backend];
 	if (!asset) throw new Error(t("ai.voice.errUnknownBackend", { backend }));
+	const fs = nodeFs();
 	const dir = binDir(backend);
-	const zip = path.join(voiceDir(), "bin-" + backend + ".zip");
+	const zip = nodePath().join(voiceDir(), "bin-" + backend + ".zip");
 	await downloadFile(asset.url, zip, onProgress);
 	fs.rmSync(dir, { recursive: true, force: true }); // réinstall propre
 	await expandZip(zip, dir);
