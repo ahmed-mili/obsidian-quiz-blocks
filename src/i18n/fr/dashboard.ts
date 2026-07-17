@@ -62,6 +62,10 @@ export const FR_DASHBOARD: Record<keyof typeof EN_DASHBOARD, string> = {
 	/* ── Regroupement ── */
 	"dashboard.quizzes.groupByModule": "Par module",
 	"dashboard.quizzes.groupByUE": "Par UE",
+	"dashboard.quizzes.noUe": "Sans UE",
+	"dashboard.quizzes.moduleQuizzesOne": "{count} quiz",
+	"dashboard.quizzes.moduleQuizzesOther": "{count} quiz",
+	"dashboard.quizzes.backToModules": "Tous les quiz",
 	"dashboard.quizzes.groupByActivity": "Par activité",
 	"dashboard.quizzes.groupByType": "Par type",
 	"dashboard.quizzes.recentWeek": "7 derniers jours",

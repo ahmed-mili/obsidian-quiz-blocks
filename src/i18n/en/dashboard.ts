@@ -73,6 +73,10 @@ export const EN_DASHBOARD = {
 	   positifs — un groupe décrit un intervalle, il ne juge pas. */
 	"dashboard.quizzes.groupByModule": "By module",
 	"dashboard.quizzes.groupByUE": "By course",
+	"dashboard.quizzes.noUe": "No course unit",
+	"dashboard.quizzes.moduleQuizzesOne": "{count} quiz",
+	"dashboard.quizzes.moduleQuizzesOther": "{count} quizzes",
+	"dashboard.quizzes.backToModules": "All quizzes",
 	"dashboard.quizzes.groupByActivity": "By activity",
 	"dashboard.quizzes.groupByType": "By type",
 	"dashboard.quizzes.recentWeek": "Last 7 days",
