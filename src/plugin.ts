@@ -64,6 +64,10 @@ interface QuizBlocksSettings {
 	    d'interface, pas une préférence : aucune section dans l'onglet de
 	    réglages. Seuls les REPLIÉS sont listés (déplié = défaut). */
 	quizzesCollapsedFolders: string[];
+	/** Axe de regroupement de « Mes quiz ». Défaut « folder » (l'arbre existant,
+	    prévisible). « recent »/« type » sont les deux axes ajoutés (StudySmarter
+	    est la source d'inspiration, pas un contrat : cf. quiz-recent.ts/quiz-type.ts). */
+	quizzesGrouping: "folder" | "recent" | "type";
 	voiceEnabled: boolean;
 	voiceBackend: VoiceBackend;
 	voiceModel: VoiceModelId;
@@ -109,6 +113,7 @@ const DEFAULT_SETTINGS: QuizBlocksSettings = {
 	aiMentionExtraFolders: [],
 	// Vide : au premier usage, tout est déplié — l'utilisateur voit ce qu'il a.
 	quizzesCollapsedFolders: [],
+	quizzesGrouping: "folder",
 	// ── Saisie vocale (dictée locale whisper.cpp) — opt-in complet.
 	// Spec : docs/superpowers/specs/2026-07-10-voice-input-design.md
 	voiceEnabled: false,

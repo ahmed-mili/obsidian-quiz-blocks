@@ -59,6 +59,14 @@ export const FR_DASHBOARD: Record<keyof typeof EN_DASHBOARD, string> = {
 	"dashboard.quizzes.folderMasteredOne": "{count} maîtrisé",
 	"dashboard.quizzes.folderMasteredOther": "{count} maîtrisés",
 
+	/* ── Regroupement ── */
+	"dashboard.quizzes.groupByFolder": "Par dossier",
+	"dashboard.quizzes.groupByActivity": "Par activité",
+	"dashboard.quizzes.groupByType": "Par type",
+	"dashboard.quizzes.recentWeek": "Actif ces 7 derniers jours",
+	"dashboard.quizzes.recentMonth": "Actif ces 30 derniers jours",
+	"dashboard.quizzes.recentOlder": "Inactif depuis plus d'un mois",
+
 	/* ── Carte de quiz ── */
 	"dashboard.card.mastered": "Maîtrisé",
 	"dashboard.card.review": "À revoir",

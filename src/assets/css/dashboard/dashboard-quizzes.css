@@ -65,6 +65,13 @@
 	color: var(--text-faint);
 }
 
+/* ── Regroupement (dossier / activité / type) ──
+   `.qbd-select` (ui-select.css) porte déjà tout le thémage (couleurs claires/
+   sombres via variables Obsidian) : seul l'espacement est propre à cette vue. */
+.qbd-quizzes-group {
+	margin-bottom: 10px;
+}
+
 /* ── Filters ── */
 .qbd-quizzes-filters {
 	display: flex;

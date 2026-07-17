@@ -1,0 +1,81 @@
+import type { QuizIndexEntry } from "./scanner";
+import type { QuizStatRecord } from "./stats-store";
+import { MASTERY_THRESHOLD } from "./quiz-tree";
+
+/* ══════════════════════════════════════════════════════════
+   QUIZ RECENT — regroupement des quiz par DERNIÈRE ACTIVITÉ
+   Deuxième axe de « Mes quiz » (à côté de quiz-tree.ts, par
+   dossier, et quiz-type.ts, par type) : trois fenêtres de
+   temps, du plus récent au plus ancien. Module PUR comme
+   quiz-tree.ts : aucune dépendance à Obsidian ni au DOM, aucun
+   appel à t() (la traduction des libellés se fait au rendu,
+   dans quizzes.ts).
+══════════════════════════════════════════════════════════ */
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/** Clé stable d'un groupe — sert aussi de clé de repli dans
+ *  settings.quizzesCollapsedFolders (préfixe « recent: », sûr par
+ *  construction : cf. le commentaire complet dans quizzes.ts). */
+export type RecentGroupKey = "recent:7d" | "recent:30d" | "recent:older";
+
+export interface RecentGroup {
+	key: RecentGroupKey;
+	/** Quiz du groupe, triés par activité DÉCROISSANTE. */
+	quizzes: QuizIndexEntry[];
+	total: number;
+	/** Quiz du groupe dont bestScore >= MASTERY_THRESHOLD. */
+	mastered: number;
+}
+
+/**
+ * « Dernière activité » = max(dernière partie jouée, dernière modification
+ * du fichier). `lastPlayed` seul est vide pour la grande majorité des quiz
+ * d'Ahmed (jamais commencés) : grouper dessus enverrait presque tout dans
+ * « plus d'un mois » et ne répondrait pas à la question « sur quoi je
+ * bossais ? ». Un quiz édité hier EST récent, même sans avoir été joué.
+ */
+function lastActivity(quiz: QuizIndexEntry, stats: Record<string, QuizStatRecord>): number {
+	const s = stats[quiz.path];
+	return Math.max((s && s.lastPlayed) || 0, quiz.mtime || 0);
+}
+
+function isMastered(quiz: QuizIndexEntry, stats: Record<string, QuizStatRecord>): boolean {
+	const s = stats[quiz.path];
+	return !!s && s.bestScore >= MASTERY_THRESHOLD;
+}
+
+/**
+ * Construit les groupes d'activité à partir des quiz DÉJÀ FILTRÉS (recherche
+ * + pastille appliquées par l'appelant, même contrat que buildQuizTree). Un
+ * groupe SANS quiz est omis du résultat (jamais affiché à 0).
+ */
+export function buildRecentGroups(
+	quizzes: QuizIndexEntry[],
+	stats: Record<string, QuizStatRecord>
+): RecentGroup[] {
+	const now = Date.now();
+	const buckets: Record<RecentGroupKey, QuizIndexEntry[]> = {
+		"recent:7d": [], "recent:30d": [], "recent:older": []
+	};
+	for (const q of quizzes) {
+		const age = now - lastActivity(q, stats);
+		if (age <= 7 * DAY_MS) buckets["recent:7d"].push(q);
+		else if (age <= 30 * DAY_MS) buckets["recent:30d"].push(q);
+		else buckets["recent:older"].push(q);
+	}
+	const order: RecentGroupKey[] = ["recent:7d", "recent:30d", "recent:older"];
+	const groups: RecentGroup[] = [];
+	for (const key of order) {
+		const list = buckets[key];
+		if (list.length === 0) continue;
+		list.sort((a, b) => lastActivity(b, stats) - lastActivity(a, stats));
+		groups.push({
+			key,
+			quizzes: list,
+			total: list.length,
+			mastered: list.filter(q => isMastered(q, stats)).length
+		});
+	}
+	return groups;
+}

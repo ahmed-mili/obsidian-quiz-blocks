@@ -6,9 +6,13 @@ import type { TransKey } from "../i18n";
 import type { DashboardCtx } from "../types/dashboard-ctx";
 import type { QuizIndexEntry } from "./scanner";
 import type { QuizStatRecord } from "./stats-store";
-import { renderQuizCard } from "./quiz-card";
+import { renderQuizCard, quizTypeLabel } from "./quiz-card";
 import { buildQuizTree, MASTERY_THRESHOLD } from "./quiz-tree";
 import type { QuizTreeNode } from "./quiz-tree";
+import { buildRecentGroups } from "./quiz-recent";
+import type { RecentGroupKey } from "./quiz-recent";
+import { buildTypeGroups } from "./quiz-type";
+import { openActionMenu } from "./ui-select";
 
 /* ══════════════════════════════════════════════════════════
    QUIZZES VIEW — Dashboard
@@ -44,6 +48,23 @@ export function createQuizzesHandlers(ctx: DashboardCtx): QuizzesHandlers {
 		ctx.plugin.saveSettings().catch(() => {});
 	}
 
+	/* Axe de regroupement de l'arbre : « folder » (défaut, prévisible — le
+	   vault tel qu'il est), « recent » (activité) et « type » empruntent
+	   l'IDÉE du sélecteur de StudySmarter, pas son exécution (leur libellé
+	   « Récents » est ambigu — quoi, ouvert ? modifié ? joué ? — d'où des
+	   clés i18n qui répondent d'elles-mêmes : cf. dashboard.ts i18n). */
+	type GroupingKey = "folder" | "recent" | "type";
+
+	function currentGrouping(): GroupingKey {
+		const g = ctx.plugin.settings.quizzesGrouping;
+		return g === "recent" || g === "type" ? g : "folder";
+	}
+
+	function setGrouping(g: GroupingKey): void {
+		ctx.plugin.settings.quizzesGrouping = g;
+		ctx.plugin.saveSettings().catch(() => {});
+	}
+
 	/* Le conteneur du dernier rendu. `renderNode` est défini HORS de
 	   `render`, donc `container` n'y est pas dans sa portée : sans cette
 	   référence, le clic d'un chevron ne pourrait pas re-rendre. Même
@@ -60,6 +81,22 @@ export function createQuizzesHandlers(ctx: DashboardCtx): QuizzesHandlers {
 		{ key: "mastered", labelKey: "dashboard.quizzes.filterMastered" },
 		{ key: "fresh", labelKey: "dashboard.quizzes.filterFresh" }
 	];
+
+	// Ordre FIXE d'affichage dans le menu du sélecteur (pas alphabétique, pas
+	// par usage) : « folder » reste en tête car c'est le défaut prévisible.
+	const GROUPING_ORDER: GroupingKey[] = ["folder", "recent", "type"];
+	const GROUPING_LABEL_KEYS: Record<GroupingKey, TransKey> = {
+		folder: "dashboard.quizzes.groupByFolder",
+		recent: "dashboard.quizzes.groupByActivity",
+		type: "dashboard.quizzes.groupByType"
+	};
+	// Libellés des 3 groupes du mode « recent » (quiz-recent.ts ne connaît pas
+	// t() : c'est ICI, au rendu, que la clé se traduit).
+	const RECENT_GROUP_LABEL_KEYS: Record<RecentGroupKey, TransKey> = {
+		"recent:7d": "dashboard.quizzes.recentWeek",
+		"recent:30d": "dashboard.quizzes.recentMonth",
+		"recent:older": "dashboard.quizzes.recentOlder"
+	};
 
 	function render(container: HTMLElement): void {
 		containerRef = container;
@@ -103,6 +140,28 @@ export function createQuizzesHandlers(ctx: DashboardCtx): QuizzesHandlers {
 		searchInput.addEventListener("input", (e) => {
 			searchQuery = (e.target as HTMLInputElement).value;
 			renderQuizGrid(treeEl, quizzes, stats);
+		});
+
+		// ── Regroupement (dossier / activité / type) ──
+		// Le déclencheur affiche TOUJOURS le mode courant en toutes lettres,
+		// jamais une icône seule : sans ça, un utilisateur qui revient après
+		// plusieurs jours en mode « Par activité » ne verrait plus ses dossiers
+		// et croirait à un bug plutôt qu'à un mode qu'il a choisi (retour Ahmed
+		// 2026-07-17 — StudySmarter est la source d'inspiration, pas le contrat).
+		const groupWrap = container.createDiv({ cls: "qbd-quizzes-group" });
+		const groupBtn = groupWrap.createEl("button", { cls: "qbd-select qbd-quizzes-group-select" });
+		groupBtn.type = "button";
+		const groupLabel = groupBtn.createSpan({ cls: "qbd-select-label" });
+		const groupChev = groupBtn.createSpan({ cls: "qbd-select-chevron" });
+		setIcon(groupChev, "chevron-down");
+		groupLabel.setText(t(GROUPING_LABEL_KEYS[currentGrouping()]));
+		groupBtn.addEventListener("click", () => {
+			const active = currentGrouping();
+			openActionMenu(groupBtn, GROUPING_ORDER.map(g => ({
+				icon: g === active ? "check" : undefined,
+				label: t(GROUPING_LABEL_KEYS[g]),
+				onClick: () => { if (g !== active) { setGrouping(g); render(container); } }
+			})));
 		});
 
 		// ── Filters ──
@@ -150,11 +209,65 @@ export function createQuizzesHandlers(ctx: DashboardCtx): QuizzesHandlers {
 			return;
 		}
 
-		// L'arbre est construit sur les quiz RETENUS : un dossier vide après
-		// filtrage n'existe pas, et les comptes affichés sont donc honnêtes.
-		for (const node of buildQuizTree(filtered, stats)) {
-			renderNode(treeEl, node, stats, 0);
+		const mode = currentGrouping();
+		if (mode === "recent") {
+			for (const g of buildRecentGroups(filtered, stats)) {
+				renderFlatGroup(treeEl, g.key, t(RECENT_GROUP_LABEL_KEYS[g.key]), g.total, g.mastered, g.quizzes, stats);
+			}
+		} else if (mode === "type") {
+			// Clé de repli préfixée « type: » — même garantie que « recent: »
+			// juste au-dessus (wireCollapseToggle) : Obsidian interdit « : » dans
+			// un nom de fichier/dossier, donc aucune collision possible avec un
+			// vrai chemin de vault.
+			for (const g of buildTypeGroups(filtered, stats)) {
+				renderFlatGroup(treeEl, `type:${g.type}`, quizTypeLabel(g.type), g.total, g.mastered, g.quizzes, stats);
+			}
+		} else {
+			// L'arbre est construit sur les quiz RETENUS : un dossier vide après
+			// filtrage n'existe pas, et les comptes affichés sont donc honnêtes.
+			for (const node of buildQuizTree(filtered, stats)) {
+				renderNode(treeEl, node, stats, 0);
+			}
 		}
+	}
+
+	/* Compte + agrégat de maîtrise + barre : même formule pour un nœud de
+	   dossier (renderNode) et un groupe plat activité/type (renderFlatGroup). */
+	function fillNodeHeadStats(head: HTMLElement, total: number, mastered: number): void {
+		head.createSpan({
+			cls: "qbd-quizzes-node-count",
+			text: t(total === 1 ? "dashboard.quizzes.folderCountOne" : "dashboard.quizzes.folderCountOther", { count: total }),
+		});
+		head.createSpan({
+			cls: "qbd-quizzes-node-mastered",
+			text: t(mastered === 1 ? "dashboard.quizzes.folderMasteredOne" : "dashboard.quizzes.folderMasteredOther", { count: mastered }),
+		});
+		// Barre d'avancement : c'est elle qui rend un nœud REPLIÉ encore
+		// informatif — sinon replier reviendrait à cacher.
+		const bar = head.createDiv({ cls: "qbd-quizzes-node-bar" });
+		const fill = bar.createDiv({ cls: "qbd-quizzes-node-bar-fill" });
+		fill.style.width = (total > 0 ? Math.round(mastered / total * 100) : 0) + "%";
+	}
+
+	/* Bascule de repli partagée par un nœud de dossier ET un groupe plat
+	   (activité/type) : même mécanique — état lu dans quizzesCollapsedFolders,
+	   forcé ouvert pendant une recherche (elle ne doit pas reconfigurer la
+	   page dans le dos de l'utilisateur), bouton désactivé pendant la
+	   recherche pour ne pas laisser un clic muet modifier un état invisible
+	   (ne PAS retirer ce disabled : ce n'est pas une gêne mais la garde qui
+	   manquait dans la spec). Seule la CLÉ change selon l'appelant : un
+	   chemin de dossier réel pour renderNode, ou une clé préfixée « recent: »/
+	   « type: » pour renderFlatGroup. */
+	function wireCollapseToggle(head: HTMLButtonElement, chev: HTMLElement, key: string): boolean {
+		const collapsed = !searchQuery && collapsedSet().has(key);
+		setIcon(chev, collapsed ? "chevron-right" : "chevron-down");
+		head.setAttribute("aria-expanded", String(!collapsed));
+		head.disabled = searchQuery.length > 0;
+		head.addEventListener("click", () => {
+			toggleCollapsed(key);
+			if (containerRef) render(containerRef);
+		});
+		return collapsed;
 	}
 
 	function renderNode(parent: HTMLElement, node: QuizTreeNode, stats: Record<string, QuizStatRecord>, depth: number): void {
@@ -177,47 +290,9 @@ export function createQuizzesHandlers(ctx: DashboardCtx): QuizzesHandlers {
 			cls: "qbd-quizzes-node-label",
 			text: node.path === "" ? t("dashboard.quizzes.noFolder") : node.label,
 		});
-		head.createSpan({
-			cls: "qbd-quizzes-node-count",
-			text: t(node.total === 1 ? "dashboard.quizzes.folderCountOne" : "dashboard.quizzes.folderCountOther", { count: node.total }),
-		});
-		head.createSpan({
-			cls: "qbd-quizzes-node-mastered",
-			text: t(node.mastered === 1 ? "dashboard.quizzes.folderMasteredOne" : "dashboard.quizzes.folderMasteredOther", { count: node.mastered }),
-		});
+		fillNodeHeadStats(head, node.total, node.mastered);
 
-		// Barre d'avancement : c'est elle qui rend un nœud REPLIÉ encore
-		// informatif — sinon replier reviendrait à cacher.
-		const bar = head.createDiv({ cls: "qbd-quizzes-node-bar" });
-		const fill = bar.createDiv({ cls: "qbd-quizzes-node-bar-fill" });
-		fill.style.width = (node.total > 0 ? Math.round(node.mastered / node.total * 100) : 0) + "%";
-
-		// Une recherche déplie TEMPORAIREMENT tout ce qui a des résultats,
-		// sans toucher à l'état mémorisé : une recherche ne doit pas
-		// reconfigurer la page dans le dos de l'utilisateur. L'arbre étant
-		// déjà construit sur les quiz filtrés, un nœud présent A des
-		// résultats — d'où la condition sur la seule recherche.
-		const collapsed = !searchQuery && collapsedSet().has(node.path);
-		setIcon(chev, collapsed ? "chevron-right" : "chevron-down");
-		head.setAttribute("aria-expanded", String(!collapsed));
-
-		// Pendant une recherche, `collapsed` est TOUJOURS false : l'affichage
-		// est dicté par la recherche, pas par le réglage persisté. Un clic
-		// ici ne changerait donc RIEN à l'écran, mais toggleCollapsed
-		// écrirait quand même dans quizzesCollapsedFolders — l'utilisateur
-		// ne découvrirait le changement qu'en vidant la recherche (le
-		// dossier se replierait sans qu'aucune action visible ne l'ait
-		// annoncé). On coupe la bascule à la racine (disabled = ni
-		// cliquable ni focusable) plutôt que de laisser un clic muet
-		// modifier un état invisible : ne PAS retirer ce disabled, ce
-		// n'est pas une gêne mais la garde qui manquait dans la spec.
-		head.disabled = searchQuery.length > 0;
-
-		head.addEventListener("click", () => {
-			toggleCollapsed(node.path);
-			if (containerRef) render(containerRef);
-		});
-
+		const collapsed = wireCollapseToggle(head, chev, node.path);
 		if (collapsed) return;
 
 		const body = nodeEl.createDiv({ cls: "qbd-quizzes-node-body" });
@@ -231,6 +306,38 @@ export function createQuizzesHandlers(ctx: DashboardCtx): QuizzesHandlers {
 				// showPath: false — le dossier est écrit juste au-dessus.
 				renderQuizCard(grid, quiz, stats[quiz.path], (q) => ctx.navigate("detail", { quiz: q }), { showPath: false });
 			}
+		}
+	}
+
+	/* Rendu partagé des modes « recent » et « type » : groupes PLATS (pas de
+	   sous-groupes), même en-tête visuel qu'un nœud de dossier (cohérence,
+	   aucun CSS nouveau). */
+	function renderFlatGroup(
+		parent: HTMLElement,
+		key: string,
+		label: string,
+		total: number,
+		mastered: number,
+		quizzes: QuizIndexEntry[],
+		stats: Record<string, QuizStatRecord>
+	): void {
+		const nodeEl = parent.createDiv({ cls: "qbd-quizzes-node" });
+		const head = nodeEl.createEl("button", { cls: "qbd-quizzes-node-head" });
+		head.type = "button";
+		const chev = head.createSpan({ cls: "qbd-quizzes-node-chevron" });
+		head.createSpan({ cls: "qbd-quizzes-node-label", text: label });
+		fillNodeHeadStats(head, total, mastered);
+
+		const collapsed = wireCollapseToggle(head, chev, key);
+		if (collapsed) return;
+
+		const body = nodeEl.createDiv({ cls: "qbd-quizzes-node-body" });
+		const grid = body.createDiv({ cls: "qbd-home-grid" });
+		for (const quiz of quizzes) {
+			// PAS de { showPath: false } ici : ni titre de dossier ni sous-groupe
+			// au-dessus dans ces modes, le chemin redevient la seule indication
+			// d'où sort le quiz (cf. quiz-card.ts, défaut true).
+			renderQuizCard(grid, quiz, stats[quiz.path], (q) => ctx.navigate("detail", { quiz: q }));
 		}
 	}
 

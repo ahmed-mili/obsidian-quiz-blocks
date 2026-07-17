@@ -63,6 +63,17 @@ export const EN_DASHBOARD = {
 	"dashboard.quizzes.folderMasteredOne": "{count} mastered",
 	"dashboard.quizzes.folderMasteredOther": "{count} mastered",
 
+	/* ── Regroupement (sélecteur au-dessus des pastilles de filtre) ──
+	   Libellés volontairement explicites : « By activity » répond exactement
+	   au critère utilisé (max(dernière partie jouée, dernière modification)),
+	   pas un jargon du type « Recent » qui laisserait deviner de quoi. */
+	"dashboard.quizzes.groupByFolder": "By folder",
+	"dashboard.quizzes.groupByActivity": "By activity",
+	"dashboard.quizzes.groupByType": "By type",
+	"dashboard.quizzes.recentWeek": "Active in the last 7 days",
+	"dashboard.quizzes.recentMonth": "Active in the last 30 days",
+	"dashboard.quizzes.recentOlder": "Inactive for over a month",
+
 	/* ── Carte de quiz (état) ── */
 	"dashboard.card.mastered": "Mastered",
 	"dashboard.card.review": "To review",
