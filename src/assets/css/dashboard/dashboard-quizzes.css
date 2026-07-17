@@ -130,6 +130,16 @@
 	cursor: default;
 }
 
+/* Un button:disabled continue de matcher :hover en CSS, créant un faux positif
+   visuel (l'utilisateur pense que c'est cliquable). On neutralise le survol
+   en revenant au style de repos : fond transparent, texte neutre. Ne pas
+   utiliser opacity/filter (comme action-buttons.css) car le nœud doit rester
+   INFORMATIF pendant la recherche (compte/agrégat/barre lisibles). */
+.qbd-quizzes-node-head:disabled:hover {
+	background: transparent;
+	color: var(--text-muted);
+}
+
 .qbd-quizzes-node-chevron {
 	display: flex;
 	flex-shrink: 0;
