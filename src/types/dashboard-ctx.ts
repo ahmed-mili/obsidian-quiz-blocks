@@ -68,6 +68,12 @@ export interface AiSettings extends VoiceSettings {
 	hotkeyAddFiles?: Hotkey | null;
 	hotkeyAddNotes?: Hotkey | null;
 	aiMentionExtraFolders?: string[];
+	/* NB : cette interface s'appelle « AiSettings » mais elle est en réalité
+	   le sous-ensemble des réglages du plugin que le DASHBOARD lit — le nom
+	   ne suit plus. Le champ ci-dessous n'a rien d'IA ; le renommage est un
+	   travail à part (plugin.js n'est pas encore converti), à signaler au
+	   rapport plutôt qu'à faire ici. */
+	quizzesCollapsedFolders?: string[];
 }
 
 /**

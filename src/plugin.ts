@@ -60,6 +60,10 @@ interface QuizBlocksSettings {
 	hotkeyAddNotes: Hotkey;
 	/** Dossiers hors vault proposés par le picker « @ » (desktop uniquement). */
 	aiMentionExtraFolders: string[];
+	/** Chemins COMPLETS des dossiers repliés dans « Mes quiz ». État
+	    d'interface, pas une préférence : aucune section dans l'onglet de
+	    réglages. Seuls les REPLIÉS sont listés (déplié = défaut). */
+	quizzesCollapsedFolders: string[];
 	voiceEnabled: boolean;
 	voiceBackend: VoiceBackend;
 	voiceModel: VoiceModelId;
@@ -103,6 +107,8 @@ const DEFAULT_SETTINGS: QuizBlocksSettings = {
 	hotkeyAddNotes: { modifiers: ["Mod"], key: "e" },
 	// Vide par défaut : le « @ » se limite au vault tant qu'Ahmed n'ajoute rien.
 	aiMentionExtraFolders: [],
+	// Vide : au premier usage, tout est déplié — l'utilisateur voit ce qu'il a.
+	quizzesCollapsedFolders: [],
 	// ── Saisie vocale (dictée locale whisper.cpp) — opt-in complet.
 	// Spec : docs/superpowers/specs/2026-07-10-voice-input-design.md
 	voiceEnabled: false,

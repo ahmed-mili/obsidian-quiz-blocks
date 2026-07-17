@@ -28,6 +28,22 @@ export function createQuizzesHandlers(ctx: DashboardCtx): QuizzesHandlers {
 	let currentFilter: FilterKey = "all";
 	let searchQuery = "";
 
+	/* L'accès réel aux réglages est `ctx.plugin.settings.<clé>` (même patron
+	   qu'ai.ts). Lu à CHAQUE rendu : le réglage peut changer sous nos pieds
+	   (autre appareil, rechargement). */
+	function collapsedSet(): Set<string> {
+		return new Set(ctx.plugin.settings.quizzesCollapsedFolders || []);
+	}
+
+	function toggleCollapsed(path: string): void {
+		const set = collapsedSet();
+		if (set.has(path)) set.delete(path); else set.add(path);
+		ctx.plugin.settings.quizzesCollapsedFolders = [...set];
+		// Même canal que quizStats (stats-store.ts) ; l'échec d'écriture ne
+		// doit pas casser le rendu.
+		ctx.plugin.saveSettings().catch(() => {});
+	}
+
 	/* Le conteneur du dernier rendu. `renderNode` est défini HORS de
 	   `render`, donc `container` n'y est pas dans sa portée : sans cette
 	   référence, le clic d'un chevron ne pourrait pas re-rendre. Même
@@ -173,10 +189,20 @@ export function createQuizzesHandlers(ctx: DashboardCtx): QuizzesHandlers {
 		const fill = bar.createDiv({ cls: "qbd-quizzes-node-bar-fill" });
 		fill.style.width = (node.total > 0 ? Math.round(node.mastered / node.total * 100) : 0) + "%";
 
-		// Repli : câblé en Task 4. Pour l'instant tout est déplié.
-		const collapsed = false;
+		// Une recherche déplie TEMPORAIREMENT tout ce qui a des résultats,
+		// sans toucher à l'état mémorisé : une recherche ne doit pas
+		// reconfigurer la page dans le dos de l'utilisateur. L'arbre étant
+		// déjà construit sur les quiz filtrés, un nœud présent A des
+		// résultats — d'où la condition sur la seule recherche.
+		const collapsed = !searchQuery && collapsedSet().has(node.path);
 		setIcon(chev, collapsed ? "chevron-right" : "chevron-down");
 		head.setAttribute("aria-expanded", String(!collapsed));
+
+		head.addEventListener("click", () => {
+			toggleCollapsed(node.path);
+			if (containerRef) render(containerRef);
+		});
+
 		if (collapsed) return;
 
 		const body = nodeEl.createDiv({ cls: "qbd-quizzes-node-body" });
