@@ -198,6 +198,18 @@ export function createQuizzesHandlers(ctx: DashboardCtx): QuizzesHandlers {
 		setIcon(chev, collapsed ? "chevron-right" : "chevron-down");
 		head.setAttribute("aria-expanded", String(!collapsed));
 
+		// Pendant une recherche, `collapsed` est TOUJOURS false : l'affichage
+		// est dicté par la recherche, pas par le réglage persisté. Un clic
+		// ici ne changerait donc RIEN à l'écran, mais toggleCollapsed
+		// écrirait quand même dans quizzesCollapsedFolders — l'utilisateur
+		// ne découvrirait le changement qu'en vidant la recherche (le
+		// dossier se replierait sans qu'aucune action visible ne l'ait
+		// annoncé). On coupe la bascule à la racine (disabled = ni
+		// cliquable ni focusable) plutôt que de laisser un clic muet
+		// modifier un état invisible : ne PAS retirer ce disabled, ce
+		// n'est pas une gêne mais la garde qui manquait dans la spec.
+		head.disabled = searchQuery.length > 0;
+
 		head.addEventListener("click", () => {
 			toggleCollapsed(node.path);
 			if (containerRef) render(containerRef);

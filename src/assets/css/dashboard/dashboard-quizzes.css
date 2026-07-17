@@ -122,6 +122,14 @@
 	color: var(--text-normal);
 }
 
+/* Pendant une recherche, la bascule de repli est désactivée (cf.
+   quizzes.ts) : le curseur doit le dire, sans quoi le bouton reste lisible
+   comme cliquable alors qu'il ne l'est plus. Compte/agrégat/barre restent
+   sinon inchangés — le nœud doit rester informatif. */
+.qbd-quizzes-node-head:disabled {
+	cursor: default;
+}
+
 .qbd-quizzes-node-chevron {
 	display: flex;
 	flex-shrink: 0;
