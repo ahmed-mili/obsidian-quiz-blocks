@@ -423,8 +423,13 @@
 	padding: 0;
 	border: none;
 	border-radius: 999px;
-	background: transparent;
-	color: var(--text-muted);
+	/* Fond PLEIN, pas transparent : rond + transparent ne laissait qu'un
+	   triangle gris pâle, lu comme une icône décorative — le défaut même du
+	   chevron qu'il remplace. C'est le fond qui en fait un contrôle. La teinte
+	   d'accent le distingue aussi de la pastille d'état, à quelques pixels de
+	   là, qui elle n'est PAS cliquable. */
+	background: var(--interactive-accent);
+	color: var(--text-on-accent);
 	cursor: pointer;
 	transition: background 0.14s ease, color 0.14s ease, transform 0.08s ease;
 }
@@ -434,9 +439,12 @@
 	height: 14px;
 }
 
+/* Le repos étant déjà plein, le survol ÉCLAIRCIT l'accent au lieu de poser un
+   voile translucide (qui, sur un fond plein, l'assombrissait au lieu de le
+   mettre en avant). */
 .qbd-root .qbd-quiz-card-play:hover {
-	background: color-mix(in srgb, var(--interactive-accent) 16%, transparent);
-	color: var(--interactive-accent);
+	background: var(--interactive-accent-hover);
+	color: var(--text-on-accent);
 }
 
 .qbd-quiz-card-play:active {
