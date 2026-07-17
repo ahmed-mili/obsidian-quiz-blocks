@@ -4,8 +4,8 @@ import { MASTERY_THRESHOLD } from "./quiz-mastery";
 
 /* ══════════════════════════════════════════════════════════
    QUIZ TYPE — regroupement des quiz par TYPE
-   Troisième axe de « Mes quiz » (à côté de quiz-tree.ts, par
-   dossier, et quiz-recent.ts, par activité) : un groupe par
+   Troisième axe de « Mes quiz » (à côté de quiz-modules.ts, par
+   module/UE, et quiz-recent.ts, par activité) : un groupe par
    QuizTypeTag, dans l'ORDRE FIXE de déclaration du type — JAMAIS
    trié par nombre : les comptes dépendent du filtre actif, un tri
    par volume ferait sauter l'ordre à chaque clic de pastille.

@@ -4,10 +4,10 @@ import { MASTERY_THRESHOLD } from "./quiz-mastery";
 
 /* ══════════════════════════════════════════════════════════
    QUIZ RECENT — regroupement des quiz par DERNIÈRE ACTIVITÉ
-   Deuxième axe de « Mes quiz » (à côté de quiz-tree.ts, par
-   dossier, et quiz-type.ts, par type) : trois fenêtres de
-   temps, du plus récent au plus ancien. Module PUR comme
-   quiz-tree.ts : aucune dépendance à Obsidian ni au DOM, aucun
+   Deuxième axe de « Mes quiz » (à côté de quiz-modules.ts, par
+   module/UE, et quiz-type.ts, par type) : trois fenêtres de
+   temps, du plus récent au plus ancien. Module PUR comme les
+   autres axes : aucune dépendance à Obsidian ni au DOM, aucun
    appel à t() (la traduction des libellés se fait au rendu,
    dans quizzes.ts).
 ══════════════════════════════════════════════════════════ */
