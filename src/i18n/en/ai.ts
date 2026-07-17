@@ -24,6 +24,10 @@ export const EN_AI = {
 	/* Pied du menu : une garde anti-explosion a coupé l'indexation d'une ou
 	   plusieurs racines externes — on ne tronque jamais en silence. */
 	"ai.mention.truncated": "Too many files in {roots} — search may be incomplete",
+	/* resolveExternalPath a renvoyé null (racine retirée des réglages pendant
+	   que le menu était ouvert) : le token a déjà été effacé, rien n'est
+	   attaché — jamais un échec silencieux. */
+	"ai.mention.externalRootGone": "Couldn't attach “{name}”: its external folder was removed from settings",
 
 	/* ── Options de génération ── */
 	"ai.options.tooltip": "{count} questions · {type}",

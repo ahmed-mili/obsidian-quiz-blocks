@@ -1,4 +1,4 @@
-import { App, TFolder } from "obsidian";
+import { App, Notice, TFolder } from "obsidian";
 import {
 	FileEntry, listExternalFolder, listExternalRoots, listVaultFolder,
 	primeExternalIndex, resolveExternalPath, searchAll,
@@ -169,7 +169,15 @@ export function attachMentionPicker(
 					// fs.readFileSync tel quel). Résolution relatif→absolu
 					// ICI, juste avant l'appel, jamais plus tôt.
 					const resolved = resolveExternalPath(opts.getExtraRoots(), entry.path);
-					if (resolved) opts.onPickExternalFile(resolved.absPath);
+					if (resolved) {
+						opts.onPickExternalFile(resolved.absPath);
+					} else {
+						// Racine retirée des réglages PENDANT que le menu était
+						// ouvert (cas réel) : replaceToken a déjà effacé le
+						// « @… », rien n'est attaché — sans Notice, échec
+						// totalement muet.
+						new Notice(t("ai.mention.externalRootGone", { name: entry.name }));
+					}
 				} else {
 					opts.onPickVaultFile(entry.path);
 				}
