@@ -213,11 +213,23 @@
 	background: var(--background-primary);
 	border: 1px solid var(--background-modifier-border);
 	border-radius: var(--radius-l, 12px);
-	padding: 16px;
+	/* Plus d'air (Ahmed : « augmente la taille des cartes ») + une hauteur
+	   minimale pour que toutes les cartes d'une rangée s'alignent, même celles
+	   sans sous-titre UE (orphelins) ou sans barre d'avancement. */
+	padding: 18px 20px;
+	min-height: 120px;
+	display: flex;
+	flex-direction: column;
 	cursor: pointer;
 	transition: background 0.15s ease, border-color 0.15s ease, box-shadow 0.2s ease, transform 0.08s ease;
 	position: relative;
 	overflow: hidden;
+}
+
+/* Titre du module un cran plus grand que sur une carte de quiz (la carte de
+   module est un point d'entrée, pas un item de liste). */
+.qbd-module-card .qbd-quiz-card-title {
+	font-size: 15px;
 }
 
 .qbd-module-card:hover {
@@ -230,21 +242,26 @@
 .qbd-module-card-accent--done { background: var(--color-green, #4ade80); }
 .qbd-module-card-accent--partial { background: var(--interactive-accent); }
 
+/* UE en SOUS-TITRE sous le nom (façon StudySmarter « math » / « Mathématiques »,
+   demande d'Ahmed 2026-07-17). Plus une petite étiquette majuscule au-dessus :
+   une ligne de légende discrète, juste sous le titre. */
 .qbd-module-card-ue {
-	font-size: 10px;
-	font-weight: 600;
-	color: var(--text-faint);
-	text-transform: uppercase;
-	letter-spacing: 0.06em;
-	margin: 0 0 4px;
+	font-size: 12px;
+	color: var(--text-muted);
+	margin: 2px 0 0;
+	line-height: 1.35;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
 }
 
-/* Grille de cartes de module : mêmes colonnes responsives que .qbd-home-grid
-   (mode « module » et corps d'un groupe d'UE). */
+/* Grille de cartes de module. Colonnes plus larges (300 px mini) et gouttière
+   plus généreuse que .qbd-home-grid : Ahmed voulait des cartes plus grandes
+   (2026-07-17). Repli en 1 colonne sous .is-mobile (dashboard-base.css). */
 .qbd-module-grid {
 	display: grid;
-	grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
-	gap: 12px;
+	grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+	gap: 14px;
 }
 
 /* ── Fil d'Ariane du drill-down (« Tous les quiz » › nom du module) ── */

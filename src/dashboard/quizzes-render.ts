@@ -107,12 +107,13 @@ function renderFlatGroup(
 	}
 }
 
-/** Grille plate de cartes de module (mode « module »), et corps d'un groupe d'UE.
-    `hideUe` : masque le badge UE de chaque carte — utile quand la grille est
-    peinte SOUS un en-tête d'UE qui affiche déjà le même intitulé (renderUeGroup). */
-function renderModuleGrid(parent: HTMLElement, groups: ModuleGroup[], onOpen: (folder: string) => void, hideUe = false): void {
+/** Grille plate de cartes de module (mode « module » et corps d'un groupe d'UE).
+    La carte affiche toujours son sous-titre UE (demande d'Ahmed : l'UE sur la
+    carte façon StudySmarter, même sous un en-tête d'UE — comme StudySmarter
+    garde le sous-titre d'une carte dans une section groupée). */
+function renderModuleGrid(parent: HTMLElement, groups: ModuleGroup[], onOpen: (folder: string) => void): void {
 	const grid = parent.createDiv({ cls: "qbd-module-grid" });
-	for (const g of groups) renderModuleCard(grid, g, (m) => onOpen(m.folder), hideUe);
+	for (const g of groups) renderModuleCard(grid, g, (m) => onOpen(m.folder));
 }
 
 /* En-tête d'UE repliable + grille de cartes de module dessous. */
@@ -126,9 +127,7 @@ function renderUeGroup(deps: GridDeps, parent: HTMLElement, ue: UeGroup): void {
 	const collapsed = wireCollapseToggle(deps, head, chev, ue.key);
 	if (collapsed) return;
 	const body = nodeEl.createDiv({ cls: "qbd-quizzes-node-body" });
-	// hideUe: true — l'en-tête juste au-dessus affiche déjà l'intitulé d'UE,
-	// le badge de la carte le répéterait à ~40px d'écart pour rien.
-	renderModuleGrid(body, ue.modules, deps.openModule, true);
+	renderModuleGrid(body, ue.modules, deps.openModule);
 }
 
 /** Contenu de la grille pour les 4 axes (pas le drill-down) : dispatch par

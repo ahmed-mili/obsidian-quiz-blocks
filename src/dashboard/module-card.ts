@@ -12,13 +12,7 @@ import type { ModuleGroup } from "./quiz-modules";
 export function renderModuleCard(
 	container: HTMLElement,
 	group: ModuleGroup,
-	onOpen: (group: ModuleGroup) => void,
-	// Vrai quand la carte est peinte SOUS un en-tête d'UE déjà déplié (mode
-	// « Par UE », cf. renderUeGroup dans quizzes-render.ts) : l'en-tête affiche
-	// déjà l'intitulé d'UE juste au-dessus, réafficher le badge répète la même
-	// chaîne à ~40px d'écart pour rien. Défaut false = comportement actuel
-	// (grille « Par module », sans en-tête d'UE au-dessus — le badge y reste utile).
-	hideUe = false
+	onOpen: (group: ModuleGroup) => void
 ): HTMLDivElement {
 	const card = container.createDiv({ cls: "qbd-module-card" });
 	// Liseré coloré selon l'avancement (vert si tout maîtrisé, accent sinon).
@@ -26,13 +20,15 @@ export function renderModuleCard(
 	card.createDiv({ cls: `qbd-quiz-card-accent qbd-module-card-accent--${done ? "done" : "partial"}` });
 	const body = card.createDiv({ cls: "qbd-quiz-card-body" });
 
-	// UE en petite étiquette (au-dessus du nom, discrète). Omise si non résolue,
-	// ou si hideUe (redondante sous un en-tête d'UE qui l'affiche déjà).
-	if (!hideUe && group.ue) body.createEl("p", { cls: "qbd-module-card-ue", text: group.ue });
-
-	// Fallback : un quiz sans ancêtre reconnu (ex. à la racine du vault) donne
-	// un nom vide (moduleForQuiz) — jamais de carte au titre blanc.
+	// Nom du module en TITRE. Fallback : un quiz sans ancêtre reconnu (ex. à la
+	// racine du vault) donne un nom vide (moduleForQuiz) — jamais de titre blanc.
 	body.createEl("p", { cls: "qbd-quiz-card-title", text: group.name || t("dashboard.quizzes.noFolder") });
+
+	// UE en SOUS-TITRE, sous le nom — façon StudySmarter (« math » / « Mathématiques »,
+	// demande d'Ahmed 2026-07-17). Affichée dans TOUS les modes, y compris sous un
+	// en-tête d'UE : Ahmed veut l'UE sur la carte (comme StudySmarter garde le
+	// sous-titre même dans une section groupée). Omise seulement si non résolue.
+	if (group.ue) body.createEl("p", { cls: "qbd-module-card-ue", text: group.ue });
 
 	// Barre d'avancement — omise si rien n'est maîtrisé (une piste vide
 	// n'apprend rien de plus que le « 0 » du compte, cf. quizzes.ts).
