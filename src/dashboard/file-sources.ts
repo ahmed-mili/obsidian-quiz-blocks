@@ -5,12 +5,14 @@ import { App, Platform, TAbstractFile, TFolder, prepareFuzzySearch } from "obsid
 export interface FileEntry {
 	/** Nom affiché : « TD3.md », « Cours ». */
 	name: string;
-	/** Vault → chemin relatif au vault. Externe → chemin absolu. */
+	/** Vault → chemin relatif au vault. Externe → chemin relatif à la racine
+	    configurée, PRÉFIXÉ par le nom de cette racine (ex.
+	    « Downloads/pdf/TD3.pdf ») — symétrique du vault, jamais de chemin
+	    absolu ici. `resolveExternalPath` fait l'inverse (relatif → absolu),
+	    à appeler juste avant tout accès disque ou tout appel de callback. */
 	path: string;
 	isFolder: boolean;
 	source: "vault" | "external";
-	/** Racine externe d'appartenance, affichée en sous-titre (source « external »). */
-	rootLabel?: string;
 }
 
 /* Formats que le composer sait réellement attacher (cf. addComposerFiles
@@ -71,30 +73,78 @@ function baseName(p: string): string {
 	return i < 0 ? norm : norm.slice(i + 1);
 }
 
+/** Normalise un chemin de racine externe pour le STOCKAGE (réglage
+    `aiMentionExtraFolders`) : séparateurs unifiés en « / », sans séparateur
+    final. Sans ça, `C:\...\Downloads` et `C:/.../Downloads` sont vus comme
+    deux racines distinctes (double parcours, chaque fichier listé deux fois),
+    et une racine saisie avec un séparateur final casse la navigation
+    (`dir.startsWith(r + "/")` dans mention-picker.ts ne matche jamais). */
+export function normalizeExternalRoot(path: string): string {
+	return path.replace(/[\\/]+/g, "/").replace(/\/+$/, "");
+}
+
+/** Longueur du préfixe « parent de la racine » à retirer d'un chemin absolu
+    pour obtenir le chemin relatif préfixé par le nom de la racine (ex.
+    « Downloads/pdf/x.pdf »). */
+function rootParentLen(root: string): number {
+	const trimmed = root.replace(/[\\/]+$/, "");
+	return trimmed.length - baseName(trimmed).length;
+}
+
+/** Chemin absolu → chemin relatif (préfixé du nom de la racine). */
+function toRelPath(absPath: string, root: string): string {
+	return absPath.slice(rootParentLen(root));
+}
+
+/** Inverse de `toRelPath` : chemin relatif du picker (« Downloads/pdf ») →
+    chemin absolu, en retrouvant la racine configurée dont le nom de base
+    préfixe ce chemin. Résolution déterministe : la PREMIÈRE racine qui
+    matche (ordre du réglage) l'emporte.
+    Ambiguïté connue et non résolue : deux racines de même nom de base (ex.
+    « D:/Cours » et « C:/Travail/Cours ») ne sont pas distinguables depuis ce
+    chemin relatif seul — la seconde racine devient alors inatteignable en
+    tapant, et leurs entrées s'affichent avec un sous-titre identique dans la
+    liste (cf. rapport de tâche, doute correspondant).
+    Renvoie null si aucune racine ne correspond (dossier hors des racines
+    configurées, ou racine retirée entre-temps). */
+export function resolveExternalPath(roots: string[], relPath: string): { absPath: string; root: string } | null {
+	for (const root of roots) {
+		const trimmed = root.replace(/[\\/]+$/, "");
+		const label = baseName(trimmed);
+		if (relPath === label || relPath.startsWith(label + "/")) {
+			return { absPath: trimmed.slice(0, rootParentLen(trimmed)) + relPath, root: trimmed };
+		}
+	}
+	return null;
+}
+
 /** Les racines configurées, en entrées listables (fin de la liste initiale). */
 export function listExternalRoots(roots: string[]): FileEntry[] {
 	if (!Platform.isDesktopApp) return [];
 	return roots.map(r => ({
-		name: baseName(r), path: r, isFolder: true, source: "external" as const, rootLabel: baseName(r),
+		name: baseName(r), path: baseName(r), isFolder: true, source: "external" as const,
 	}));
 }
 
 /** Contenu d'un dossier externe. readdir du SEUL dossier affiché : le coût
-    ne dépend pas de la taille du disque. */
-export function listExternalFolder(dirPath: string): FileEntry[] {
+    ne dépend pas de la taille du disque. `root` = la racine configurée dont
+    `dirPath` descend, nécessaire pour reconstruire un chemin relatif correct
+    même en profondeur (sinon on ne verrait que le nom du dossier courant,
+    pas tout le chemin depuis la racine — cf. `walk`). */
+export function listExternalFolder(dirPath: string, root: string): FileEntry[] {
 	if (!Platform.isDesktopApp) return [];
 	const fs = require("fs") as typeof import("fs");
 	let dirents: import("fs").Dirent[];
 	try { dirents = fs.readdirSync(dirPath, { withFileTypes: true }); } catch (e) { return []; }
+	const dirAbs = dirPath.replace(/[\\/]+$/, "");
 	return dirents
 		.filter(d => !d.name.startsWith("."))
 		.filter(d => d.isDirectory() ? !SKIP_DIRS.has(d.name) : isAttachable(d.name))
 		.map(d => ({
 			name: d.name,
-			path: dirPath.replace(/[\\/]+$/, "") + "/" + d.name,
+			path: toRelPath(dirAbs + "/" + d.name, root),
 			isFolder: d.isDirectory(),
 			source: "external" as const,
-			rootLabel: baseName(dirPath),
 		}))
 		.sort(compareEntries);
 }
@@ -121,10 +171,10 @@ function walk(root: string): ExternalIndex {
 			const full = cur.dir.replace(/[\\/]+$/, "") + "/" + d.name;
 			if (d.isDirectory()) {
 				if (SKIP_DIRS.has(d.name)) continue;
-				entries.push({ name: d.name, path: full, isFolder: true, source: "external", rootLabel: baseName(root) });
+				entries.push({ name: d.name, path: toRelPath(full, root), isFolder: true, source: "external" });
 				stack.push({ dir: full, depth: cur.depth + 1 });
 			} else if (isAttachable(d.name)) {
-				entries.push({ name: d.name, path: full, isFolder: false, source: "external", rootLabel: baseName(root) });
+				entries.push({ name: d.name, path: toRelPath(full, root), isFolder: false, source: "external" });
 			}
 		}
 	}
@@ -163,9 +213,17 @@ function indexOf(root: string): ExternalIndex | null {
     réel (mesuré, Node, à chaud : Downloads — 18 entrées, 4 dossiers, < 1 ms ;
     pire cas plausible C:\Users\Ahmed — 12309 entrées, 7383 dossiers, ~158 ms)
     et (b) le contrôle de mtime dans `indexOf` garde tout son intérêt PENDANT
-    la frappe : toutes les frappes d'une même session de menu (donc un seul
-    clear) réutilisent l'index déjà calculé. Ne pas retirer ce clear pour
-    « optimiser ». */
+    la frappe : tant que le menu reste OUVERT, chaque frappe (`refresh` sans
+    passer par ce prime) réutilise l'index déjà calculé, sans reclear.
+    ATTENTION, ce n'est PAS « un seul clear par session de menu » : choisir un
+    dossier FERME le menu (`closeMenu()` dans ui-select.ts tourne avant
+    `item.onChoose()`, y compris au clic comme à Entrée/Tab) puis le rouvre
+    aussitôt (`refresh` revoit `menu === null`) — donc un clear (et un
+    parcours) par NIVEAU de navigation descendu, pas un seul pour toute la
+    session. Le coût reste borné (mesures ci-dessus), mais ne pas décrire ce
+    comportement comme « un seul clear » : ce projet s'est déjà fait piéger
+    par un commentaire qui promettait moins de travail que le code n'en fait
+    réellement. Ne pas retirer ce clear pour « optimiser ». */
 export function primeExternalIndex(roots: string[]): void {
 	if (!Platform.isDesktopApp) return;
 	externalCache.clear();
@@ -196,24 +254,19 @@ export function searchAll(app: App, roots: string[], query: string): { entries: 
 	}
 
 	// Externe (desktop uniquement) : chaque racine configurée, intégralement.
+	// `entry.path` (produit par `walk`) est DÉJÀ le chemin relatif préfixé du
+	// nom de la racine (« Downloads/x.pdf »), symétrique du chemin relatif du
+	// vault — même échelle pour `prepareFuzzySearch`, pas de biais de
+	// préfixe absolu (~25 caractères de bruit de tête sinon, qui handicaperait
+	// systématiquement l'externe dans le tri par score commun).
 	const truncated: string[] = [];
 	if (Platform.isDesktopApp) {
 		for (const root of roots) {
 			const idx = indexOf(root);
 			if (!idx) continue;
 			if (idx.truncated) truncated.push(baseName(root));
-			// Score sur le chemin relatif au PARENT de la racine, pas sur le
-			// chemin absolu : le vault est scoré sur un chemin relatif
-			// (« Cours/Reseaux/TD3.md »), or prepareFuzzySearch pénalise les
-			// correspondances tardives. Scorer « C:/Users/Ahmed/Downloads/x.pdf »
-			// contre « Cours/TD3.md » handicaperait l'externe de ~25 caractères
-			// de bruit de tête — le tri par score commun ne serait plus une
-			// comparaison équitable. On garde le nom de la racine dans la chaîne
-			// scorée (« Downloads/x.pdf ») pour que taper le nom du dossier
-			// matche encore.
-			const parentLen = root.replace(/[\\/]+$/, "").length - baseName(root).length;
 			for (const entry of idx.entries) {
-				const r = fuzzy(entry.path.slice(parentLen));
+				const r = fuzzy(entry.path);
 				if (r) scored.push({ entry, score: r.score });
 			}
 		}

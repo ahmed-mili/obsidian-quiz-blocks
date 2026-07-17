@@ -1,7 +1,7 @@
-import { App } from "obsidian";
+import { App, TFolder } from "obsidian";
 import {
 	FileEntry, listExternalFolder, listExternalRoots, listVaultFolder,
-	primeExternalIndex, searchAll,
+	primeExternalIndex, resolveExternalPath, searchAll,
 } from "./file-sources";
 import { MentionMenuHandle, MentionMenuItem, openMentionMenu } from "./ui-select";
 import { t } from "../i18n";
@@ -76,11 +76,18 @@ export function attachMentionPicker(
 
 	/* Remplace le token « @… » par `replacement` et repositionne le caret
 	   juste après. Mute le textarea SANS re-render (le render d'ai.ts
-	   reconstruit le DOM et perdrait le caret). */
+	   reconstruit le DOM et perdrait le caret).
+	   Borne la fin du remplacement sur la fin RÉELLE du token
+	   (`token.start + 1 + token.query.length`), jamais sur le caret vivant :
+	   si le caret a bougé pendant que le menu était ouvert (ex. ai.ts
+	   replace le caret en fin de texte au clic sur une carte, sans fermer
+	   le menu), lire `textarea.selectionStart` ici effacerait tout le texte
+	   entre le token et le caret, sans undo (`.value` est une affectation
+	   directe). Avec la fin bornée au token, ce cas devient impossible. */
 	function replaceToken(token: MentionToken, replacement: string): void {
 		const v = textarea.value;
-		const caret = textarea.selectionStart ?? v.length;
-		const next = v.slice(0, token.start) + replacement + v.slice(caret);
+		const tokenEnd = token.start + 1 + token.query.length;
+		const next = v.slice(0, token.start) + replacement + v.slice(tokenEnd);
 		textarea.value = next;
 		const pos = token.start + replacement.length;
 		textarea.setSelectionRange(pos, pos);
@@ -94,11 +101,22 @@ export function attachMentionPicker(
 		if (!query) {
 			return { entries: [...listVaultFolder(app, ""), ...listExternalRoots(roots)] };
 		}
-		// Token finissant par « / » → on liste ce dossier.
+		// Token finissant par « / » → on liste ce dossier. `dir` est un
+		// chemin RELATIF (vault, ou racine externe préfixée de son nom —
+		// cf. FileEntry.path) : jamais de chemin absolu dans le texte tapé.
 		if (query.endsWith("/")) {
 			const dir = query.slice(0, -1);
-			const external = roots.some(r => dir === r || dir.startsWith(r + "/"));
-			return { entries: external ? listExternalFolder(dir) : listVaultFolder(app, dir) };
+			// Priorité au vault : si un dossier RÉEL du vault existe à ce
+			// chemin, il l'emporte. Un dossier du vault et une racine
+			// externe peuvent partager le même nom de base (ex. tous deux
+			// « Cours ») depuis que le token externe porte un chemin relatif
+			// (plus de préfixe absolu pour les distinguer) — cf. rapport de
+			// tâche, doute sur l'ambiguïté des homonymes.
+			const vaultFolder = app.vault.getAbstractFileByPath(dir);
+			if (vaultFolder instanceof TFolder) return { entries: listVaultFolder(app, dir) };
+			const resolved = resolveExternalPath(roots, dir);
+			if (resolved) return { entries: listExternalFolder(resolved.absPath, resolved.root) };
+			return { entries: listVaultFolder(app, dir) }; // ni l'un ni l'autre → liste vide
 		}
 		// Sinon : recherche TOUJOURS globale, vault + toutes les racines,
 		// fusionnées et triées par score commun (searchAll) — jamais une
@@ -117,21 +135,36 @@ export function attachMentionPicker(
 		const firstExternal = shown.findIndex(e => e.source === "external");
 		return shown.map((entry, i) => ({
 			label: entry.isFolder ? entry.name + "/" : entry.name,
-			sub: entry.source === "external"
-				? entry.rootLabel
-				: (entry.path.includes("/") ? entry.path.slice(0, entry.path.lastIndexOf("/")) : undefined),
+			// Dossier parent en chemin relatif, pour vault ET externe (même
+			// champ `path`, même calcul) : deux fichiers homonymes à des
+			// profondeurs différentes (ex. « Downloads/x.pdf » vs
+			// « Downloads/pdf/x.pdf ») restent distinguables. Avant : les
+			// externes affichaient toujours le nom de la racine, quelle que
+			// soit leur profondeur — deux homonymes rendaient un sous-titre
+			// identique.
+			sub: entry.path.includes("/") ? entry.path.slice(0, entry.path.lastIndexOf("/")) : undefined,
 			icon: entry.source === "external" && entry.isFolder ? "corner-up-right" : iconFor(entry),
 			separatorBefore: i > 0 && i === firstExternal,
 			onChoose: () => {
 				if (entry.isFolder) {
 					// Dossier → on descend dedans, on n'attache jamais.
+					// entry.path est RELATIF (vault, ou racine externe
+					// préfixée de son nom) : le token reste lisible, jamais
+					// de chemin absolu écrit dans le texte.
 					replaceToken(token, "@" + entry.path + "/");
 					refresh();
 					return;
 				}
 				replaceToken(token, "");
-				if (entry.source === "external") opts.onPickExternalFile(entry.path);
-				else opts.onPickVaultFile(entry.path);
+				if (entry.source === "external") {
+					// Callback contractuel : chemin ABSOLU (ai.ts en fait
+					// fs.readFileSync tel quel). Résolution relatif→absolu
+					// ICI, juste avant l'appel, jamais plus tôt.
+					const resolved = resolveExternalPath(opts.getExtraRoots(), entry.path);
+					if (resolved) opts.onPickExternalFile(resolved.absPath);
+				} else {
+					opts.onPickVaultFile(entry.path);
+				}
 			},
 		}));
 	}

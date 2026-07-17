@@ -29,6 +29,7 @@ import type { OllamaCatalogEntry } from "./dashboard/ai-providers";
 import { formatHotkey, eventToHotkey } from "./hotkey-format";
 import type { Hotkey } from "./hotkey-format";
 import { closeAllSelects } from "./dashboard/ui-select";
+import { normalizeExternalRoot } from "./dashboard/file-sources";
 import { t, setLanguage, langSetting } from "./i18n";
 import type { LangSetting } from "./i18n";
 
@@ -732,11 +733,19 @@ class QuizBlocksSettingTab extends PluginSettingTab {
 			paint();
 			new Setting(containerEl)
 				.addText(txt => {
-					txt.setPlaceholder("C:\\Users\\...\\Downloads");
+					txt.setPlaceholder(t("settings.ai.mentionFolders.placeholder"));
 					txt.inputEl.addEventListener("keydown", async (e) => {
 						if (e.key !== "Enter") return;
-						const dir = txt.getValue().trim();
-						if (!dir) return;
+						const raw = txt.getValue().trim();
+						if (!raw) return;
+						// Séparateurs unifiés, sans séparateur final : sinon
+						// « C:\...\Downloads » et « C:/.../Downloads » sont vus
+						// comme deux racines distinctes (double parcours, chaque
+						// fichier listé deux fois), et un séparateur final casse
+						// la navigation (mention-picker.ts teste
+						// `dir.startsWith(r + "/")`, jamais vrai avec une racine
+						// du genre « .../Downloads/ »).
+						const dir = normalizeExternalRoot(raw);
 						const fs = require("fs") as typeof import("fs");
 						let ok = false;
 						try { ok = fs.statSync(dir).isDirectory(); } catch (err) { ok = false; }

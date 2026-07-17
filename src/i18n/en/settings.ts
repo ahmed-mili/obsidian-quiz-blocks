@@ -11,4 +11,5 @@ export const EN_SETTINGS = {
 	"settings.ai.mentionFolders.desc": "Folders the “@” picker also searches, on top of your vault. Press Enter to add. Desktop only.",
 	"settings.ai.mentionFolders.remove": "Remove this folder",
 	"settings.ai.mentionFolders.invalid": "Not a folder: {dir}",
+	"settings.ai.mentionFolders.placeholder": "Folder path",
 } as const;
