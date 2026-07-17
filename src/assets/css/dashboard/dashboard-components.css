@@ -370,6 +370,8 @@
 	background: var(--background-modifier-hover, rgba(255,255,255,0.05));
 }
 
+/* Chevron ornemental — comportement HISTORIQUE, encore utilisé par l'accueil
+   (home.ts) quand `opts.onPlay` n'est pas fourni à renderQuizCard. */
 .qbd-quiz-card-open {
 	display: inline-flex;
 	align-items: center;
@@ -388,6 +390,44 @@
 .qbd-quiz-card:hover .qbd-quiz-card-open {
 	opacity: 1;
 	transform: translateX(0);
+}
+
+/* Bouton lecture rond — remplace le chevron dans « Mes quiz » (quizzes.ts,
+   `opts.onPlay` fourni). `.qbd-root` préfixe pour passer devant le chrome
+   natif `button:not(.clickable-icon){background:var(--interactive-normal)}`
+   d'Obsidian (spécificité 0,1,1 > 0,1,0 d'une classe seule) — sinon un
+   rectangle gris remplace le cercle transparent voulu. Toujours visible
+   (pas de reveal au survol de la carte comme l'ancien chevron) : c'est
+   désormais une action réelle, y compris au toucher (mobile), où il n'y a
+   pas de hover pour la révéler. */
+.qbd-root .qbd-quiz-card-play {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	flex-shrink: 0;
+	width: 26px;
+	height: 26px;
+	padding: 0;
+	border: none;
+	border-radius: 999px;
+	background: transparent;
+	color: var(--text-muted);
+	cursor: pointer;
+	transition: background 0.14s ease, color 0.14s ease, transform 0.08s ease;
+}
+
+.qbd-quiz-card-play svg {
+	width: 14px;
+	height: 14px;
+}
+
+.qbd-root .qbd-quiz-card-play:hover {
+	background: color-mix(in srgb, var(--interactive-accent) 16%, transparent);
+	color: var(--interactive-accent);
+}
+
+.qbd-quiz-card-play:active {
+	transform: scale(0.92);
 }
 
 /* ── Empty states ── */

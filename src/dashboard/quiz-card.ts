@@ -24,9 +24,15 @@ export function quizTypeLabel(tag: QuizTypeTag): string {
 /* ══════════════════════════════════════════════════════════
    QUIZ CARD — composant carte partagé (home + quizzes)
    État lisible (pastille couleur + icône), accent coloré par état,
-   progression affichée seulement en cours, chevron d'ouverture au survol.
-   `onOpen(quiz)` est appelé au clic (navigation laissée à l'appelant).
-══════════════════════════════════════════════════════════ */
+   progression affichée seulement en cours.
+   `onOpen(quiz)` est appelé au clic sur la carte (navigation laissée
+   à l'appelant). En haut à droite : chevron `chevron-right` ornemental
+   par défaut (comportement historique) ; SI `opts.onPlay` est fourni,
+   un bouton lecture rond le remplace et lance le quiz directement au
+   clic (stoppe la propagation — ne doit PAS aussi déclencher `onOpen`).
+   Opt-in par appelant (périmètre Ahmed 2026-07-17 : seul « Mes quiz »
+   passe `onPlay` ; l'accueil garde le chevron pour l'instant) — même
+   patron que `showPath` juste en dessous. */
 
 export function renderQuizCard(
 	container: HTMLElement,
@@ -36,8 +42,11 @@ export function renderQuizCard(
 	/* showPath: false quand l'appelant affiche DÉJÀ le dossier au-dessus des
 	   cartes (arbre de « Mes quiz ») — la ligne serait une redondance pure.
 	   L'accueil, lui, rend une grille plate : le chemin y est la seule
-	   indication d'où sort un quiz, d'où le défaut à true. */
-	opts?: { showPath?: boolean }
+	   indication d'où sort un quiz, d'où le défaut à true.
+	   onPlay : callback de lancement direct, construite par l'appelant à
+	   partir de SON `ctx.app` (renderQuizCard n'a pas accès à `app` — même
+	   patron que `onOpen`, pas de nouveau paramètre positionnel). */
+	opts?: { showPath?: boolean; onPlay?: (quiz: QuizIndexEntry) => void }
 ): HTMLDivElement {
 	const card = container.createDiv({ cls: "qbd-quiz-card" });
 	card.dataset.path = quiz.path;
@@ -65,14 +74,37 @@ export function renderQuizCard(
 
 	const body = card.createDiv({ cls: "qbd-quiz-card-body" });
 
-	// En-tête : pastille d'état + chevron d'ouverture (au survol)
+	// En-tête : pastille d'état + chevron (ou bouton lecture, cf. plus bas)
 	const head = body.createDiv({ cls: "qbd-quiz-card-head" });
 	const pill = head.createDiv({ cls: `qbd-quiz-card-status qbd-quiz-card-status--${state}` });
 	const sIcon = pill.createSpan({ cls: "qbd-quiz-card-status-icon" });
 	setIcon(sIcon, stateIcon);
 	pill.createSpan({ text: stateLabel });
-	const openEl = head.createSpan({ cls: "qbd-quiz-card-open" });
-	setIcon(openEl, "chevron-right");
+	// opts.onPlay non fourni = comportement HISTORIQUE strictement inchangé :
+	// chevron ornemental révélé au survol (même patron que `showPath` — un
+	// appelant opte, l'autre ne bouge pas). Périmètre actuel (Ahmed,
+	// 2026-07-17) : seul « Mes quiz » (quizzes.ts) passe `onPlay` ; l'accueil
+	// (home.ts) garde le chevron, le bouton lecture viendra plus tard.
+	if (opts?.onPlay) {
+		const onPlay = opts.onPlay;
+		// Bouton lecture rond — lance le quiz directement, sans passer par la
+		// fiche. Pas d'aria-label (Obsidian en ferait une infobulle native
+		// flottante, cf. ai.ts) : un `title` traduit suffit, le bouton n'a pas
+		// de texte visible pour porter un nom accessible implicite.
+		const playBtn = head.createEl("button", { cls: "qbd-quiz-card-play" });
+		playBtn.type = "button";
+		playBtn.title = t("dashboard.detail.play");
+		setIcon(playBtn, "play");
+		playBtn.addEventListener("click", (e) => {
+			// Empêche le clic de remonter à la carte : sinon on lancerait le
+			// quiz ET on ouvrirait la fiche (deux actions pour un seul clic).
+			e.stopPropagation();
+			onPlay(quiz);
+		});
+	} else {
+		const openEl = head.createSpan({ cls: "qbd-quiz-card-open" });
+		setIcon(openEl, "chevron-right");
+	}
 
 	// Titre
 	body.createEl("p", { cls: "qbd-quiz-card-title", text: quiz.title });

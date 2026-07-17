@@ -7,6 +7,7 @@ import type { DashboardCtx } from "../types/dashboard-ctx";
 import type { QuizIndexEntry } from "./scanner";
 import type { QuizStatRecord } from "./stats-store";
 import { renderQuizCard, quizTypeLabel } from "./quiz-card";
+import { openQuizForPlay } from "./quiz-open";
 import { buildQuizTree, MASTERY_THRESHOLD } from "./quiz-tree";
 import type { QuizTreeNode } from "./quiz-tree";
 import { buildRecentGroups } from "./quiz-recent";
@@ -312,7 +313,10 @@ export function createQuizzesHandlers(ctx: DashboardCtx): QuizzesHandlers {
 			grid.style.paddingLeft = (Math.min(depth + 1, MAX_INDENT_LEVELS) * INDENT_PX) + "px";
 			for (const quiz of node.quizzes) {
 				// showPath: false — le dossier est écrit juste au-dessus.
-				renderQuizCard(grid, quiz, stats[quiz.path], (q) => ctx.navigate("detail", { quiz: q }), { showPath: false });
+				renderQuizCard(grid, quiz, stats[quiz.path], (q) => ctx.navigate("detail", { quiz: q }), {
+					showPath: false,
+					onPlay: (q) => openQuizForPlay(ctx.app, q)
+				});
 			}
 		}
 	}
@@ -345,7 +349,9 @@ export function createQuizzesHandlers(ctx: DashboardCtx): QuizzesHandlers {
 			// PAS de { showPath: false } ici : ni titre de dossier ni sous-groupe
 			// au-dessus dans ces modes, le chemin redevient la seule indication
 			// d'où sort le quiz (cf. quiz-card.ts, défaut true).
-			renderQuizCard(grid, quiz, stats[quiz.path], (q) => ctx.navigate("detail", { quiz: q }));
+			renderQuizCard(grid, quiz, stats[quiz.path], (q) => ctx.navigate("detail", { quiz: q }), {
+				onPlay: (q) => openQuizForPlay(ctx.app, q)
+			});
 		}
 	}
 

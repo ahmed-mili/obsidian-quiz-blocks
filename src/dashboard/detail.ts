@@ -7,6 +7,7 @@ import type { DashboardCtx } from "../types/dashboard-ctx";
 import type { QuizIndexEntry } from "./scanner";
 import type { QuizStatRecord } from "./stats-store";
 import { quizTypeLabel } from "./quiz-card";
+import { openQuizForPlay } from "./quiz-open";
 
 /* ══════════════════════════════════════════════════════════
    DETAIL VIEW — Dashboard
@@ -66,7 +67,7 @@ export function createDetailHandlers(ctx: DashboardCtx): DetailHandlers {
 		const playIcon = playBtn.createSpan({ cls: "qbd-btn-icon" });
 		setIcon(playIcon, "play");
 		playBtn.createSpan({ text: t("dashboard.detail.play") });
-		playBtn.addEventListener("click", () => openForPlay(quiz));
+		playBtn.addEventListener("click", () => openQuizForPlay(ctx.app, quiz));
 
 		// ── Body (2 colonnes) ──
 		const body = container.createDiv({ cls: "qbd-detail-body" });
@@ -197,16 +198,6 @@ export function createDetailHandlers(ctx: DashboardCtx): DetailHandlers {
 		svg.appendChild(fgCircle);
 
 		return svg;
-	}
-
-	async function openForPlay(quiz: QuizIndexEntry): Promise<void> {
-		const file = ctx.app.vault.getAbstractFileByPath(quiz.path);
-		if (!file || !(file instanceof TFile)) {
-			new Notice(t("dashboard.detail.fileNotFound"));
-			return;
-		}
-		const leaf = ctx.app.workspace.getLeaf(false);
-		await leaf.openFile(file);
 	}
 
 	async function openInEditor(quiz: QuizIndexEntry): Promise<void> {
