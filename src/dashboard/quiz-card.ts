@@ -39,10 +39,11 @@ export function renderQuizCard(
 	quiz: QuizIndexEntry,
 	stats: QuizStatRecord | null | undefined,
 	onOpen?: (quiz: QuizIndexEntry) => void,
-	/* showPath: false quand l'appelant affiche DÉJÀ le dossier au-dessus des
-	   cartes (arbre de « Mes quiz ») — la ligne serait une redondance pure.
-	   L'accueil, lui, rend une grille plate : le chemin y est la seule
-	   indication d'où sort un quiz, d'où le défaut à true.
+	/* showPath (défaut true) : sous-titre dossier parent affiché sur TOUTE
+	   carte, y compris quand l'appelant affiche déjà le dossier au-dessus
+	   (arbre de « Mes quiz ») — répétition assumée, comme StudySmarter
+	   (référence Ahmed, 2026-07-17). Option conservée pour un appelant futur
+	   qui voudrait la masquer, mais aucun ne le fait plus aujourd'hui.
 	   onPlay : callback de lancement direct, construite par l'appelant à
 	   partir de SON `ctx.app` (renderQuizCard n'a pas accès à `app` — même
 	   patron que `onOpen`, pas de nouveau paramètre positionnel). */

@@ -312,9 +312,11 @@ export function createQuizzesHandlers(ctx: DashboardCtx): QuizzesHandlers {
 			const grid = body.createDiv({ cls: "qbd-home-grid" });
 			grid.style.paddingLeft = (Math.min(depth + 1, MAX_INDENT_LEVELS) * INDENT_PX) + "px";
 			for (const quiz of node.quizzes) {
-				// showPath: false — le dossier est écrit juste au-dessus.
+				// showPath toujours affiché (défaut true) même si le dossier est
+				// déjà écrit juste au-dessus : redondance assumée, StudySmarter
+				// affiche systématiquement le sous-titre sur ses cartes (Ahmed,
+				// 2026-07-17).
 				renderQuizCard(grid, quiz, stats[quiz.path], (q) => ctx.navigate("detail", { quiz: q }), {
-					showPath: false,
 					onPlay: (q) => openQuizForPlay(ctx.app, q)
 				});
 			}
