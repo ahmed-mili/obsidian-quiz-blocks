@@ -87,6 +87,20 @@ export function createQuizzesHandlers(ctx: DashboardCtx): QuizzesHandlers {
 
 	async function loadModuleMap(): Promise<void> {
 		moduleMapLoaded = true;
+		// Cède TOUJOURS avant de poursuivre : sans ce yield, quand la note de
+		// correspondance est absente, getFirstLinkpathDest renvoie null et la
+		// branche « map vide » ci-dessous ne traverse alors AUCUN await réel —
+		// la fonction (jusqu'à son `if (containerRef) render(...)` final)
+		// s'exécute donc de façon SYNCHRONE et RÉENTRANTE, depuis l'intérieur
+		// du render() qui vient de l'appeler (juste après `void loadModuleMap()`
+		// ligne ~175), avant que CE render() ait fini de construire header/
+		// recherche/sélecteur/filtres/contenu. Le render() imbriqué peint une
+		// copie complète ; le render() externe reprend ensuite et peint une
+		// SECONDE copie par-dessus, sans container.empty() entre les deux →
+		// header/recherche/sélecteur/groupe/arbre dupliqués dans le DOM. Ce
+		// yield garantit que le render() déclencheur s'est entièrement déroulé
+		// avant toute réentrée, quelle que soit la branche empruntée plus bas.
+		await Promise.resolve();
 		try {
 			const name = ctx.plugin.settings.quizzesModuleMapNote || "Dashboard";
 			const file = ctx.app.metadataCache.getFirstLinkpathDest(name, "");
