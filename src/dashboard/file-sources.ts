@@ -160,10 +160,12 @@ function indexOf(root: string): ExternalIndex | null {
     sous-dossiers pour décider s'il faut invalider : ce serait aussi coûteux
     que le parcours qu'on cherche à éviter. Le compromis retenu marche parce
     que (a) un parcours complet coûte quelques millisecondes sur un dossier
-    réel (mesuré : 15 fichiers, 2 dossiers) et (b) le contrôle de mtime dans
-    `indexOf` garde tout son intérêt PENDANT la frappe : toutes les frappes
-    d'une même session de menu (donc un seul clear) réutilisent l'index déjà
-    calculé. Ne pas retirer ce clear pour « optimiser ». */
+    réel (mesuré, Node, à chaud : Downloads — 18 entrées, 4 dossiers, < 1 ms ;
+    pire cas plausible C:\Users\Ahmed — 12309 entrées, 7383 dossiers, ~158 ms)
+    et (b) le contrôle de mtime dans `indexOf` garde tout son intérêt PENDANT
+    la frappe : toutes les frappes d'une même session de menu (donc un seul
+    clear) réutilisent l'index déjà calculé. Ne pas retirer ce clear pour
+    « optimiser ». */
 export function primeExternalIndex(roots: string[]): void {
 	if (!Platform.isDesktopApp) return;
 	externalCache.clear();
@@ -200,8 +202,18 @@ export function searchAll(app: App, roots: string[], query: string): { entries: 
 			const idx = indexOf(root);
 			if (!idx) continue;
 			if (idx.truncated) truncated.push(baseName(root));
+			// Score sur le chemin relatif au PARENT de la racine, pas sur le
+			// chemin absolu : le vault est scoré sur un chemin relatif
+			// (« Cours/Reseaux/TD3.md »), or prepareFuzzySearch pénalise les
+			// correspondances tardives. Scorer « C:/Users/Ahmed/Downloads/x.pdf »
+			// contre « Cours/TD3.md » handicaperait l'externe de ~25 caractères
+			// de bruit de tête — le tri par score commun ne serait plus une
+			// comparaison équitable. On garde le nom de la racine dans la chaîne
+			// scorée (« Downloads/x.pdf ») pour que taper le nom du dossier
+			// matche encore.
+			const parentLen = root.replace(/[\\/]+$/, "").length - baseName(root).length;
 			for (const entry of idx.entries) {
-				const r = fuzzy(entry.path);
+				const r = fuzzy(entry.path.slice(parentLen));
 				if (r) scored.push({ entry, score: r.score });
 			}
 		}
