@@ -333,6 +333,22 @@
 	font-weight: 600;
 	box-shadow: none !important;
 	cursor: pointer;
+	transform-origin: center;
+	transition: background 0.15s ease, transform 0.15s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* Survol StudySmarter (captures Ahmed 2026-07-18) : la pilule blanche vire
+   au gris clair (#FFFFFF → #ECECED, ~7 % vers le gris) — theme-aware en
+   mêlant le fond inversé à la surface de page. */
+.qbd-btn--create:hover {
+	background: color-mix(in srgb, var(--text-normal) 92%, var(--background-secondary)) !important;
+}
+
+/* Clic StudySmarter : le bouton RÉTRÉCIT pendant l'appui puis reprend sa
+   taille au relâché (le retour passe par la transition transform du repos). */
+.qbd-btn--create:active {
+	transform: scale(0.95);
+	transition-duration: 0.15s, 90ms;
 }
 .qbd-btn--create .qbd-btn-icon svg {
 	width: 15px;

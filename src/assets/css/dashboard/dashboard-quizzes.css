@@ -72,6 +72,26 @@
 	margin-bottom: 10px;
 }
 
+/* Géométrie du chip « Recent » MESURÉE sur le crop StudySmarter fourni
+   (2026-07-18) : pilule 40px de haut, radius 8 (déjà --radius-m), texte
+   15px/600, 15px avant le texte, ~20px visuels après le chevron, ~14px
+   visuels entre texte et chevron (le SVG 16px porte ~3px de marge interne,
+   déduits du padding/gap CSS). Seule la géométrie/typo diverge du
+   vocabulaire .qbd-select ; les couleurs restent celles du composant.
+   `.qbd-root` préfixe pour battre le padding de base de .qbd-select. */
+.qbd-root .qbd-quizzes-group-select {
+	min-height: 40px;
+	padding: 0 17px 0 15px;
+	gap: 11px;
+	font-size: 15px;
+	font-weight: 600;
+}
+
+.qbd-quizzes-group-select .qbd-select-chevron svg {
+	width: 16px;
+	height: 16px;
+}
+
 /* ── Filters ── */
 .qbd-quizzes-filters {
 	display: flex;
