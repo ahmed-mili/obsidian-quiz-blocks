@@ -50,12 +50,10 @@ export const EN_DASHBOARD = {
 
 	/* ── Mes quiz ── */
 	"dashboard.quizzes.title": "My quizzes",
-	"dashboard.quizzes.new": "New",
-	"dashboard.quizzes.search": "Search…",
-	"dashboard.quizzes.filterAll": "All",
-	"dashboard.quizzes.filterProgress": "In progress",
-	"dashboard.quizzes.filterMastered": "Mastered",
-	"dashboard.quizzes.filterFresh": "Not started",
+	"dashboard.quizzes.new": "New folder",
+	"dashboard.quizzes.newFolderTitle": "New folder",
+	"dashboard.quizzes.newFolderCta": "Create",
+	"dashboard.quizzes.newFolderError": "Could not create the folder",
 	"dashboard.quizzes.empty": "No quiz found",
 	"dashboard.quizzes.noFolder": "No folder",
 	"dashboard.quizzes.folderMasteredOne": "{count} mastered",

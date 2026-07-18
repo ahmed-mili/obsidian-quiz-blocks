@@ -1,6 +1,7 @@
 import type { QuizIndexEntry } from "./scanner";
 import type { QuizStatRecord } from "./stats-store";
 import { MASTERY_THRESHOLD } from "./quiz-mastery";
+import type { ModuleGroup } from "./quiz-modules";
 
 /* ══════════════════════════════════════════════════════════
    QUIZ RECENT — regroupement des quiz par DERNIÈRE ACTIVITÉ
@@ -78,4 +79,35 @@ export function buildRecentGroups(
 		});
 	}
 	return groups;
+}
+
+/** Sections d'activité pour l'axe « Récent » — cartes de MODULE, jamais de
+    quiz (règle Ahmed 2026-07-18 : « on ne doit voir que les dossiers »). */
+export interface RecentModuleGroup {
+	key: RecentGroupKey;
+	/** Modules du groupe, triés par activité DÉCROISSANTE. */
+	modules: ModuleGroup[];
+}
+
+/** Récence d'un module = la plus récente activité de SES quiz (un module
+    vide date de 0 → « plus d'un mois »). Un groupe vide est omis. */
+export function buildRecentModuleGroups(
+	modules: ModuleGroup[],
+	stats: Record<string, QuizStatRecord>
+): RecentModuleGroup[] {
+	const now = Date.now();
+	const activity = (m: ModuleGroup) => m.quizzes.reduce((mx, q) => Math.max(mx, lastActivity(q, stats)), 0);
+	const buckets: Record<RecentGroupKey, ModuleGroup[]> = {
+		"recent:7d": [], "recent:30d": [], "recent:older": []
+	};
+	for (const m of modules) {
+		const age = now - activity(m);
+		if (age <= 7 * DAY_MS) buckets["recent:7d"].push(m);
+		else if (age <= 30 * DAY_MS) buckets["recent:30d"].push(m);
+		else buckets["recent:older"].push(m);
+	}
+	const order: RecentGroupKey[] = ["recent:7d", "recent:30d", "recent:older"];
+	return order
+		.filter(key => buckets[key].length > 0)
+		.map(key => ({ key, modules: buckets[key].sort((a, b) => activity(b) - activity(a)) }));
 }

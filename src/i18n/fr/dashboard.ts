@@ -46,12 +46,10 @@ export const FR_DASHBOARD: Record<keyof typeof EN_DASHBOARD, string> = {
 
 	/* ── Mes quiz ── */
 	"dashboard.quizzes.title": "Mes quiz",
-	"dashboard.quizzes.new": "Nouveau",
-	"dashboard.quizzes.search": "Rechercher…",
-	"dashboard.quizzes.filterAll": "Tous",
-	"dashboard.quizzes.filterProgress": "En cours",
-	"dashboard.quizzes.filterMastered": "Maîtrisés",
-	"dashboard.quizzes.filterFresh": "Non commencés",
+	"dashboard.quizzes.new": "Nouveau dossier",
+	"dashboard.quizzes.newFolderTitle": "Nouveau dossier",
+	"dashboard.quizzes.newFolderCta": "Créer",
+	"dashboard.quizzes.newFolderError": "Impossible de créer le dossier",
 	"dashboard.quizzes.empty": "Aucun quiz trouvé",
 	"dashboard.quizzes.noFolder": "Sans dossier",
 	"dashboard.quizzes.folderMasteredOne": "{count} maîtrisé",

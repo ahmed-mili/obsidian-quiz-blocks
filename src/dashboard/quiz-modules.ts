@@ -137,9 +137,16 @@ export interface ModuleGroup {
 export function buildModuleGroups(
 	quizzes: QuizIndexEntry[],
 	stats: Record<string, QuizStatRecord>,
-	map: ModuleMap
+	map: ModuleMap,
+	/** Dossiers à afficher MÊME sans quiz (créés/édités via les modals —
+	    sans ça, un « Nouveau dossier » vide n'apparaîtrait jamais). */
+	alwaysInclude: string[] = []
 ): ModuleGroup[] {
 	const acc = new Map<string, ModuleGroup>();
+	for (const folder of alwaysInclude) {
+		const info = map.byFolder.get(folder) ?? { folder, name: folder, ue: null };
+		acc.set(folder, { folder, name: info.name, ue: info.ue, color: info.color, quizzes: [], total: 0, mastered: 0 });
+	}
 	for (const q of quizzes) {
 		const m = moduleForQuiz(q.path, map);
 		let g = acc.get(m.folder);

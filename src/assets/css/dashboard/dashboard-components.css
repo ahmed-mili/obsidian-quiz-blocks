@@ -316,6 +316,29 @@
 	height: 18px;
 }
 
+/* Bouton pilule « Nouveau dossier » — copie du « Create Study Set » de
+   StudySmarter : pilule inversée theme-aware (blanc sur sombre), icône +.
+   !important contre le chrome .theme-dark button (0,1,1). */
+.qbd-btn--create {
+	display: inline-flex;
+	align-items: center;
+	gap: 7px;
+	height: 36px;
+	padding: 0 16px !important;
+	border: none !important;
+	border-radius: 18px;
+	background: var(--text-normal) !important;
+	color: var(--background-secondary) !important;
+	font-size: 13px;
+	font-weight: 600;
+	box-shadow: none !important;
+	cursor: pointer;
+}
+.qbd-btn--create .qbd-btn-icon svg {
+	width: 15px;
+	height: 15px;
+}
+
 /* ── Modal « Modifier dossier » (référence StudySmarter, sans toggle public).
    Champs façon Notion (obsidian:plugin-design §2) ; !important contre le
    chrome natif des input/button d'Obsidian (0,1,1). ── */

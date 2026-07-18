@@ -10,7 +10,7 @@ import { buildQuizCardMenu, buildModuleCardMenu } from "./quiz-menu";
 import { renderModuleCard } from "./module-card";
 import { moduleForQuiz, buildModuleGroups, buildUeGroups } from "./quiz-modules";
 import type { ModuleMap, ModuleGroup, UeGroup } from "./quiz-modules";
-import { buildRecentGroups } from "./quiz-recent";
+import { buildRecentModuleGroups } from "./quiz-recent";
 import type { RecentGroupKey } from "./quiz-recent";
 
 /* ══════════════════════════════════════════════════════════
@@ -29,8 +29,6 @@ export type GroupingKey = "ue" | "recent";
     re-rendu) — tout ce qui n'est pas pur DOM reste côté quizzes.ts. */
 export interface GridDeps {
 	ctx: DashboardCtx;
-	/** Recherche active : force les groupes ouverts et désactive le repli. */
-	searchActive: boolean;
 	isExpanded: (key: string) => boolean;
 	toggleExpanded: (key: string) => void;
 	rerender: () => void;
@@ -54,13 +52,11 @@ function fillNodeHeadStats(head: HTMLElement, total: number): void {
    `defaultOpen` (les sections StudySmarter sont OUVERTES par défaut —
    capture 2026-07-18) inverse la lecture du réglage : la clé présente dans
    quizzesExpandedFolders signifie alors « repliée par l'utilisateur ».
-   Recherche : forcée ouverte + bascule désactivée (ne reconfigure jamais la
-   page dans le dos de l'utilisateur, n'écrit pas dans le réglage). */
+   (La recherche a été retirée de la vue le 2026-07-18.) */
 function wireCollapseToggle(deps: GridDeps, head: HTMLButtonElement, chev: HTMLElement, key: string, defaultOpen = true): boolean {
-	const collapsed = !deps.searchActive && (defaultOpen ? deps.isExpanded(key) : !deps.isExpanded(key));
+	const collapsed = defaultOpen ? deps.isExpanded(key) : !deps.isExpanded(key);
 	setIcon(chev, collapsed ? "chevron-right" : "chevron-down");
 	head.setAttribute("aria-expanded", String(!collapsed));
-	head.disabled = deps.searchActive;
 	head.addEventListener("click", () => { deps.toggleExpanded(key); deps.rerender(); });
 	return collapsed;
 }
@@ -146,14 +142,28 @@ export function renderQuizGrid(
 		return;
 	}
 
+	// Les deux axes affichent des cartes de MODULE (règle Ahmed 2026-07-18 :
+	// « Recent » ne montre que les dossiers, jamais des quiz). Les dossiers
+	// déclarés par le modal Nouveau dossier / Modifier dossier existent même
+	// sans quiz (alwaysInclude).
+	const alwaysInclude = Object.keys(deps.ctx.plugin.settings.quizzesModuleOverrides || {});
+	const modules = buildModuleGroups(filtered, stats, map, alwaysInclude);
+
 	if (mode === "recent") {
-		for (const g of buildRecentGroups(filtered, stats)) {
-			renderFlatGroup(deps, treeEl, g.key, t(RECENT_GROUP_LABEL_KEYS[g.key]), g.total, g.quizzes, stats);
+		for (const g of buildRecentModuleGroups(modules, stats)) {
+			const nodeEl = treeEl.createDiv({ cls: "qbd-quizzes-node" });
+			const head = nodeEl.createEl("button", { cls: "qbd-quizzes-node-head" });
+			head.type = "button";
+			const chev = head.createSpan({ cls: "qbd-quizzes-node-chevron" });
+			head.createSpan({ cls: "qbd-quizzes-node-label", text: t(RECENT_GROUP_LABEL_KEYS[g.key]) });
+			fillNodeHeadStats(head, g.modules.length);
+			if (wireCollapseToggle(deps, head, chev, g.key)) continue;
+			const body = nodeEl.createDiv({ cls: "qbd-quizzes-node-body" });
+			renderModuleGrid(deps, body, g.modules, map);
 		}
 	} else {
 		// Axe UE (défaut) : en-tête d'UE repliable, cartes de module dessous ;
 		// « Sans UE » (modules non résolus) en dernier (garanti par buildUeGroups).
-		const modules = buildModuleGroups(filtered, stats, map);
 		for (const ue of buildUeGroups(modules, map)) renderUeGroup(deps, treeEl, ue, map);
 	}
 
@@ -165,8 +175,8 @@ export function renderQuizGrid(
 	}
 }
 
-/** Filtre partagé (recherche + pilule active) — grille ET drill-down. */
-export type ApplyFilters = (quizzes: QuizIndexEntry[], stats: Record<string, QuizStatRecord>) => QuizIndexEntry[];
+/** Filtre partagé (exclusion des archivés) — grille ET drill-down. */
+export type ApplyFilters = (quizzes: QuizIndexEntry[]) => QuizIndexEntry[];
 
 /* Drill-down : fil d'Ariane (« Tous les quiz » › nom du module) + les quiz de
    CE module, filtrés (recherche + pilule) comme la grille. moduleForQuiz (pas
@@ -198,7 +208,7 @@ export function renderModuleDrill(
 	const info = map.byFolder.get(openModuleFolder);
 	crumb.createSpan({ cls: "qbd-quizzes-crumb-current", text: info ? info.name : openModuleFolder });
 
-	const inModule = applyFilters(quizzes, stats).filter(q => moduleForQuiz(q.path, map).folder === openModuleFolder);
+	const inModule = applyFilters(quizzes).filter(q => moduleForQuiz(q.path, map).folder === openModuleFolder);
 	if (inModule.length === 0) {
 		treeEl.createDiv({ cls: "qbd-empty-state" }, el => { el.createEl("p", { text: t("dashboard.quizzes.empty") }); });
 		return;
