@@ -65,14 +65,24 @@ export interface ColorPickerHandle {
 }
 
 /*
- * openColorPicker(anchorEl, color, onChange) — popover portalé au body.
+ * openColorPicker(anchorEl, color, onChange, container) — popover portalé.
  * onChange est émis EN CONTINU pendant le drag (aperçu live, comme
  * neo-calendar) ; la fermeture se fait au clic dehors / Escape / Enter.
+ *
+ * `container` (défaut : document.body) — parent du popover. Ouvert DEPUIS UN
+ * MODAL, il DOIT être le modalEl : le focus trap d'Obsidian ramène tout focus
+ * hors de `modalEl` vers le 1er champ du modal, donc un picker portalé au body
+ * voit son input hex défocalisé instantanément (le focus saute au champ « nom »).
+ * Le rester enfant du modalEl garde `modalEl.contains(input)` vrai → pas de vol.
+ * Sûr côté position : le popover est `position: fixed`, et aucun ancêtre du
+ * modal n'a de transform/contain (vérifié), donc il reste calé au viewport et
+ * n'est pas clippé par un overflow.
  */
 export function openColorPicker(
 	anchorEl: HTMLElement,
 	color: string,
-	onChange: (hex: string) => void
+	onChange: (hex: string) => void,
+	container: HTMLElement = document.body
 ): ColorPickerHandle {
 	const anchorRect = anchorEl.getBoundingClientRect();
 
@@ -80,7 +90,7 @@ export function openColorPicker(
 	let { h, s, v } = rgbToHsv(init.r, init.g, init.b);
 	let hexText = color;
 
-	const root = document.body.createDiv({ cls: "qbd-color-picker" });
+	const root = container.createDiv({ cls: "qbd-color-picker" });
 	root.style.width = PICKER_W + "px";
 	// Ne pas laisser bouillonner : un mousedown intérieur fermerait le
 	// menu/modal parent (leurs listeners document sont en bubble).
@@ -107,6 +117,9 @@ export function openColorPicker(
 	const current = rowEl.createSpan({ cls: "qbd-cp-current" });
 	const hexInput = rowEl.createEl("input", { cls: "qbd-cp-hex" });
 	hexInput.spellcheck = false;
+	// Un hex vaut au plus « #RRGGBB » (7 car.) : borne la saisie pour éviter
+	// un champ qui déborde (#ffffffffff… tapé à la main).
+	hexInput.maxLength = 7;
 	hexInput.value = hexText;
 
 	function paint(): void {

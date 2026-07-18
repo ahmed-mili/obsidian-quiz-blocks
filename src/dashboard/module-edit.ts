@@ -128,11 +128,14 @@ export class ModuleEditModal extends Modal {
 			custom.addEventListener("click", () => {
 				// Aperçu live : onChange arrive en continu pendant le drag ;
 				// le repaint recrée les pastilles, le picker (fixed) reste.
+				// Portalé au MODAL (this.modalEl), pas au body : sinon le focus
+				// trap du modal ramène le focus de l'input hex vers le champ
+				// « nom » dès qu'on clique dedans (bug de sélection).
 				openColorPicker(custom, this.color ?? COLORS[0], (hex) => {
 					this.color = hex;
 					paintDots();
 					this.apply();
-				});
+				}, this.modalEl);
 			});
 		};
 		paintDots();

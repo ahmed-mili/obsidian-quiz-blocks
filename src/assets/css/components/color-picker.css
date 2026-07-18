@@ -98,7 +98,19 @@
 	box-shadow: none !important;
 	color: var(--text-normal);
 	font-size: 13px;
-	font-family: var(--font-monospace, monospace);
+	/* Stack monospace système EXPLICITE (identique à neo-calendar) : la
+	   var(--font-monospace) d'Obsidian suit la police d'éditeur de l'user
+	   (ici « Droid Arabic Naskh » en tête, vault arabe) et rend le hex de
+	   travers. Consolas sur Windows, SF Mono/Menlo sur macOS — tous fournis
+	   par l'OS, aucune fonte à charger. */
+	font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas,
+		"Liberation Mono", monospace;
+	letter-spacing: 0.02em;
+	/* Le root porte user-select:none (pour ne pas sélectionner les zones
+	   SV/teinte au drag) ; dans Chromium/Electron il est hérité par l'input
+	   et bloque la sélection du hex → on la réautorise ICI. */
+	user-select: text;
+	-webkit-user-select: text;
 	outline: none;
 }
 .qbd-cp-hex:focus {
