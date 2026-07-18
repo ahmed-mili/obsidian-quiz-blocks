@@ -7,7 +7,7 @@ import type { DashboardCtx } from "../types/dashboard-ctx";
 import type { QuizIndexEntry } from "./scanner";
 import type { QuizStatRecord } from "./stats-store";
 import { MASTERY_THRESHOLD } from "./quiz-mastery";
-import { parseModuleMap } from "./quiz-modules";
+import { parseModuleMap, applyModuleOverrides } from "./quiz-modules";
 import type { ModuleMap } from "./quiz-modules";
 import { openActionMenu } from "./ui-select";
 import { isArchived } from "./quiz-menu";
@@ -58,14 +58,13 @@ export function createQuizzesHandlers(ctx: DashboardCtx): QuizzesHandlers {
 		ctx.plugin.saveSettings().catch(() => {});
 	}
 
-	/* Axe de regroupement : « module » (défaut, noms + UE de Dashboard.md),
-	   « ue » (cartes de module groupées par UE), « recent » (activité) et
-	   « type » empruntent l'IDÉE du sélecteur de StudySmarter, pas son
-	   exécution. Toute valeur inconnue (dont l'ancienne « folder ») migre
-	   vers « module ». */
+	/* Axe de regroupement : DEUX axes seulement (demande Excalidraw
+	   2026-07-18) — « UE » (défaut : en-têtes d'UE, cartes de module dessous)
+	   et « Récent » (activité). Toute valeur historique (« module », « type »,
+	   « folder »…) migre vers « ue ». */
 	function currentGrouping(): GroupingKey {
 		const g = ctx.plugin.settings.quizzesGrouping;
-		return g === "recent" || g === "type" || g === "ue" || g === "module" ? g : "module";
+		return g === "recent" ? g : "ue";
 	}
 
 	function setGrouping(g: GroupingKey): void {
@@ -117,10 +116,12 @@ export function createQuizzesHandlers(ctx: DashboardCtx): QuizzesHandlers {
 		if (containerRef) render(containerRef);
 	}
 
-	/** Map effective au rendu : la vraie si chargée, sinon une map vide (les
-	    quiz retombent sur leur dossier parent, sans UE) — ne plante jamais. */
+	/** Map effective au rendu : la note si chargée (sinon map vide), TOUJOURS
+	    recouverte par les overrides du modal « Modifier dossier » (réglages) —
+	    relus à chaque rendu, ils peuvent changer sous nos pieds. */
 	function effectiveMap(): ModuleMap {
-		return moduleMap ?? { byFolder: new Map(), ueOrder: [] };
+		const base = moduleMap ?? { byFolder: new Map(), ueOrder: [] };
+		return applyModuleOverrides(base, ctx.plugin.settings.quizzesModuleOverrides || {});
 	}
 
 	function openModule(folder: string): void {
@@ -184,14 +185,12 @@ export function createQuizzesHandlers(ctx: DashboardCtx): QuizzesHandlers {
 		{ key: "fresh", labelKey: "dashboard.quizzes.filterFresh" }
 	];
 
-	// Ordre FIXE d'affichage dans le menu du sélecteur (pas alphabétique, pas
-	// par usage) : « module » est le nouveau défaut prévisible (cf. spec).
-	const GROUPING_ORDER: GroupingKey[] = ["module", "ue", "recent", "type"];
+	// Ordre FIXE : « UE » (défaut) puis « Récent » — libellés SANS « By/Par »
+	// (demande Excalidraw 2026-07-18 : « on ne doit voir que UE ou Recent »).
+	const GROUPING_ORDER: GroupingKey[] = ["ue", "recent"];
 	const GROUPING_LABEL_KEYS: Record<GroupingKey, TransKey> = {
-		module: "dashboard.quizzes.groupByModule",
 		ue: "dashboard.quizzes.groupByUE",
-		recent: "dashboard.quizzes.groupByActivity",
-		type: "dashboard.quizzes.groupByType"
+		recent: "dashboard.quizzes.groupByActivity"
 	};
 
 	function render(container: HTMLElement): void {

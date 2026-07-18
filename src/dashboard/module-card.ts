@@ -21,9 +21,11 @@ export function renderModuleCard(
 	menu?: (group: ModuleGroup) => ActionMenuItem[]
 ): HTMLDivElement {
 	const card = container.createDiv({ cls: "qbd-module-card" });
-	// Liseré coloré selon l'avancement (vert si tout maîtrisé, accent sinon).
+	// Liseré : couleur choisie dans « Modifier dossier » si définie, sinon
+	// selon l'avancement (vert si tout maîtrisé, accent sinon).
 	const done = group.total > 0 && group.mastered >= group.total;
-	card.createDiv({ cls: `qbd-quiz-card-accent qbd-module-card-accent--${done ? "done" : "partial"}` });
+	const accent = card.createDiv({ cls: `qbd-quiz-card-accent qbd-module-card-accent--${done ? "done" : "partial"}` });
+	if (group.color) accent.style.background = group.color;
 	const body = card.createDiv({ cls: "qbd-quiz-card-body" });
 
 	// Nom du module en TITRE. Fallback : un quiz sans ancêtre reconnu (ex. à la

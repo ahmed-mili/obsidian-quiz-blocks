@@ -60,14 +60,12 @@ export const FR_DASHBOARD: Record<keyof typeof EN_DASHBOARD, string> = {
 	"dashboard.quizzes.folderMasteredOther": "{count} maîtrisés",
 
 	/* ── Regroupement ── */
-	"dashboard.quizzes.groupByModule": "Par module",
-	"dashboard.quizzes.groupByUE": "Par UE",
+	"dashboard.quizzes.groupByUE": "UE",
 	"dashboard.quizzes.noUe": "Sans UE",
 	"dashboard.quizzes.moduleQuizzesOne": "{count} quiz",
 	"dashboard.quizzes.moduleQuizzesOther": "{count} quiz",
 	"dashboard.quizzes.backToModules": "Tous les quiz",
-	"dashboard.quizzes.groupByActivity": "Par activité",
-	"dashboard.quizzes.groupByType": "Par type",
+	"dashboard.quizzes.groupByActivity": "Récent",
 	"dashboard.quizzes.recentWeek": "7 derniers jours",
 	"dashboard.quizzes.recentMonth": "30 derniers jours",
 	"dashboard.quizzes.recentOlder": "Plus ancien",
@@ -94,6 +92,13 @@ export const FR_DASHBOARD: Record<keyof typeof EN_DASHBOARD, string> = {
 	"dashboard.quizzes.menuDeleteModule": "Supprimer les quiz du module",
 	"dashboard.quizzes.deleteModuleConfirmBody": "Supprimer les {count} quiz de « {name} » et leurs stats ? Cette action est définitive.",
 	"dashboard.quizzes.zipSaved": "ZIP créé : {path}",
+
+	/* ── Modal « Modifier dossier » ── */
+	"dashboard.quizzes.moduleEditTitle": "Modifier dossier",
+	"dashboard.quizzes.moduleEditName": "Nom du dossier",
+	"dashboard.quizzes.moduleEditUe": "UE",
+	"dashboard.quizzes.moduleEditColor": "Couleur",
+	"dashboard.quizzes.moduleEditSave": "Enregistrer",
 
 	/* ── Carte de quiz ── */
 	"dashboard.card.mastered": "Maîtrisé",

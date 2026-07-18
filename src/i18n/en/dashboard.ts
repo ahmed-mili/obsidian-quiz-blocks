@@ -71,14 +71,12 @@ export const EN_DASHBOARD = {
 	   ambiguïté, et les trois restent parallèles et neutres. « Inactive for
 	   over a month » sonnait comme un reproche là où les deux autres étaient
 	   positifs — un groupe décrit un intervalle, il ne juge pas. */
-	"dashboard.quizzes.groupByModule": "By module",
-	"dashboard.quizzes.groupByUE": "By course",
+	"dashboard.quizzes.groupByUE": "UE",
 	"dashboard.quizzes.noUe": "No course unit",
 	"dashboard.quizzes.moduleQuizzesOne": "{count} quiz",
 	"dashboard.quizzes.moduleQuizzesOther": "{count} quizzes",
 	"dashboard.quizzes.backToModules": "All quizzes",
-	"dashboard.quizzes.groupByActivity": "By activity",
-	"dashboard.quizzes.groupByType": "By type",
+	"dashboard.quizzes.groupByActivity": "Recent",
 	"dashboard.quizzes.recentWeek": "Last 7 days",
 	"dashboard.quizzes.recentMonth": "Last 30 days",
 	"dashboard.quizzes.recentOlder": "Older",
@@ -106,6 +104,13 @@ export const EN_DASHBOARD = {
 	"dashboard.quizzes.menuDeleteModule": "Delete module quizzes",
 	"dashboard.quizzes.deleteModuleConfirmBody": "Remove the {count} quizzes of “{name}” and their stats ? This cannot be undone.",
 	"dashboard.quizzes.zipSaved": "ZIP saved: {path}",
+
+	/* ── Modal « Modifier dossier » (calqué StudySmarter, sans le toggle public) ── */
+	"dashboard.quizzes.moduleEditTitle": "Edit folder",
+	"dashboard.quizzes.moduleEditName": "Folder name",
+	"dashboard.quizzes.moduleEditUe": "Course unit",
+	"dashboard.quizzes.moduleEditColor": "Color",
+	"dashboard.quizzes.moduleEditSave": "Save",
 
 	/* ── Carte de quiz (état) ── */
 	"dashboard.card.mastered": "Mastered",

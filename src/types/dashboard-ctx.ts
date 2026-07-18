@@ -34,6 +34,7 @@ import type { Hotkey } from "../hotkey-format";
 import type { OllamaCatalogEntry } from "../dashboard/ai-providers";
 import type { AiClient } from "../dashboard/ai-client";
 import type { AiHandlers } from "../dashboard/ai";
+import type { ModuleOverride } from "../dashboard/quiz-modules";
 
 export type { Scanner, StatsStore, AiClient, AiHandlers };
 
@@ -83,6 +84,8 @@ export interface AiSettings extends VoiceSettings {
 	    Cf. plugin.ts DEFAULT_SETTINGS. */
 	quizzesPaused?: string[];
 	quizzesArchived?: string[];
+	/** Overrides « Modifier dossier » (module-edit.ts). Cf. plugin.ts. */
+	quizzesModuleOverrides?: Record<string, ModuleOverride>;
 }
 
 /**

@@ -316,6 +316,83 @@
 	height: 18px;
 }
 
+/* ── Modal « Modifier dossier » (référence StudySmarter, sans toggle public).
+   Champs façon Notion (obsidian:plugin-design §2) ; !important contre le
+   chrome natif des input/button d'Obsidian (0,1,1). ── */
+.qbd-medit-modal {
+	width: 420px;
+	max-width: calc(100vw - 32px);
+}
+.qbd-medit-label {
+	margin: 14px 0 6px;
+	font-size: 12px;
+	font-weight: 600;
+	color: var(--text-muted);
+}
+.qbd-medit-input,
+.qbd-medit-select {
+	width: 100%;
+	height: 38px;
+	padding: 0 12px;
+	font: inherit;
+	font-size: 14px;
+	color: var(--text-normal);
+	background: var(--background-modifier-form-field) !important;
+	border: 1px solid var(--background-modifier-border) !important;
+	border-radius: 10px;
+	box-shadow: none !important;
+	outline: none;
+	transition: border-color 120ms;
+}
+.qbd-medit-input:focus,
+.qbd-medit-select[aria-expanded="true"] {
+	border-color: var(--interactive-accent) !important;
+}
+.qbd-medit-select {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	cursor: pointer;
+}
+.qbd-medit-colors {
+	display: flex;
+	gap: 14px;
+	padding: 12px;
+	background: var(--background-modifier-form-field);
+	border-radius: 10px;
+}
+.qbd-medit-dot {
+	width: 26px;
+	height: 26px;
+	padding: 0 !important;
+	border: none !important;
+	border-radius: 50%;
+	box-shadow: none !important;
+	color: #fff !important;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	cursor: pointer;
+}
+.qbd-medit-dot svg {
+	width: 14px;
+	height: 14px;
+}
+/* Bouton Enregistrer pleine largeur, carte inversée theme-aware (le blanc
+   sur sombre de StudySmarter, sans hex en dur). */
+.qbd-medit-save {
+	width: 100%;
+	margin-top: 20px;
+	height: 40px;
+	border: none !important;
+	border-radius: 20px;
+	background: var(--text-normal) !important;
+	color: var(--background-secondary) !important;
+	font-weight: 600;
+	box-shadow: none !important;
+	cursor: pointer;
+}
+
 .qbd-quiz-card-meta-item {
 	font-size: 10px;
 	color: var(--text-faint);

@@ -5,7 +5,8 @@ import type { ZipEntry } from "./zip";
 import { t } from "../i18n";
 import type { DashboardCtx } from "../types/dashboard-ctx";
 import type { QuizIndexEntry } from "./scanner";
-import type { ModuleGroup } from "./quiz-modules";
+import type { ModuleGroup, ModuleMap } from "./quiz-modules";
+import { ModuleEditModal } from "./module-edit";
 import type { ActionMenuItem } from "./ui-select";
 import { openQuizInEditor } from "./quiz-open";
 
@@ -179,17 +180,6 @@ async function deleteModuleQuizzes(ctx: DashboardCtx, group: ModuleGroup): Promi
 	new Notice(t("dashboard.quizzes.deleted"));
 }
 
-/** Edit d'un module = ouvrir la note de correspondance (noms + UE s'y éditent). */
-async function openModuleMapNote(ctx: DashboardCtx): Promise<void> {
-	const name = ctx.plugin.settings.quizzesModuleMapNote || "Dashboard";
-	const file = ctx.app.metadataCache.getFirstLinkpathDest(name, "");
-	if (!file) {
-		new Notice(t("dashboard.detail.fileNotFound"));
-		return;
-	}
-	await ctx.app.workspace.getLeaf(false).openFile(file);
-}
-
 /* ── Menus ── */
 
 /** Menu ⋯ d'une carte de quiz — l'ordre et la rangée rouge suivent la
@@ -249,7 +239,7 @@ export function buildQuizCardMenu(ctx: DashboardCtx, rerender: () => void): (qui
     Share = zip des notes du module (envoyable sur Discord), Edit = la note
     de correspondance, Pause/Archive sur tous les quiz, Delete = tous les
     quiz du module (confirmation avec le compte). */
-export function buildModuleCardMenu(ctx: DashboardCtx, rerender: () => void): (g: ModuleGroup) => ActionMenuItem[] {
+export function buildModuleCardMenu(ctx: DashboardCtx, rerender: () => void, map: ModuleMap): (g: ModuleGroup) => ActionMenuItem[] {
 	return (g) => {
 		const allPaused = g.quizzes.every(q => isPaused(ctx, q.path));
 		const allArchived = g.quizzes.every(q => isArchived(ctx, q.path));
@@ -262,7 +252,10 @@ export function buildModuleCardMenu(ctx: DashboardCtx, rerender: () => void): (g
 			{
 				icon: "pencil",
 				label: t("dashboard.detail.edit"),
-				onClick: () => { void openModuleMapNote(ctx); },
+				// Modal « Modifier dossier » calqué sur StudySmarter (nom / UE /
+				// couleur, sans le toggle public) — remplace l'ancienne ouverture
+				// de la note de correspondance, jugée non fonctionnelle.
+				onClick: () => { new ModuleEditModal(ctx, g, map, rerender).open(); },
 			},
 			{
 				icon: allPaused ? "circle-play" : "circle-pause",

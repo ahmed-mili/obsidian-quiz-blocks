@@ -4,7 +4,7 @@ import type { TransKey } from "../i18n";
 import type { DashboardCtx } from "../types/dashboard-ctx";
 import type { QuizIndexEntry } from "./scanner";
 import type { QuizStatRecord } from "./stats-store";
-import { renderQuizCard, quizTypeLabel } from "./quiz-card";
+import { renderQuizCard } from "./quiz-card";
 import { openQuizForPlay } from "./quiz-open";
 import { buildQuizCardMenu, buildModuleCardMenu } from "./quiz-menu";
 import { renderModuleCard } from "./module-card";
@@ -13,7 +13,6 @@ import type { ModuleMap, ModuleGroup, UeGroup } from "./quiz-modules";
 import { MASTERY_THRESHOLD } from "./quiz-mastery";
 import { buildRecentGroups } from "./quiz-recent";
 import type { RecentGroupKey } from "./quiz-recent";
-import { buildTypeGroups } from "./quiz-type";
 
 /* ══════════════════════════════════════════════════════════
    QUIZZES RENDER — extrait de quizzes.ts (Task 4) pour rester
@@ -23,7 +22,9 @@ import { buildTypeGroups } from "./quiz-type";
    recherche/filtres/sélecteur, dispatch vers ce module.
 ══════════════════════════════════════════════════════════ */
 
-export type GroupingKey = "module" | "ue" | "recent" | "type";
+/* Deux axes seulement depuis la demande Excalidraw 2026-07-18 (« on ne doit
+   voir que UE ou Recent ») ; « module » et « type » ont été retirés. */
+export type GroupingKey = "ue" | "recent";
 
 /** Dépendances d'ÉTAT fournies par le contrôleur (réglages, recherche,
     re-rendu) — tout ce qui n'est pas pur DOM reste côté quizzes.ts. */
@@ -114,14 +115,14 @@ function renderFlatGroup(
     La carte affiche toujours son sous-titre UE (demande d'Ahmed : l'UE sur la
     carte façon StudySmarter, même sous un en-tête d'UE — comme StudySmarter
     garde le sous-titre d'une carte dans une section groupée). */
-function renderModuleGrid(deps: GridDeps, parent: HTMLElement, groups: ModuleGroup[]): void {
+function renderModuleGrid(deps: GridDeps, parent: HTMLElement, groups: ModuleGroup[], map: ModuleMap): void {
 	const grid = parent.createDiv({ cls: "qbd-module-grid" });
-	const menu = buildModuleCardMenu(deps.ctx, deps.rerender);
+	const menu = buildModuleCardMenu(deps.ctx, deps.rerender, map);
 	for (const g of groups) renderModuleCard(grid, g, (m) => deps.openModule(m.folder), menu);
 }
 
 /* En-tête d'UE repliable + grille de cartes de module dessous. */
-function renderUeGroup(deps: GridDeps, parent: HTMLElement, ue: UeGroup): void {
+function renderUeGroup(deps: GridDeps, parent: HTMLElement, ue: UeGroup, map: ModuleMap): void {
 	const nodeEl = parent.createDiv({ cls: "qbd-quizzes-node" });
 	const head = nodeEl.createEl("button", { cls: "qbd-quizzes-node-head" });
 	head.type = "button";
@@ -131,7 +132,7 @@ function renderUeGroup(deps: GridDeps, parent: HTMLElement, ue: UeGroup): void {
 	const collapsed = wireCollapseToggle(deps, head, chev, ue.key);
 	if (collapsed) return;
 	const body = nodeEl.createDiv({ cls: "qbd-quizzes-node-body" });
-	renderModuleGrid(deps, body, ue.modules);
+	renderModuleGrid(deps, body, ue.modules, map);
 }
 
 /** Contenu de la grille pour les 4 axes (pas le drill-down) : dispatch par
@@ -158,22 +159,11 @@ export function renderQuizGrid(
 		for (const g of buildRecentGroups(filtered, stats)) {
 			renderFlatGroup(deps, treeEl, g.key, t(RECENT_GROUP_LABEL_KEYS[g.key]), g.total, g.mastered, g.quizzes, stats);
 		}
-	} else if (mode === "type") {
-		// Clé préfixée « type: » — Obsidian interdit « : » dans un chemin, donc
-		// aucune collision possible avec une vraie clé de dossier.
-		for (const g of buildTypeGroups(filtered, stats)) {
-			renderFlatGroup(deps, treeEl, `type:${g.type}`, quizTypeLabel(g.type), g.total, g.mastered, g.quizzes, stats);
-		}
-	} else if (mode === "ue") {
-		// Axe UE : en-tête d'UE repliable, cartes de module dessous ; « Sans
-		// UE » (modules non résolus par la note de correspondance) en dernier
-		// (garanti par buildUeGroups).
-		const modules = buildModuleGroups(filtered, stats, map);
-		for (const ue of buildUeGroups(modules, map)) renderUeGroup(deps, treeEl, ue);
 	} else {
-		// Mode « module » (défaut) : grille plate de cartes de module — noms
-		// et UE résolus depuis la note de correspondance (map).
-		renderModuleGrid(deps, treeEl, buildModuleGroups(filtered, stats, map));
+		// Axe UE (défaut) : en-tête d'UE repliable, cartes de module dessous ;
+		// « Sans UE » (modules non résolus) en dernier (garanti par buildUeGroups).
+		const modules = buildModuleGroups(filtered, stats, map);
+		for (const ue of buildUeGroups(modules, map)) renderUeGroup(deps, treeEl, ue, map);
 	}
 
 	// ── Section « Archivés » en pied de grille (tous les axes) — repliée par

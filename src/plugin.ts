@@ -23,6 +23,7 @@ import { createScanner } from "./dashboard/scanner";
 import type { Scanner } from "./dashboard/scanner";
 import { createStatsStore } from "./dashboard/stats-store";
 import type { StatsStore, QuizStatRecord } from "./dashboard/stats-store";
+import type { ModuleOverride } from "./dashboard/quiz-modules";
 import * as voiceInstall from "./dashboard/voice-install";
 import type { VoiceBackend, VoiceModelId, VoiceLang } from "./dashboard/voice-install";
 import * as aiProviders from "./dashboard/ai-providers";
@@ -80,6 +81,9 @@ interface QuizBlocksSettings {
 	/** Chemins de notes dont le quiz est « archivé » (menu ⋯) : masqué partout,
 	    ne revient que sous la pilule « Archivés » de « Mes quiz ». */
 	quizzesArchived: string[];
+	/** Overrides du modal « Modifier dossier » (nom / UE / couleur par module),
+	    appliqués PAR-DESSUS la note de correspondance. Cf. quiz-modules.ts. */
+	quizzesModuleOverrides: Record<string, ModuleOverride>;
 	voiceEnabled: boolean;
 	voiceBackend: VoiceBackend;
 	voiceModel: VoiceModelId;
@@ -131,6 +135,7 @@ const DEFAULT_SETTINGS: QuizBlocksSettings = {
 	quizzesModuleMapNote: "Dashboard",
 	quizzesPaused: [],
 	quizzesArchived: [],
+	quizzesModuleOverrides: {},
 	// ── Saisie vocale (dictée locale whisper.cpp) — opt-in complet.
 	// Spec : docs/superpowers/specs/2026-07-10-voice-input-design.md
 	voiceEnabled: false,
