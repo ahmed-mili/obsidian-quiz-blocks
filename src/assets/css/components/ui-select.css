@@ -102,11 +102,14 @@
 	min-width: max-content;
 	max-width: min(340px, calc(100vw - 16px));
 	overflow-y: auto;
-	/* Un cran PLUS CLAIR que les cartes (pipette SS 2026-07-18 : menu
-	   #1F242F sur carte #161B26, delta +9) : le menu ressort au-dessus. */
-	background: color-mix(in srgb, color-mix(in srgb, var(--background-primary) 95%, white) 96%, transparent);
-	backdrop-filter: blur(14px);
-	-webkit-backdrop-filter: blur(14px);
+	/* Surface glass canonique (obsidian:plugin-design §3) : fond natif
+	   translucide + backdrop brightness — l'éclaircissement vient de ce qui
+	   TRAVERSE, donc theme-aware clair/sombre par construction (remplace
+	   l'ancien +5 % de blanc, correct seulement en sombre). Conserve le
+	   « menu plus clair que la carte » de la cible SS (#1F242F vs #161B26). */
+	background: color-mix(in srgb, var(--background-primary) 92%, transparent);
+	backdrop-filter: blur(12px) brightness(1.18);
+	-webkit-backdrop-filter: blur(12px) brightness(1.18);
 	/* Bordure ADOUCIE : sur la cible SS le menu n'a quasi pas de liseré,
 	   c'est la surface plus claire qui le détache (comparaison Excalidraw). */
 	border: 1px solid color-mix(in srgb, var(--background-modifier-border) 55%, transparent);

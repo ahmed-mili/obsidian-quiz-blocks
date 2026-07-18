@@ -1259,12 +1259,15 @@
 	flex-direction: column;
 	gap: 1px;
 	padding: 4px;
-	background: color-mix(in srgb, var(--background-primary) 96%, transparent);
-	backdrop-filter: blur(12px);
-	-webkit-backdrop-filter: blur(12px);
-	border: 1px solid var(--background-modifier-border);
-	border-radius: 9px;
-	box-shadow: 0 14px 28px -6px rgba(0, 0, 0, 0.4);
+	/* MÊME surface glass que .qbd-select-menu (un seul style de menu
+	   flottant — obsidian:plugin-design §3) : fond natif translucide,
+	   backdrop brightness theme-aware, bordure adoucie, ombre 2 couches. */
+	background: color-mix(in srgb, var(--background-primary) 92%, transparent);
+	backdrop-filter: blur(12px) brightness(1.18);
+	-webkit-backdrop-filter: blur(12px) brightness(1.18);
+	border: 1px solid color-mix(in srgb, var(--background-modifier-border) 55%, transparent);
+	border-radius: 10px;
+	box-shadow: 0 14px 28px -6px rgba(0, 0, 0, 0.4), 0 2px 6px -1px rgba(0, 0, 0, 0.22);
 }
 
 .qbd-opts-dd-menu.is-hidden {
