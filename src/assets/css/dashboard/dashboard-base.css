@@ -22,8 +22,13 @@
 	   Le fond de PAGE (thème/wallpaper) reste au-dessus du panneau en
 	   luminance perçue. Dérivé des natives → theme-aware ; le panneau est
 	   translucide à 6 % pour laisser respirer le wallpaper. */
-	--qbd-panel-bg: color-mix(in srgb, color-mix(in srgb, var(--background-primary) 42%, black) 94%, transparent);
-	--qbd-card-bg: color-mix(in srgb, var(--background-primary) 74%, black);
+	/* Luminance remontée d'un cran vs les hex StudySmarter (retour Ahmed
+	   « c'est trop sombre » 2026-07-18) : leur fond de page bleu roi
+	   ILLUMINE la scène, le wallpaper sombre d'Ahmed non — on garde la
+	   HIÉRARCHIE (panneau < cartes), pas leurs valeurs absolues. Cartes =
+	   background-primary (la teinte d'avant-refonte, validée). */
+	--qbd-panel-bg: color-mix(in srgb, color-mix(in srgb, var(--background-primary) 62%, black) 94%, transparent);
+	--qbd-card-bg: var(--background-primary);
 	--qbd-card-bg-hover: color-mix(in srgb, var(--qbd-card-bg) 95%, white);
 	--qbd-inset-bg: color-mix(in srgb, var(--qbd-card-bg) 92%, white);
 	--qbd-line: color-mix(in srgb, var(--text-normal) 8%, transparent);
