@@ -53,6 +53,11 @@
 	overflow-x: hidden;
 	padding: 28px 32px;
 	animation: qbd-fade-in 0.2s ease-out;
+	/* Fond de ZONE CENTRALE façon StudySmarter (demande 2026-07-18) : leur
+	   colonne de contenu porte un fond opaque (rgb(12,17,29)) distinct du
+	   fond de page, le rail restant dessus. Version theme-aware et
+	   SEMI-opaque : le wallpaper du thème reste perceptible derrière. */
+	background: color-mix(in srgb, var(--background-primary) 78%, transparent);
 }
 
 /* Plein écran : colonne de contenu CENTRÉE dans l'espace restant après le
