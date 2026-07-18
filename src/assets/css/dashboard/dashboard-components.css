@@ -359,7 +359,12 @@
    Champs façon Notion (obsidian:plugin-design §2) ; !important contre le
    chrome natif des input/button d'Obsidian (0,1,1). ── */
 .qbd-medit-modal {
-	width: 420px;
+	/* Largeur calée pour que les 9 pastilles (8 + roue custom) tombent à un
+	   pas PARFAITEMENT uniforme (bord conteneur = inter-pastille = 18px) :
+	   9×29 + 8×18 + 2×18(padding) + 2(bordure) = 443 utile, +32 (padding du
+	   .modal, .modal-content à 0) = 475. Cf. space-between + padding: 18px sur
+	   .qbd-medit-colors ci-dessous. */
+	width: 475px;
 	max-width: calc(100vw - 32px);
 }
 .qbd-medit-label {
@@ -394,15 +399,22 @@
 	cursor: pointer;
 }
 .qbd-medit-colors {
+	/* space-between + padding horizontal = 18px → pas uniforme de 18px entre
+	   chaque pastille ET aux deux bords (largeur du modal calée pour ça).
+	   Bordure subtile + fond form-field : le conteneur encadré de la
+	   référence StudySmarter (capture Ahmed 2026-07-18). */
 	display: flex;
-	gap: 14px;
-	padding: 12px;
+	justify-content: space-between;
+	align-items: center;
+	padding: 14px 18px;
 	background: var(--background-modifier-form-field);
-	border-radius: 10px;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 12px;
 }
 .qbd-medit-dot {
-	width: 26px;
-	height: 26px;
+	flex: 0 0 auto;
+	width: 29px;
+	height: 29px;
 	padding: 0 !important;
 	border: none !important;
 	border-radius: 50%;
@@ -414,8 +426,18 @@
 	cursor: pointer;
 }
 .qbd-medit-dot svg {
-	width: 14px;
-	height: 14px;
+	width: 16px;
+	height: 16px;
+}
+/* Mobile : le modal se clampe (max-width) ; on rétrécit pastilles + padding
+   pour que les 9 tiennent sans déborder sur ~360 px (règle « jamais
+   desktop-only » — dégradation gracieuse, pas de blocage). */
+.is-mobile .qbd-medit-colors {
+	padding: 12px 10px;
+}
+.is-mobile .qbd-medit-dot {
+	width: 26px;
+	height: 26px;
 }
 /* Pastille « couleur personnalisée » : roue chromatique au repos. Quand une
    couleur custom est active, module-edit pose un background INLINE (la
