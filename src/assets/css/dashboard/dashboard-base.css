@@ -47,6 +47,18 @@
 	animation: qbd-fade-in 0.2s ease-out;
 }
 
+/* Plein écran : colonne de contenu CENTRÉE dans l'espace restant après le
+   rail, largeur max 1182 px — mesuré sur StudySmarter à 1920 px (colonne
+   x=411, marges ~310/330 équilibrées ; correction Excalidraw 2026-07-18
+   « on passe au rendu plein écran, regarde comment ils ont fait »). Chaque
+   enfant direct est la rangée d'une vue (header, sélecteur, arbre…). */
+.qbd-content > * {
+	width: 100%;
+	max-width: 1182px;
+	margin-left: auto;
+	margin-right: auto;
+}
+
 @keyframes qbd-fade-in {
 	from { opacity: 0; transform: translateY(8px); }
 	to   { opacity: 1; transform: translateY(0); }
