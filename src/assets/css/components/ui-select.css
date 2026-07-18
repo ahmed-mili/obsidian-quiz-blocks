@@ -83,9 +83,8 @@
 	transition: transform 0.16s ease;
 }
 
-.qbd-select[aria-expanded="true"] .qbd-select-chevron {
-	transform: rotate(180deg);
-}
+/* Pas de rotation du chevron à l'ouverture : la cible StudySmarter
+   (Excalidraw 2026-07-18, état « après clic ») le garde vers le BAS. */
 
 .qbd-select-chevron svg {
 	width: 14px;
@@ -108,7 +107,9 @@
 	background: color-mix(in srgb, color-mix(in srgb, var(--background-primary) 95%, white) 96%, transparent);
 	backdrop-filter: blur(14px);
 	-webkit-backdrop-filter: blur(14px);
-	border: 1px solid var(--background-modifier-border);
+	/* Bordure ADOUCIE : sur la cible SS le menu n'a quasi pas de liseré,
+	   c'est la surface plus claire qui le détache (comparaison Excalidraw). */
+	border: 1px solid color-mix(in srgb, var(--background-modifier-border) 55%, transparent);
 	border-radius: 10px;
 	box-shadow: 0 14px 28px -6px rgba(0, 0, 0, 0.4), 0 2px 6px -1px rgba(0, 0, 0, 0.22);
 	scrollbar-width: thin;
@@ -126,8 +127,9 @@
 	to   { opacity: 1; transform: translateY(0); }
 }
 
-/* Espacement compact façon StudySmarter (annotation Ahmed 2026-07-18,
-   mesuré : ~27px par option simple, menu serré) — les options riches
+/* Espacement façon StudySmarter (comparaison Excalidraw 2026-07-18,
+   échelle recalée sur la hauteur du chip : ~38px par option, soit presque
+   la hauteur du trigger — pas un menu serré) — les options riches
    (renderOption) gardent leur hauteur via height:auto. */
 .qbd-select-option {
 	display: flex;
@@ -136,8 +138,8 @@
 	gap: 8px;
 	width: 100%;
 	height: auto;          /* le chrome natif d'Obsidian impose une height fixe sur les <button> — sans ça le contenu est écrasé */
-	min-height: 27px;
-	padding: 5px 10px;
+	min-height: 38px;
+	padding: 8px 12px;
 	line-height: 1.35;
 	background: transparent !important;
 	border: none;
@@ -176,8 +178,10 @@
 }
 
 .qbd-select-check svg {
-	width: 13px;
-	height: 13px;
+	width: 14px;
+	height: 14px;
+	/* Check franc comme la cible StudySmarter (comparaison Excalidraw). */
+	stroke-width: 2.5;
 }
 
 .qbd-select-option-label {
