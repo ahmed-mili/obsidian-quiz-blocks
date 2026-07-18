@@ -52,10 +52,14 @@ export function renderQuizCard(
 	/* menu (opt-in, même patron que onPlay) : items du menu ⋯ façon
 	   StudySmarter, bâtis par l'appelant AU CLIC (les stats peuvent avoir
 	   changé depuis le rendu de la carte). Non fourni = pas de bouton ⋯. */
-	opts?: { showPath?: boolean; onPlay?: (quiz: QuizIndexEntry) => void; menu?: (quiz: QuizIndexEntry) => ActionMenuItem[] }
+	/* accent : couleur du DOSSIER PARENT (handoff « cartes quiz teintées »
+	   2026-07-18) — posée en --accent ; barre supérieure, bouton play et badge
+	   de type s'y teintent en CSS. Absente = repli sur l'accent Obsidian. */
+	opts?: { showPath?: boolean; onPlay?: (quiz: QuizIndexEntry) => void; menu?: (quiz: QuizIndexEntry) => ActionMenuItem[]; accent?: string }
 ): HTMLDivElement {
 	const card = container.createDiv({ cls: "qbd-quiz-card" });
 	card.dataset.path = quiz.path;
+	if (opts?.accent) { card.style.setProperty("--accent", opts.accent); card.addClass("qbd-quiz-card--tinted"); }
 
 	// ── État du quiz (source unique de vérité pour pastille + couleurs) ──
 	const total = quiz.questions || (stats && stats.totalQuestions) || 0;

@@ -445,6 +445,38 @@
 .qbd-medit-dot--custom {
 	background: conic-gradient(from 0deg, #f00, #ff0, #0f0, #0ff, #00f, #f0f, #f00);
 }
+
+/* Aperçu d'icône du modal « Modifier dossier » : le MÊME carré teinté que la
+   carte (var --mod-color posée sur .modal-content par module-edit.ts, suit la
+   couleur choisie en direct), cliquable → grille Lucide. !important contre le
+   chrome natif des `button` d'Obsidian. */
+.qbd-medit-icon-btn {
+	/* RENDU IDENTIQUE au carré d'icône de la carte (.qbd-module-card__icon) —
+	   mêmes color-mix oklab (22% #181d2b / bordure 55% #232939) et même géométrie
+	   34/9/19 : l'aperçu du modal doit être exactement la même pastille que la
+	   carte (--mod-color == accent effectif). */
+	width: 34px;
+	height: 34px;
+	box-sizing: border-box;
+	padding: 0 !important;
+	display: grid;
+	place-items: center;
+	border-radius: 9px;
+	box-shadow: none !important;
+	cursor: pointer;
+	/* !important : c'est un <button>, donc .theme-dark button (0,1,1) écrase
+	   sinon la `color` → l'icône devient grise au lieu de l'accent (la carte,
+	   elle, est un <div> et n'a pas ce souci). */
+	color: var(--mod-color, var(--interactive-accent)) !important;
+	background: color-mix(in oklab, var(--mod-color, var(--interactive-accent)) 22%, #181d2b) !important;
+	border: 1px solid color-mix(in oklab, var(--mod-color, var(--interactive-accent)) 55%, #232939) !important;
+	transition: background 120ms, border-color 120ms;
+}
+.qbd-medit-icon-btn svg { width: 19px; height: 19px; }
+.qbd-medit-icon-btn:hover {
+	background: color-mix(in oklab, var(--mod-color, var(--interactive-accent)) 34%, #181d2b) !important;
+	border-color: var(--mod-color, var(--interactive-accent)) !important;
+}
 /* Bouton Enregistrer pleine largeur, carte inversée theme-aware (le blanc
    sur sombre de StudySmarter, sans hex en dur). */
 .qbd-medit-save {
@@ -504,6 +536,27 @@
 .qbd-quiz-card-accent--progress { background: var(--interactive-accent); }
 .qbd-quiz-card-accent--review   { background: var(--color-yellow, #facc15); }
 .qbd-quiz-card-accent--fresh    { background: var(--background-modifier-border); }
+
+/* ── Carte quiz TEINTÉE par son DOSSIER PARENT (handoff « cartes quiz teintées »
+   2026-07-18) : quand --accent du dossier est posé (.qbd-quiz-card--tinted), la
+   barre supérieure, le bouton play et le badge de type reprennent cette couleur
+   — le quiz hérite l'identité de son dossier. Base sombre #181d2b (hex du
+   handoff, cohérent avec les cartes dossier). L'état reste porté par la pastille. ── */
+.qbd-quiz-card--tinted .qbd-quiz-card-accent {
+	background: var(--accent);
+}
+.qbd-root .qbd-quiz-card--tinted .qbd-quiz-card-play {
+	background: color-mix(in oklab, var(--accent) 20%, #181d2b);
+	color: var(--accent);
+}
+.qbd-root .qbd-quiz-card--tinted .qbd-quiz-card-play:hover {
+	background: color-mix(in oklab, var(--accent) 34%, #181d2b);
+	color: var(--accent);
+}
+.qbd-quiz-card--tinted .qbd-quiz-card-badge {
+	background: color-mix(in oklab, var(--accent) 20%, #181d2b);
+	color: color-mix(in oklab, var(--accent) 75%, #ffffff);
+}
 
 /* ── En-tête de carte : pastille d'état + chevron d'ouverture ── */
 .qbd-quiz-card-head {

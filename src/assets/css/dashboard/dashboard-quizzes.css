@@ -186,6 +186,45 @@
 	display: flex;
 	flex-shrink: 0;
 	color: var(--text-faint);
+	/* Flèche : rotation ANIMÉE entre repliée (droite) et ouverte (bas). Un seul
+	   icône (chevron-right) tourné par CSS → transition fluide, impossible avec
+	   deux icônes échangés par setIcon. */
+	transition: transform 240ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+/* Ouvert (pas de .is-collapsed) : le chevron-right pivote de 90° → pointe bas. */
+.qbd-quizzes-node:not(.is-collapsed) .qbd-quizzes-node-chevron {
+	transform: rotate(90deg);
+}
+
+/* Corps repliable — hauteur animée par grid-template-rows (1fr↔0fr) : pas de
+   hauteur magique en dur, easing parfait dans les deux sens. L'enfant (grille
+   de cartes) doit pouvoir se comprimer sous sa hauteur mini et est clippé. */
+.qbd-quizzes-node-body {
+	display: grid;
+	grid-template-rows: 1fr;
+	transition: grid-template-rows 240ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+.qbd-quizzes-node-body > * {
+	min-height: 0;
+}
+/* overflow:hidden UNIQUEMENT pendant l'animation ou quand replié : à l'état
+   ouvert stable, le corps doit rester `overflow: visible` sinon il ROGNE la
+   carte quand elle se surélève au survol (translateY -3px) — la carte
+   « sortait » coupée. Hors de ces deux états, rien ne clippe. */
+.qbd-quizzes-node.is-collapsed .qbd-quizzes-node-body > *,
+.qbd-quizzes-node.is-animating .qbd-quizzes-node-body > * {
+	overflow: hidden;
+}
+.qbd-quizzes-node.is-collapsed .qbd-quizzes-node-body {
+	grid-template-rows: 0fr;
+}
+
+/* Accessibilité : pas d'animation si l'utilisateur la refuse au niveau OS. */
+@media (prefers-reduced-motion: reduce) {
+	.qbd-quizzes-node-chevron,
+	.qbd-quizzes-node-body {
+		transition: none;
+	}
 }
 
 .qbd-quizzes-node-label {
@@ -218,64 +257,128 @@
 	border-radius: 4px;
 }
 
-/* Carte de MODULE — réutilise le châssis de .qbd-quiz-card (liseré, filet,
-   coins) ; seuls le liseré coloré par avancement et l'étiquette UE lui sont
-   propres. */
+/* Carte de MODULE — design « folder card 6a » (handoff claude design validé
+   Ahmed 2026-07-18). Rendu SOMBRE fixe (hex bleutés du handoff — le README
+   impose ce thème sombre) ; --accent posé inline par module-card.ts, tout le
+   reste dérivé par color-mix in oklab. Halo radial dans l'angle HAUT-GAUCHE,
+   intégré au fond (pas un div). */
 .qbd-module-card {
-	background: var(--background-primary);
-	border: 1px solid var(--background-modifier-border);
-	/* Dimensions MESURÉES sur une carte de la Library StudySmarter
-	   (2026-07-18, correction « les nôtres sont mal dimensionnées ») :
-	   350×148, radius 8, padding 16/12/8. La hauteur mini aligne les cartes
-	   d'une rangée ; la ligne meta est poussée au pied (margin-top auto,
-	   dashboard-components.css). */
-	border-radius: 8px;
-	padding: 16px 12px 8px;
-	min-height: 148px;
+	--card-bg: #1c2130;
+	--card-mix-base: #181d2b;
+	--tile-bg:     color-mix(in oklab, var(--accent) 12%, var(--card-mix-base));
+	--icon-bg:     color-mix(in oklab, var(--accent) 22%, var(--card-mix-base));
+	--border-c:    color-mix(in oklab, var(--accent) 55%, #232939);
+	--border-soft: color-mix(in oklab, var(--accent) 25%, #262d3f);
+	--glow:        color-mix(in oklab, var(--accent) 45%, transparent);
+
+	height: 148px;
+	box-sizing: border-box;
 	display: flex;
 	flex-direction: column;
+	border: 1px solid var(--border-soft);
+	border-radius: 10px;
+	background: radial-gradient(360px 150px at 0% 0%, var(--tile-bg) 0%, var(--card-bg) 68%);
 	cursor: pointer;
-	transition: background 0.15s ease, border-color 0.15s ease, box-shadow 0.2s ease, transform 0.08s ease;
-	position: relative;
-	overflow: hidden;
+	transition: border-color .18s ease, box-shadow .18s ease, transform .18s ease;
 }
-
-/* Titre du module : 16px/500 (mesuré sur « math » / « Réseaux » chez
-   StudySmarter). */
-.qbd-module-card .qbd-quiz-card-title {
-	font-size: 16px;
-	font-weight: 500;
-}
-
 .qbd-module-card:hover {
-	background: var(--background-secondary);
-	border-color: var(--background-modifier-border-hover);
-	box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
-	transform: translateY(-1px);
+	transform: translateY(-3px);
+	border-color: var(--border-c);
+	box-shadow: 0 14px 30px -12px var(--glow), 0 0 0 1px var(--border-soft);
 }
 
-/* La carte de module a un padding 18/20 (plus grand que la carte de quiz, 16) :
-   le liseré, dont la marge négative par défaut suppose 16px, se retrouverait
-   décalé de ~2px en haut et ~4px sur les côtés. On aligne sa marge sur le
-   padding réel pour qu'il coiffe la carte pleine largeur, coins compris. */
-.qbd-module-card .qbd-quiz-card-accent {
-	margin: -16px -12px 12px;
+/* En-tête : pastille d'icône + colonne titre/sous-titre. */
+.qbd-module-card__header {
+	padding: 13px 16px 0;
+	display: flex;
+	align-items: flex-start;
+	gap: 12px;
 }
-
-.qbd-module-card-accent--done { background: var(--color-green, #4ade80); }
-.qbd-module-card-accent--partial { background: var(--interactive-accent); }
-
-/* UE en SOUS-TITRE sous le nom (façon StudySmarter « math » / « Mathématiques »,
-   demande d'Ahmed 2026-07-17). Plus une petite étiquette majuscule au-dessus :
-   une ligne de légende discrète, juste sous le titre. */
-.qbd-module-card-ue {
-	font-size: 12px;
-	color: var(--text-muted);
-	margin: 2px 0 0;
-	line-height: 1.35;
+.qbd-module-card__icon {
+	width: 34px;
+	height: 34px;
+	flex-shrink: 0;
+	box-sizing: border-box;
+	border-radius: 9px;
+	background: var(--icon-bg);
+	border: 1px solid var(--border-c);
+	display: grid;
+	place-items: center;
+	color: var(--accent);
+}
+.qbd-module-card__icon svg { width: 19px; height: 19px; }
+/* Pastille cliquable = raccourci « changer l'icône » (clic direct sur la carte,
+   demande Ahmed 2026-07-19) : indice visuel au survol, sans entrer dans le module. */
+.qbd-module-card__icon--editable {
+	cursor: pointer;
+	transition: background 0.12s ease, border-color 0.12s ease, transform 0.08s ease;
+}
+.qbd-module-card__icon--editable:hover {
+	background: color-mix(in oklab, var(--accent) 34%, var(--card-mix-base));
+	border-color: var(--accent);
+}
+.qbd-module-card__icon--editable:active { transform: scale(0.94); }
+.qbd-module-card__titles {
+	display: flex;
+	flex-direction: column;
+	gap: 3px;
+	min-width: 0;
+}
+.qbd-module-card__title {
+	font-size: 15px;
+	font-weight: 700;
+	line-height: 1.25;
+	color: var(--accent);
+	white-space: nowrap;
 	overflow: hidden;
 	text-overflow: ellipsis;
+}
+.qbd-module-card__subtitle {
+	font-size: 11.5px;
+	color: #8b93a7;
 	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+/* Stats : « N quiz • N maîtrisés » — nombres en gras clair, séparateur discret. */
+.qbd-module-card__stats {
+	padding: 10px 16px 0;
+	display: flex;
+	align-items: center;
+	gap: 9px;
+	font-size: 12.5px;
+	color: #9aa3b8;
+}
+.qbd-module-card__stats strong { color: #dfe4ef; font-weight: 700; }
+.qbd-module-card__stats .sep { opacity: .5; }
+
+/* Spacer pousse le pied en bas ; ligne séparatrice ; pied avec le bouton •••. */
+.qbd-module-card__spacer { flex: 1; }
+.qbd-module-card__divider { margin: 0 16px; border-top: 1px solid #262d3f; }
+.qbd-module-card__footer {
+	padding: 5px 12px 8px;
+	display: flex;
+	justify-content: flex-end;
+}
+/* Bouton ••• = menu ⋯ existant (icône ellipsis Lucide ≈ •••), stylé comme le
+   handoff. !important contre le chrome natif des `button` d'Obsidian. */
+.qbd-module-card__menu {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	padding: 2px 6px !important;
+	border: none !important;
+	border-radius: 6px;
+	background: transparent !important;
+	box-shadow: none !important;
+	color: #8b93a7 !important;
+	cursor: pointer;
+}
+.qbd-module-card__menu svg { width: 16px; height: 16px; }
+.qbd-module-card__menu:hover {
+	background: rgba(255, 255, 255, .08) !important;
+	color: #dfe4ef !important;
 }
 
 /* Grille de cartes de module. Largeur de rangée plafonnée à 1082 px
@@ -291,41 +394,6 @@
 		minmax(max(300px, calc((100% - 2 * 16px) / 3)), 1fr)
 	);
 	gap: 16px;
-}
-
-/* Ligne meta de la carte de module poussée au PIED (footer StudySmarter :
-   filet + padding-top 8, collé en bas de la carte de 148 px). Le body doit
-   s'étirer sur la hauteur de la carte pour que le margin-top:auto agisse. */
-.qbd-module-card .qbd-quiz-card-body {
-	display: flex;
-	flex-direction: column;
-	flex: 1;
-}
-.qbd-module-card .qbd-quiz-card-meta {
-	margin-top: auto;
-	padding-top: 8px;
-	/* Footer réduit au ⋯ (les compteurs sont remontés dans le corps) :
-	   la rangée reste alignée à droite comme le footer StudySmarter. */
-	justify-content: flex-end;
-	min-height: 34px;
-}
-
-/* Compteurs dans le corps — « 12 Subsets • 96 Flashcards » StudySmarter :
-   chiffre en gras (texte normal), libellé et séparateur discrets. */
-.qbd-module-card-counts {
-	display: flex;
-	align-items: center;
-	gap: 8px;
-	margin-top: 10px;
-	font-size: 13px;
-	color: var(--text-muted);
-}
-.qbd-module-card-count strong {
-	font-weight: 600;
-	color: var(--text-normal);
-}
-.qbd-module-card-count-sep {
-	color: var(--text-faint);
 }
 
 /* Espacement inter-sections : 16 px au-dessus de chaque en-tête suivant

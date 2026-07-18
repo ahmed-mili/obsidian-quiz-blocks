@@ -6,6 +6,9 @@ import { moduleForQuiz } from "./quiz-modules";
 import type { ModuleGroup, ModuleMap, ModuleOverride } from "./quiz-modules";
 import { openActionMenu } from "./ui-select";
 import { openColorPicker } from "./color-picker";
+import { openIconPicker, DEFAULT_MODULE_ICON } from "./icon-picker";
+import { MODULE_PALETTE, hashAccent } from "./module-color";
+import { suggestIcons } from "./icon-suggest";
 
 /* ══════════════════════════════════════════════════════════
    MODULE EDIT — modal « Modifier dossier », calqué sur celui de
@@ -21,16 +24,11 @@ import { openColorPicker } from "./color-picker";
    réécrite par le plugin.
 ══════════════════════════════════════════════════════════ */
 
-/** Palette de la référence StudySmarter (8 pastilles, ordre identique). */
-const COLORS = [
-	"#4573ff", "#14b8a6", "#10b981", "#84cc16",
-	"#f59e0b", "#ef4466", "#d946ef", "#8b5cf6",
-];
-
 export class ModuleEditModal extends Modal {
 	private name: string;
 	private ue: string | null;
 	private color: string | undefined;
+	private icon: string | undefined;
 	/** Un changement au moins a eu lieu → onClose persiste + rafraîchit. */
 	private dirty = false;
 
@@ -44,6 +42,7 @@ export class ModuleEditModal extends Modal {
 		this.name = group.name || group.folder;
 		this.ue = group.ue;
 		this.color = group.color;
+		this.icon = group.icon;
 	}
 
 	/** Auto-save : reconstruit l'override depuis l'état courant, l'écrit dans
@@ -59,6 +58,7 @@ export class ModuleEditModal extends Modal {
 		// null (Sans UE) ne se stocke que si la note, elle, donnait une UE.
 		ov.ue = this.ue;
 		if (this.color) ov.color = this.color;
+		if (this.icon) ov.icon = this.icon;
 		overrides[this.group.folder] = ov;
 		this.ctx.plugin.settings.quizzesModuleOverrides = overrides;
 		this.dirty = true;
@@ -69,6 +69,23 @@ export class ModuleEditModal extends Modal {
 		this.modalEl.addClass("qbd-medit-modal");
 		this.titleEl.setText(t("dashboard.quizzes.moduleEditTitle"));
 		const c = this.contentEl;
+		// Accent effectif (couleur choisie sinon dérivée du nom) dès l'ouverture :
+		// il teinte l'aperçu d'icône ci-dessous ; paintDots() le met à jour quand
+		// la couleur change.
+		c.style.setProperty("--mod-color", this.color ?? hashAccent(this.group.folder));
+
+		// ── Icône EN HAUT (au-dessus du nom, demande Ahmed 2026-07-19) : aperçu
+		// carré teinté ; clic → picker avec recherche + suggestions du module ──
+		c.createEl("p", { cls: "qbd-medit-label", text: t("dashboard.quizzes.moduleEditIcon") });
+		const iconBtn = c.createEl("button", { cls: "qbd-medit-icon-btn" });
+		iconBtn.type = "button";
+		const paintIcon = () => { iconBtn.empty(); setIcon(iconBtn, this.icon ?? DEFAULT_MODULE_ICON); };
+		paintIcon();
+		iconBtn.addEventListener("click", () => {
+			// Portalé au modal (comme le color picker) → pas de vol de focus.
+			// Suggestions d'après le nom + l'UE COURANTS.
+			openIconPicker(iconBtn, this.icon, (name) => { this.icon = name; paintIcon(); this.apply(); }, this.modalEl, suggestIcons(this.name, this.ue));
+		});
 
 		// ── Nom du dossier ──
 		c.createEl("p", { cls: "qbd-medit-label", text: t("dashboard.quizzes.moduleEditName") });
@@ -103,7 +120,7 @@ export class ModuleEditModal extends Modal {
 		const row = c.createDiv({ cls: "qbd-medit-colors" });
 		const paintDots = () => {
 			row.empty();
-			for (const col of COLORS) {
+			for (const col of MODULE_PALETTE) {
 				const dot = row.createEl("button", { cls: "qbd-medit-dot" });
 				dot.type = "button";
 				dot.style.background = col;
@@ -120,7 +137,7 @@ export class ModuleEditModal extends Modal {
 			custom.type = "button";
 			custom.setAttribute("aria-label", t("dashboard.quizzes.moduleEditCustomColor"));
 			custom.title = t("dashboard.quizzes.moduleEditCustomColor");
-			const isCustom = !!this.color && !COLORS.includes(this.color);
+			const isCustom = !!this.color && !MODULE_PALETTE.includes(this.color);
 			if (isCustom && this.color) {
 				custom.style.background = this.color;
 				setIcon(custom, "check");
@@ -131,12 +148,17 @@ export class ModuleEditModal extends Modal {
 				// Portalé au MODAL (this.modalEl), pas au body : sinon le focus
 				// trap du modal ramène le focus de l'input hex vers le champ
 				// « nom » dès qu'on clique dedans (bug de sélection).
-				openColorPicker(custom, this.color ?? COLORS[0], (hex) => {
+				openColorPicker(custom, this.color ?? MODULE_PALETTE[0], (hex) => {
 					this.color = hex;
 					paintDots();
 					this.apply();
 				}, this.modalEl);
 			});
+			// La couleur courante teinte aussi l'aperçu d'icône (var --mod-color,
+			// comme la carte). Défaut = accent quand aucune couleur n'est choisie.
+			// L'aperçu d'icône montre l'accent EFFECTIF (couleur choisie sinon
+			// dérivée du nom) — WYSIWYG avec la carte.
+			c.style.setProperty("--mod-color", this.color ?? hashAccent(this.group.folder));
 		};
 		paintDots();
 		// Pas de bouton « Enregistrer » : auto-save (apply() sur chaque

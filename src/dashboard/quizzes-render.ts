@@ -12,6 +12,9 @@ import { moduleForQuiz, buildModuleGroups, buildUeGroups } from "./quiz-modules"
 import type { ModuleMap, ModuleGroup, UeGroup } from "./quiz-modules";
 import { buildRecentModuleGroups } from "./quiz-recent";
 import type { RecentGroupKey } from "./quiz-recent";
+import { moduleAccent } from "./module-color";
+import { openIconPicker } from "./icon-picker";
+import { suggestIcons } from "./icon-suggest";
 
 /* ══════════════════════════════════════════════════════════
    QUIZZES RENDER — extrait de quizzes.ts (Task 4) pour rester
@@ -53,12 +56,37 @@ function fillNodeHeadStats(head: HTMLElement, total: number): void {
    capture 2026-07-18) inverse la lecture du réglage : la clé présente dans
    quizzesExpandedFolders signifie alors « repliée par l'utilisateur ».
    (La recherche a été retirée de la vue le 2026-07-18.) */
-function wireCollapseToggle(deps: GridDeps, head: HTMLButtonElement, chev: HTMLElement, key: string, defaultOpen = true): boolean {
+function wireCollapseToggle(deps: GridDeps, nodeEl: HTMLElement, head: HTMLButtonElement, chev: HTMLElement, key: string, defaultOpen = true): void {
 	const collapsed = defaultOpen ? deps.isExpanded(key) : !deps.isExpanded(key);
-	setIcon(chev, collapsed ? "chevron-right" : "chevron-down");
+	// UN SEUL icône (chevron-right) : l'orientation « ouvert » est une ROTATION
+	// CSS animée, pas un second icône — c'est ce qui rend la flèche fluide.
+	setIcon(chev, "chevron-right");
+	nodeEl.classList.toggle("is-collapsed", collapsed);
 	head.setAttribute("aria-expanded", String(!collapsed));
-	head.addEventListener("click", () => { deps.toggleExpanded(key); deps.rerender(); });
-	return collapsed;
+	head.addEventListener("click", () => {
+		// Bascule PUREMENT CSS : le corps reste monté, sa hauteur s'anime
+		// (grid-template-rows). On persiste l'état (toggleExpanded) mais SANS
+		// rerender — un rerender détruirait le DOM et tuerait la transition.
+		deps.toggleExpanded(key);
+		// Clip pendant TOUTE la transition (is-animating), retiré à la fin : à
+		// l'état ouvert stable le corps repasse en overflow visible, sinon il
+		// rogne la carte quand elle se surélève au survol.
+		nodeEl.classList.add("is-animating");
+		const nowCollapsed = nodeEl.classList.toggle("is-collapsed");
+		head.setAttribute("aria-expanded", String(!nowCollapsed));
+		const body = nodeEl.querySelector(".qbd-quizzes-node-body");
+		const stopAnim = () => nodeEl.classList.remove("is-animating");
+		if (body) {
+			const onEnd = (e: Event) => {
+				if ((e as TransitionEvent).propertyName !== "grid-template-rows") return;
+				body.removeEventListener("transitionend", onEnd);
+				stopAnim();
+			};
+			body.addEventListener("transitionend", onEnd);
+		}
+		// Filet : reduced-motion (pas de transitionend) ou transition coupée.
+		window.setTimeout(stopAnim, 320);
+	});
 }
 
 /* Rendu partagé des modes « recent » et « type » : groupe PLAT (pas de
@@ -71,6 +99,8 @@ function renderFlatGroup(
 	total: number,
 	quizzes: QuizIndexEntry[],
 	stats: Record<string, QuizStatRecord>,
+	/** Carte quiz teintée de l'accent de son dossier parent (via cette map). */
+	map: ModuleMap,
 	/** false = section repliée par défaut (seulement « Archivés »). */
 	defaultOpen = true
 ): void {
@@ -80,9 +110,10 @@ function renderFlatGroup(
 	const chev = head.createSpan({ cls: "qbd-quizzes-node-chevron" });
 	head.createSpan({ cls: "qbd-quizzes-node-label", text: label });
 	fillNodeHeadStats(head, total);
-	const collapsed = wireCollapseToggle(deps, head, chev, key, defaultOpen);
-	if (collapsed) return;
+	wireCollapseToggle(deps, nodeEl, head, chev, key, defaultOpen);
 
+	// Corps TOUJOURS monté (même replié) : c'est ce qui permet d'animer la
+	// hauteur dans les deux sens ; la classe .is-collapsed le réduit à 0.
 	const body = nodeEl.createDiv({ cls: "qbd-quizzes-node-body" });
 	const grid = body.createDiv({ cls: "qbd-home-grid" });
 	for (const quiz of quizzes) {
@@ -92,6 +123,7 @@ function renderFlatGroup(
 		renderQuizCard(grid, quiz, stats[quiz.path], (q) => deps.ctx.navigate("detail", { quiz: q }), {
 			onPlay: (q) => openQuizForPlay(deps.ctx.app, q),
 			menu: buildQuizCardMenu(deps.ctx, deps.rerender),
+			accent: moduleAccent(moduleForQuiz(quiz.path, map)),
 		});
 	}
 }
@@ -103,7 +135,18 @@ function renderFlatGroup(
 function renderModuleGrid(deps: GridDeps, parent: HTMLElement, groups: ModuleGroup[], map: ModuleMap): void {
 	const grid = parent.createDiv({ cls: "qbd-module-grid" });
 	const menu = buildModuleCardMenu(deps.ctx, deps.rerender, map);
-	for (const g of groups) renderModuleCard(grid, g, (m) => deps.openModule(m.folder), menu);
+	// Raccourci « changer l'icône » depuis la pastille de la carte : picker
+	// portalé au body (pas de modal ici) → override + save + rerender.
+	const pickIcon = (group: ModuleGroup, anchor: HTMLElement) => {
+		openIconPicker(anchor, group.icon, (name) => {
+			const overrides = { ...(deps.ctx.plugin.settings.quizzesModuleOverrides || {}) };
+			overrides[group.folder] = { ...(overrides[group.folder] || {}), icon: name };
+			deps.ctx.plugin.settings.quizzesModuleOverrides = overrides;
+			deps.ctx.plugin.saveSettings().catch(() => {});
+			deps.rerender();
+		}, document.body, suggestIcons(group.name, group.ue));
+	};
+	for (const g of groups) renderModuleCard(grid, g, (m) => deps.openModule(m.folder), menu, pickIcon);
 }
 
 /* En-tête d'UE repliable + grille de cartes de module dessous. */
@@ -116,8 +159,7 @@ function renderUeGroup(deps: GridDeps, parent: HTMLElement, ue: UeGroup, map: Mo
 	// Badge = nombre d'éléments DIRECTS de la section (les modules), comme le
 	// compteur des sections « Mes dossiers » de StudySmarter.
 	fillNodeHeadStats(head, ue.modules.length);
-	const collapsed = wireCollapseToggle(deps, head, chev, ue.key);
-	if (collapsed) return;
+	wireCollapseToggle(deps, nodeEl, head, chev, ue.key);
 	const body = nodeEl.createDiv({ cls: "qbd-quizzes-node-body" });
 	renderModuleGrid(deps, body, ue.modules, map);
 }
@@ -157,7 +199,7 @@ export function renderQuizGrid(
 			const chev = head.createSpan({ cls: "qbd-quizzes-node-chevron" });
 			head.createSpan({ cls: "qbd-quizzes-node-label", text: t(RECENT_GROUP_LABEL_KEYS[g.key]) });
 			fillNodeHeadStats(head, g.modules.length);
-			if (wireCollapseToggle(deps, head, chev, g.key)) continue;
+			wireCollapseToggle(deps, nodeEl, head, chev, g.key);
 			const body = nodeEl.createDiv({ cls: "qbd-quizzes-node-body" });
 			renderModuleGrid(deps, body, g.modules, map);
 		}
@@ -171,7 +213,7 @@ export function renderQuizGrid(
 	// défaut, même en-tête repliable que les groupes plats. Clé « archived: » :
 	// « : » est interdit dans un chemin Obsidian, aucune collision possible.
 	if (archived.length > 0) {
-		renderFlatGroup(deps, treeEl, "archived:", t("dashboard.quizzes.archivedSection"), archived.length, archived, stats, false);
+		renderFlatGroup(deps, treeEl, "archived:", t("dashboard.quizzes.archivedSection"), archived.length, archived, stats, map, false);
 	}
 }
 
@@ -213,11 +255,14 @@ export function renderModuleDrill(
 		treeEl.createDiv({ cls: "qbd-empty-state" }, el => { el.createEl("p", { text: t("dashboard.quizzes.empty") }); });
 		return;
 	}
+	// Tous les quiz du module ouvert partagent l'accent de CE dossier.
+	const accent = moduleAccent(info ?? { folder: openModuleFolder });
 	const grid = treeEl.createDiv({ cls: "qbd-home-grid" });
 	for (const quiz of inModule) {
 		renderQuizCard(grid, quiz, stats[quiz.path], (q) => ctx.navigate("detail", { quiz: q }), {
 			onPlay: (q) => openQuizForPlay(ctx.app, q),
 			menu: buildQuizCardMenu(ctx, rerender),
+			accent,
 		});
 	}
 }

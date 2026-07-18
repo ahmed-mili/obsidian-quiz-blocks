@@ -116,3 +116,100 @@
 .qbd-cp-hex:focus {
 	border-color: var(--interactive-accent);
 }
+
+/* ═════════════════════════════════════════════════════════
+   ICON PICKER — grille d'icônes Lucide (module-card), MÊME surface
+   glass que le color picker. Portalé au modal (icon-picker.ts).
+   ═════════════════════════════════════════════════════════ */
+.qbd-icon-picker {
+	position: fixed;
+	z-index: 1002;
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	padding: 10px;
+	border-radius: 10px;
+	background: color-mix(in srgb, var(--background-primary) 92%, transparent);
+	backdrop-filter: blur(12px) brightness(1.18);
+	-webkit-backdrop-filter: blur(12px) brightness(1.18);
+	border: 1px solid color-mix(in srgb, var(--background-modifier-border) 55%, transparent);
+	box-shadow: 0 14px 28px -6px rgba(0, 0, 0, 0.4), 0 2px 6px -1px rgba(0, 0, 0, 0.22);
+}
+/* Barre de recherche (icône loupe superposée à gauche). */
+.qbd-icon-search-wrap { position: relative; display: flex; align-items: center; }
+/* Loupe centrée VERTICALEMENT (top 50% + translate) : un absolute sans `top`
+   se cale en haut du wrap, pas au milieu de l'input. */
+.qbd-icon-search-icon {
+	position: absolute; left: 9px; top: 50%; transform: translateY(-50%);
+	display: inline-flex; color: var(--text-muted); pointer-events: none;
+}
+.qbd-icon-search-icon svg { width: 15px; height: 15px; }
+.qbd-icon-search {
+	flex: 1; min-width: 0; height: 30px;
+	/* padding-left en !important : le chrome natif des input d'Obsidian
+	   (.theme-dark input, 0,1,1) écrase sinon le padding → le texte glisse SOUS
+	   la loupe (chevauchement). 30px = place réservée à la loupe. */
+	padding: 0 10px 0 30px !important;
+	border-radius: 7px;
+	border: 1px solid var(--background-modifier-border) !important;
+	background: var(--background-modifier-form-field) !important;
+	box-shadow: none !important;
+	color: var(--text-normal); font-size: 13px; outline: none;
+}
+.qbd-icon-search:focus { border-color: var(--interactive-accent) !important; }
+/* Zone scrollable (sections empilées). scrollbar-gutter stable : la place de
+   la scrollbar est réservée d'emblée → la grille garde une largeur constante,
+   pas de débordement horizontal quand la barre verticale apparaît.
+   scrollbar-color OBLIGATOIRE : depuis Chromium 121, poser `scrollbar-width`
+   fait IGNORER les règles ::-webkit-scrollbar (Obsidian = Chromium 142) — c'est
+   donc `scrollbar-color` (standard) qui thème la barre, sinon Electron peint la
+   barre NATIVE claire qui jure (cf. ui-select.css, même piège). */
+.qbd-icon-scroll {
+	overflow-y: auto;
+	scrollbar-width: thin;
+	scrollbar-gutter: stable;
+	scrollbar-color: var(--scrollbar-thumb-bg) transparent;
+}
+.qbd-icon-section-label {
+	font-size: 11px; font-weight: 600; color: var(--text-muted);
+	text-transform: uppercase; letter-spacing: 0.04em; margin: 8px 2px 4px;
+}
+.qbd-icon-section-label:first-child { margin-top: 0; }
+.qbd-icon-empty {
+	padding: 16px 8px; text-align: center; color: var(--text-muted); font-size: 12px;
+}
+.qbd-icon-grid {
+	display: grid;
+	grid-template-columns: repeat(6, 1fr);
+	gap: 4px;
+}
+/* !important : neutralise le chrome natif des `button` d'Obsidian
+   (.theme-dark button, 0,1,1) — fond gris + ombre sinon (cf. plugin-dev §1). */
+.qbd-icon-cell {
+	/* Largeur FLEXIBLE (1fr de la grille) + carré via aspect-ratio : la grille
+	   s'adapte à l'espace réel (scrollbar comprise) au lieu de déborder avec des
+	   cellules à largeur fixe. */
+	width: 100%;
+	aspect-ratio: 1 / 1;
+	min-width: 0;
+	padding: 0 !important;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	border: none !important;
+	border-radius: 8px;
+	background: transparent !important;
+	box-shadow: none !important;
+	color: var(--text-muted) !important;
+	cursor: pointer;
+	transition: background 120ms, color 120ms;
+}
+.qbd-icon-cell svg { width: 18px; height: 18px; }
+.qbd-icon-cell:hover {
+	background: var(--background-modifier-hover) !important;
+	color: var(--text-normal) !important;
+}
+.qbd-icon-cell.is-active {
+	background: color-mix(in srgb, var(--interactive-accent) 20%, transparent) !important;
+	color: var(--interactive-accent) !important;
+}

@@ -22,6 +22,9 @@ export interface ModuleInfo {
 	/** Couleur du liseré choisie dans « Modifier dossier » (override réglages) —
 	    absente = liseré par état d'avancement (comportement historique). */
 	color?: string;
+	/** Icône Lucide choisie dans « Modifier dossier » (carré teinté de la carte)
+	    — absente = icône par défaut (cf. module-card.ts). */
+	icon?: string;
 }
 
 /** Override persisté par le modal « Modifier dossier » (menu ⋯ d'un module).
@@ -31,6 +34,7 @@ export interface ModuleOverride {
 	name?: string;
 	ue?: string | null;
 	color?: string;
+	icon?: string;
 }
 
 /** Applique les overrides réglages PAR-DESSUS la table issue de la note.
@@ -45,6 +49,7 @@ export function applyModuleOverrides(map: ModuleMap, overrides: Record<string, M
 			name: ov.name?.trim() || base.name,
 			ue: ov.ue !== undefined ? ov.ue : base.ue,
 			color: ov.color ?? base.color,
+			icon: ov.icon ?? base.icon,
 		};
 		byFolder.set(folder, merged);
 		// Une UE inventée dans le modal doit exister dans l'axe UE.
@@ -127,6 +132,8 @@ export interface ModuleGroup {
 	ue: string | null;
 	/** Couleur de liseré override (cf. ModuleInfo.color). */
 	color?: string;
+	/** Icône Lucide override (cf. ModuleInfo.icon). */
+	icon?: string;
 	quizzes: QuizIndexEntry[];
 	total: number;
 	mastered: number;
@@ -145,12 +152,12 @@ export function buildModuleGroups(
 	const acc = new Map<string, ModuleGroup>();
 	for (const folder of alwaysInclude) {
 		const info = map.byFolder.get(folder) ?? { folder, name: folder, ue: null };
-		acc.set(folder, { folder, name: info.name, ue: info.ue, color: info.color, quizzes: [], total: 0, mastered: 0 });
+		acc.set(folder, { folder, name: info.name, ue: info.ue, color: info.color, icon: info.icon, quizzes: [], total: 0, mastered: 0 });
 	}
 	for (const q of quizzes) {
 		const m = moduleForQuiz(q.path, map);
 		let g = acc.get(m.folder);
-		if (!g) { g = { folder: m.folder, name: m.name, ue: m.ue, color: m.color, quizzes: [], total: 0, mastered: 0 }; acc.set(m.folder, g); }
+		if (!g) { g = { folder: m.folder, name: m.name, ue: m.ue, color: m.color, icon: m.icon, quizzes: [], total: 0, mastered: 0 }; acc.set(m.folder, g); }
 		g.quizzes.push(q);
 	}
 	const groups = [...acc.values()];

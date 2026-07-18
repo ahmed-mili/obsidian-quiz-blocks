@@ -94,6 +94,11 @@ export const FR_DASHBOARD: Record<keyof typeof EN_DASHBOARD, string> = {
 	"dashboard.quizzes.moduleEditName": "Nom du dossier",
 	"dashboard.quizzes.moduleEditUe": "UE",
 	"dashboard.quizzes.moduleEditColor": "Couleur",
+	"dashboard.quizzes.moduleEditIcon": "Icône",
+	"dashboard.quizzes.moduleIconSearch": "Rechercher une icône…",
+	"dashboard.quizzes.moduleIconSuggested": "Suggérées",
+	"dashboard.quizzes.moduleIconAll": "Toutes",
+	"dashboard.quizzes.moduleIconNoResult": "Aucune icône trouvée",
 	"dashboard.quizzes.moduleEditCustomColor": "Couleur personnalisée",
 
 	/* ── Carte de quiz ── */
