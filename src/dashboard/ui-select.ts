@@ -174,7 +174,9 @@ export function createSelect<T extends SelectOption = SelectOption>(parent: HTML
 		const spaceAbove = rect.top - 8;
 		const openUp = spaceBelow < 160 && spaceAbove > spaceBelow;
 		const maxH = Math.max(Math.min(openUp ? spaceAbove : spaceBelow, 320), 120);
-		menuEl.style.top = rect.bottom + 4 + "px";
+		// +1 : le menu est COLLÉ au trigger (annotation StudySmarter 2026-07-18,
+		// gap mesuré ~0-1px), pas détaché de 4px.
+		menuEl.style.top = rect.bottom + 1 + "px";
 		menuEl.style.left = rect.left + "px";
 		menuEl.style.minWidth = rect.width + "px";
 		menuEl.style.maxHeight = maxH + "px";
@@ -185,7 +187,7 @@ export function createSelect<T extends SelectOption = SelectOption>(parent: HTML
 		// de place (openUp), sinon en dessous (défaut déjà posé).
 		const menuRect = menuEl.getBoundingClientRect();
 		if (openUp) {
-			menuEl.style.top = Math.max(8, rect.top - 4 - menuRect.height) + "px";
+			menuEl.style.top = Math.max(8, rect.top - 1 - menuRect.height) + "px";
 		}
 		// Si le menu déborde à droite du viewport, le rabattre
 		if (menuRect.right > window.innerWidth - 8) {

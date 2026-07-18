@@ -6,7 +6,7 @@ import type { QuizIndexEntry } from "./scanner";
 import type { QuizStatRecord } from "./stats-store";
 import { parseModuleMap, applyModuleOverrides } from "./quiz-modules";
 import type { ModuleMap } from "./quiz-modules";
-import { openActionMenu } from "./ui-select";
+import { createSelect, openActionMenu } from "./ui-select";
 import { isArchived } from "./quiz-menu";
 import { NewFolderModal } from "./module-edit";
 import { renderQuizGrid, renderModuleDrill } from "./quizzes-render";
@@ -188,21 +188,19 @@ export function createQuizzesHandlers(ctx: DashboardCtx): QuizzesHandlers {
 		// « Par activité » croirait à un bug plutôt qu'à un mode qu'il a choisi
 		// (retour Ahmed 2026-07-17 — StudySmarter est l'inspiration, pas le contrat).
 		if (openModuleFolder === null) {
+			// Vrai SELECT (createSelect), pas un menu d'actions : options
+			// exclusives dont une active → menu d'OPTIONS à la largeur du
+			// trigger, check accent à droite, bordure accent à l'ouverture
+			// (aria-expanded) — l'état « après clic » StudySmarter
+			// (annotation Ahmed 2026-07-18). openActionMenu imposait son
+			// min-width 248px, son icône à gauche et aucun état ouvert.
 			const groupWrap = container.createDiv({ cls: "qbd-quizzes-group" });
-			const groupBtn = groupWrap.createEl("button", { cls: "qbd-select qbd-quizzes-group-select" });
-			groupBtn.type = "button";
-			const groupLabel = groupBtn.createSpan({ cls: "qbd-select-label" });
-			const groupChev = groupBtn.createSpan({ cls: "qbd-select-chevron" });
-			setIcon(groupChev, "chevron-down");
-			groupLabel.setText(t(GROUPING_LABEL_KEYS[currentGrouping()]));
-			groupBtn.addEventListener("click", () => {
-				const active = currentGrouping();
-				openActionMenu(groupBtn, GROUPING_ORDER.map(g => ({
-					icon: g === active ? "check" : undefined,
-					label: t(GROUPING_LABEL_KEYS[g]),
-					onClick: () => { if (g !== active) { setGrouping(g); render(container); } }
-				})));
+			const groupSelect = createSelect(groupWrap, {
+				value: currentGrouping(),
+				options: GROUPING_ORDER.map(g => ({ value: g, label: t(GROUPING_LABEL_KEYS[g]) })),
+				onChange: (v) => { setGrouping(v as GroupingKey); render(container); }
 			});
+			groupSelect.el.classList.add("qbd-quizzes-group-select");
 		}
 
 		// ── Contenu : grille (UE/Récent) ou drill-down d'un module ──

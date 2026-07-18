@@ -98,12 +98,14 @@
 	z-index: 1000;
 	display: flex;
 	flex-direction: column;
-	gap: 3px;
-	padding: 6px;
+	gap: 1px;
+	padding: 4px;
 	min-width: max-content;
 	max-width: min(340px, calc(100vw - 16px));
 	overflow-y: auto;
-	background: color-mix(in srgb, var(--background-primary) 94%, transparent);
+	/* Un cran PLUS CLAIR que les cartes (pipette SS 2026-07-18 : menu
+	   #1F242F sur carte #161B26, delta +9) : le menu ressort au-dessus. */
+	background: color-mix(in srgb, color-mix(in srgb, var(--background-primary) 95%, white) 96%, transparent);
 	backdrop-filter: blur(14px);
 	-webkit-backdrop-filter: blur(14px);
 	border: 1px solid var(--background-modifier-border);
@@ -124,8 +126,9 @@
 	to   { opacity: 1; transform: translateY(0); }
 }
 
-/* Espacement calibré Notion Calendar : ~36px de hauteur par
-   option simple, padding vertical franc, lignes qui respirent */
+/* Espacement compact façon StudySmarter (annotation Ahmed 2026-07-18,
+   mesuré : ~27px par option simple, menu serré) — les options riches
+   (renderOption) gardent leur hauteur via height:auto. */
 .qbd-select-option {
 	display: flex;
 	align-items: center;
@@ -133,8 +136,8 @@
 	gap: 8px;
 	width: 100%;
 	height: auto;          /* le chrome natif d'Obsidian impose une height fixe sur les <button> — sans ça le contenu est écrasé */
-	min-height: 36px;
-	padding: 9px 12px 9px 9px;
+	min-height: 27px;
+	padding: 5px 10px;
 	line-height: 1.35;
 	background: transparent !important;
 	border: none;
@@ -152,10 +155,9 @@
 	background: var(--background-modifier-hover) !important;
 }
 
-.qbd-select-option.is-active {
-	color: var(--interactive-accent);
-	font-weight: 600;
-}
+/* L'option active n'est signalée QUE par le check accent (cible SS : le
+   label de « Recent » reste blanc, seul le ✓ est bleu) — plus de couleur
+   ni de graisse sur le label. */
 
 .qbd-select-check {
 	width: 14px;
@@ -164,6 +166,13 @@
 	align-items: center;
 	justify-content: center;
 	color: var(--interactive-accent);
+}
+
+/* Check à DROITE du label (cible SS « Recent  ✓ ») — sauf dans le menu
+   d'actions, où le même span sert d'icône de ligne, à gauche. */
+.qbd-select-check:not(.qbd-action-menu-icon) {
+	order: 2;
+	margin-left: auto;
 }
 
 .qbd-select-check svg {
