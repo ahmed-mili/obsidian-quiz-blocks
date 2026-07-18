@@ -97,6 +97,9 @@ export const EN_DASHBOARD = {
 	"dashboard.quizzes.deleteConfirmTitle": "Delete quiz",
 	"dashboard.quizzes.deleteConfirmBody": "Remove “{title}” and its stats from the note ? This cannot be undone.",
 	"dashboard.quizzes.deleteConfirmCta": "Delete",
+	"dashboard.quizzes.menuDeleteModule": "Delete module quizzes",
+	"dashboard.quizzes.deleteModuleConfirmBody": "Remove the {count} quizzes of “{name}” and their stats ? This cannot be undone.",
+	"dashboard.quizzes.zipSaved": "ZIP saved: {path}",
 
 	/* ── Carte de quiz (état) ── */
 	"dashboard.card.mastered": "Mastered",

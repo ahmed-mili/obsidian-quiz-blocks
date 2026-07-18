@@ -85,6 +85,9 @@ export const FR_DASHBOARD: Record<keyof typeof EN_DASHBOARD, string> = {
 	"dashboard.quizzes.deleteConfirmTitle": "Supprimer le quiz",
 	"dashboard.quizzes.deleteConfirmBody": "Supprimer « {title} » et ses stats de la note ? Cette action est définitive.",
 	"dashboard.quizzes.deleteConfirmCta": "Supprimer",
+	"dashboard.quizzes.menuDeleteModule": "Supprimer les quiz du module",
+	"dashboard.quizzes.deleteModuleConfirmBody": "Supprimer les {count} quiz de « {name} » et leurs stats ? Cette action est définitive.",
+	"dashboard.quizzes.zipSaved": "ZIP créé : {path}",
 
 	/* ── Carte de quiz ── */
 	"dashboard.card.mastered": "Maîtrisé",
