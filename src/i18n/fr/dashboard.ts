@@ -54,8 +54,6 @@ export const FR_DASHBOARD: Record<keyof typeof EN_DASHBOARD, string> = {
 	"dashboard.quizzes.filterFresh": "Non commencés",
 	"dashboard.quizzes.empty": "Aucun quiz trouvé",
 	"dashboard.quizzes.noFolder": "Sans dossier",
-	"dashboard.quizzes.folderCountOne": "{count} quiz",
-	"dashboard.quizzes.folderCountOther": "{count} quiz",
 	"dashboard.quizzes.folderMasteredOne": "{count} maîtrisé",
 	"dashboard.quizzes.folderMasteredOther": "{count} maîtrisés",
 
@@ -68,7 +66,7 @@ export const FR_DASHBOARD: Record<keyof typeof EN_DASHBOARD, string> = {
 	"dashboard.quizzes.groupByActivity": "Récent",
 	"dashboard.quizzes.recentWeek": "7 derniers jours",
 	"dashboard.quizzes.recentMonth": "30 derniers jours",
-	"dashboard.quizzes.recentOlder": "Plus ancien",
+	"dashboard.quizzes.recentOlder": "Plus d'un mois",
 
 	/* ── Menu ⋯ des cartes ── */
 	"dashboard.quizzes.menuShare": "Partager",

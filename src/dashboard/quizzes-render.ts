@@ -10,7 +10,6 @@ import { buildQuizCardMenu, buildModuleCardMenu } from "./quiz-menu";
 import { renderModuleCard } from "./module-card";
 import { moduleForQuiz, buildModuleGroups, buildUeGroups } from "./quiz-modules";
 import type { ModuleMap, ModuleGroup, UeGroup } from "./quiz-modules";
-import { MASTERY_THRESHOLD } from "./quiz-mastery";
 import { buildRecentGroups } from "./quiz-recent";
 import type { RecentGroupKey } from "./quiz-recent";
 
@@ -44,32 +43,21 @@ const RECENT_GROUP_LABEL_KEYS: Record<RecentGroupKey, TransKey> = {
 	"recent:older": "dashboard.quizzes.recentOlder",
 };
 
-/* Compte + agrégat de maîtrise + barre : même formule pour un groupe plat
-   (activité/type) et un en-tête d'UE. */
-function fillNodeHeadStats(head: HTMLElement, total: number, mastered: number): void {
-	head.createSpan({
-		cls: "qbd-quizzes-node-count",
-		text: t(total === 1 ? "dashboard.quizzes.folderCountOne" : "dashboard.quizzes.folderCountOther", { count: total }),
-	});
-	head.createSpan({
-		cls: "qbd-quizzes-node-mastered",
-		text: t(mastered === 1 ? "dashboard.quizzes.folderMasteredOne" : "dashboard.quizzes.folderMasteredOther", { count: mastered }),
-	});
-	// Omise quand rien n'est maîtrisé : une piste vide à 0 % n'apprend rien de
-	// plus que le compte juste à côté, et attire l'œil pour rien.
-	if (mastered > 0) {
-		const bar = head.createDiv({ cls: "qbd-quizzes-node-bar" });
-		const fill = bar.createDiv({ cls: "qbd-quizzes-node-bar-fill" });
-		fill.style.width = Math.round(mastered / total * 100) + "%";
-	}
+/* En-tête de section — copie LITTÉRALE de StudySmarter (capture Ahmed
+   2026-07-18) : chevron + libellé gras + BADGE compteur, rien d'autre
+   (ni agrégat de maîtrise, ni barre). */
+function fillNodeHeadStats(head: HTMLElement, total: number): void {
+	head.createSpan({ cls: "qbd-quizzes-node-badge", text: String(total) });
 }
 
-/* Bascule de repli partagée par un groupe plat (activité/type) et un en-tête
-   d'UE : repliée tant que la clé n'est pas dans quizzesExpandedFolders,
-   forcée ouverte + désactivée pendant une recherche (ne doit pas reconfigurer
-   la page dans le dos de l'utilisateur, ni écrire dans le réglage). */
-function wireCollapseToggle(deps: GridDeps, head: HTMLButtonElement, chev: HTMLElement, key: string): boolean {
-	const collapsed = !deps.searchActive && !deps.isExpanded(key);
+/* Bascule de repli partagée par un groupe (activité, UE, archivés).
+   `defaultOpen` (les sections StudySmarter sont OUVERTES par défaut —
+   capture 2026-07-18) inverse la lecture du réglage : la clé présente dans
+   quizzesExpandedFolders signifie alors « repliée par l'utilisateur ».
+   Recherche : forcée ouverte + bascule désactivée (ne reconfigure jamais la
+   page dans le dos de l'utilisateur, n'écrit pas dans le réglage). */
+function wireCollapseToggle(deps: GridDeps, head: HTMLButtonElement, chev: HTMLElement, key: string, defaultOpen = true): boolean {
+	const collapsed = !deps.searchActive && (defaultOpen ? deps.isExpanded(key) : !deps.isExpanded(key));
 	setIcon(chev, collapsed ? "chevron-right" : "chevron-down");
 	head.setAttribute("aria-expanded", String(!collapsed));
 	head.disabled = deps.searchActive;
@@ -85,17 +73,18 @@ function renderFlatGroup(
 	key: string,
 	label: string,
 	total: number,
-	mastered: number,
 	quizzes: QuizIndexEntry[],
-	stats: Record<string, QuizStatRecord>
+	stats: Record<string, QuizStatRecord>,
+	/** false = section repliée par défaut (seulement « Archivés »). */
+	defaultOpen = true
 ): void {
 	const nodeEl = parent.createDiv({ cls: "qbd-quizzes-node" });
 	const head = nodeEl.createEl("button", { cls: "qbd-quizzes-node-head" });
 	head.type = "button";
 	const chev = head.createSpan({ cls: "qbd-quizzes-node-chevron" });
 	head.createSpan({ cls: "qbd-quizzes-node-label", text: label });
-	fillNodeHeadStats(head, total, mastered);
-	const collapsed = wireCollapseToggle(deps, head, chev, key);
+	fillNodeHeadStats(head, total);
+	const collapsed = wireCollapseToggle(deps, head, chev, key, defaultOpen);
 	if (collapsed) return;
 
 	const body = nodeEl.createDiv({ cls: "qbd-quizzes-node-body" });
@@ -128,7 +117,9 @@ function renderUeGroup(deps: GridDeps, parent: HTMLElement, ue: UeGroup, map: Mo
 	head.type = "button";
 	const chev = head.createSpan({ cls: "qbd-quizzes-node-chevron" });
 	head.createSpan({ cls: "qbd-quizzes-node-label", text: ue.ue ?? t("dashboard.quizzes.noUe") });
-	fillNodeHeadStats(head, ue.total, ue.mastered);
+	// Badge = nombre d'éléments DIRECTS de la section (les modules), comme le
+	// compteur des sections « Mes dossiers » de StudySmarter.
+	fillNodeHeadStats(head, ue.modules.length);
 	const collapsed = wireCollapseToggle(deps, head, chev, ue.key);
 	if (collapsed) return;
 	const body = nodeEl.createDiv({ cls: "qbd-quizzes-node-body" });
@@ -157,7 +148,7 @@ export function renderQuizGrid(
 
 	if (mode === "recent") {
 		for (const g of buildRecentGroups(filtered, stats)) {
-			renderFlatGroup(deps, treeEl, g.key, t(RECENT_GROUP_LABEL_KEYS[g.key]), g.total, g.mastered, g.quizzes, stats);
+			renderFlatGroup(deps, treeEl, g.key, t(RECENT_GROUP_LABEL_KEYS[g.key]), g.total, g.quizzes, stats);
 		}
 	} else {
 		// Axe UE (défaut) : en-tête d'UE repliable, cartes de module dessous ;
@@ -170,11 +161,7 @@ export function renderQuizGrid(
 	// défaut, même en-tête repliable que les groupes plats. Clé « archived: » :
 	// « : » est interdit dans un chemin Obsidian, aucune collision possible.
 	if (archived.length > 0) {
-		const mastered = archived.filter(q => {
-			const s = stats[q.path];
-			return s && s.bestScore >= MASTERY_THRESHOLD;
-		}).length;
-		renderFlatGroup(deps, treeEl, "archived:", t("dashboard.quizzes.archivedSection"), archived.length, mastered, archived, stats);
+		renderFlatGroup(deps, treeEl, "archived:", t("dashboard.quizzes.archivedSection"), archived.length, archived, stats, false);
 	}
 }
 

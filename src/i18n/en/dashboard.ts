@@ -58,8 +58,6 @@ export const EN_DASHBOARD = {
 	"dashboard.quizzes.filterFresh": "Not started",
 	"dashboard.quizzes.empty": "No quiz found",
 	"dashboard.quizzes.noFolder": "No folder",
-	"dashboard.quizzes.folderCountOne": "{count} quiz",
-	"dashboard.quizzes.folderCountOther": "{count} quizzes",
 	"dashboard.quizzes.folderMasteredOne": "{count} mastered",
 	"dashboard.quizzes.folderMasteredOther": "{count} mastered",
 
@@ -79,7 +77,7 @@ export const EN_DASHBOARD = {
 	"dashboard.quizzes.groupByActivity": "Recent",
 	"dashboard.quizzes.recentWeek": "Last 7 days",
 	"dashboard.quizzes.recentMonth": "Last 30 days",
-	"dashboard.quizzes.recentOlder": "Older",
+	"dashboard.quizzes.recentOlder": "Older than one month",
 
 	/* ── Menu ⋯ des cartes — contrat StudySmarter (capture Excalidraw
 	   2026-07-18) : Share / Edit / Pause study reminders / Archive / Delete. ── */
