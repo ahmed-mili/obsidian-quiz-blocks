@@ -127,15 +127,20 @@
 	   fond gris ci-dessous : le chrome natif des `button` gagne tant qu'on ne
 	   le neutralise pas explicitement. */
 	justify-content: flex-start;
+	/* Dimensions MESURÉES sur la Library StudySmarter (2026-07-18, correction
+	   Excalidraw « mieux espacé et à la bonne taille ») : rangée de 52 px,
+	   gap 8 px, libellé 16px/500 — l'espacement inter-sections vient de la
+	   hauteur de rangée, pas de marges. */
 	gap: 8px;
 	width: 100%;
-	padding: 6px 8px;
+	min-height: 52px;
+	padding: 0 8px;
 	background: transparent;
 	border: none;
 	box-shadow: none;
 	cursor: pointer;
 	color: var(--text-muted);
-	font-size: 12.5px;
+	font-size: 16px;
 	text-align: left;
 }
 
@@ -171,7 +176,9 @@
 }
 
 .qbd-quizzes-node-label {
-	font-weight: 600;
+	/* 16px/500 : mesuré sur l'en-tête « Last 7 days » de StudySmarter. */
+	font-size: 16px;
+	font-weight: 500;
 	color: var(--text-normal);
 	/* Un libellé de chaîne compactée peut être long : il s'élide, il ne
 	   pousse jamais le compte hors de la ligne. */
@@ -186,12 +193,13 @@
 	flex-shrink: 0;
 	min-width: 18px;
 	height: 18px;
-	padding: 0 5px;
+	padding: 0 4px;
 	display: inline-flex;
 	align-items: center;
 	justify-content: center;
-	font-size: 11px;
-	font-weight: 600;
+	/* 12px/500, padding 0 4, radius 4 : badge StudySmarter mesuré. */
+	font-size: 12px;
+	font-weight: 500;
 	color: var(--text-muted);
 	background: var(--background-modifier-hover);
 	border-radius: 4px;
