@@ -47,15 +47,23 @@ export function renderModuleCard(
 		fill.style.width = Math.round(group.mastered / group.total * 100) + "%";
 	}
 
+	// Compteurs dans le CORPS, sous le titre, chiffre en gras + « • » entre
+	// les deux — la ligne « 12 Subsets • 96 Flashcards » de StudySmarter
+	// (capture Ahmed 2026-07-18 : nos cartes étaient creuses, compteurs
+	// relégués au footer). Le footer ne garde que le ⋯.
+	const counts = body.createDiv({ cls: "qbd-module-card-counts" });
+	const addCount = (n: number, key: "dashboard.quizzes.moduleQuizzesOne" | "dashboard.quizzes.moduleQuizzesOther" | "dashboard.quizzes.folderMasteredOne" | "dashboard.quizzes.folderMasteredOther") => {
+		const item = counts.createSpan({ cls: "qbd-module-card-count" });
+		item.createEl("strong", { text: String(n) });
+		// La clé produit « {count} quizzes » : on retire le chiffre de tête,
+		// déjà rendu en gras juste avant — seul le libellé reste.
+		item.appendText(" " + t(key, { count: n }).replace(/^\s*\d+\s*/, ""));
+	};
+	addCount(group.total, group.total === 1 ? "dashboard.quizzes.moduleQuizzesOne" : "dashboard.quizzes.moduleQuizzesOther");
+	counts.createSpan({ cls: "qbd-module-card-count-sep", text: "•" });
+	addCount(group.mastered, group.mastered === 1 ? "dashboard.quizzes.folderMasteredOne" : "dashboard.quizzes.folderMasteredOther");
+
 	const meta = body.createDiv({ cls: "qbd-quiz-card-meta" });
-	meta.createEl("span", {
-		cls: "qbd-quiz-card-meta-item",
-		text: t(group.total === 1 ? "dashboard.quizzes.moduleQuizzesOne" : "dashboard.quizzes.moduleQuizzesOther", { count: group.total }),
-	});
-	meta.createEl("span", {
-		cls: "qbd-quiz-card-meta-item",
-		text: t(group.mastered === 1 ? "dashboard.quizzes.folderMasteredOne" : "dashboard.quizzes.folderMasteredOther", { count: group.mastered }),
-	});
 
 	// Bouton ⋯ en bout de ligne meta (position StudySmarter : coin bas droit).
 	if (menu) {

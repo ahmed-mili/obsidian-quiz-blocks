@@ -291,6 +291,28 @@
 .qbd-module-card .qbd-quiz-card-meta {
 	margin-top: auto;
 	padding-top: 8px;
+	/* Footer réduit au ⋯ (les compteurs sont remontés dans le corps) :
+	   la rangée reste alignée à droite comme le footer StudySmarter. */
+	justify-content: flex-end;
+	min-height: 34px;
+}
+
+/* Compteurs dans le corps — « 12 Subsets • 96 Flashcards » StudySmarter :
+   chiffre en gras (texte normal), libellé et séparateur discrets. */
+.qbd-module-card-counts {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	margin-top: 10px;
+	font-size: 13px;
+	color: var(--text-muted);
+}
+.qbd-module-card-count strong {
+	font-weight: 600;
+	color: var(--text-normal);
+}
+.qbd-module-card-count-sep {
+	color: var(--text-faint);
 }
 
 /* Espacement inter-sections : 16 px au-dessus de chaque en-tête suivant
