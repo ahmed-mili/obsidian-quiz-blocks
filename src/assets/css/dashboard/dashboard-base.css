@@ -21,6 +21,14 @@
 	display: flex;
 	height: 100%;
 	overflow: hidden;
+	/* Plein écran : le bloc rail + contenu est CENTRÉ dans la fenêtre, le
+	   rail ne colle pas au bord (mesuré StudySmarter à 1920 px : rail x=310
+	   larg. 100 + colonne 1182 = bloc 1283 centré ; correction capture Ahmed
+	   2026-07-18 « la barre latérale, regarde où ils l'ont mise »).
+	   88 (notre rail) + 1182 + 64 de padding du contenu ≈ 1334. */
+	width: 100%;
+	max-width: 1334px;
+	margin: 0 auto;
 }
 
 /* Rail iconique étroit (référence StudySmarter) — une seule largeur
