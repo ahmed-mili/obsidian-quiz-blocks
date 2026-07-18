@@ -211,12 +211,14 @@
 .qbd-module-card {
 	background: var(--background-primary);
 	border: 1px solid var(--background-modifier-border);
-	border-radius: var(--radius-l, 12px);
-	/* Plus d'air (Ahmed : « augmente la taille des cartes ») + une hauteur
-	   minimale pour que toutes les cartes d'une rangée s'alignent, même celles
-	   sans sous-titre UE (orphelins) ou sans barre d'avancement. */
-	padding: 18px 20px;
-	min-height: 120px;
+	/* Dimensions MESURÉES sur une carte de la Library StudySmarter
+	   (2026-07-18, correction « les nôtres sont mal dimensionnées ») :
+	   350×148, radius 8, padding 16/12/8. La hauteur mini aligne les cartes
+	   d'une rangée ; la ligne meta est poussée au pied (margin-top auto,
+	   dashboard-components.css). */
+	border-radius: 8px;
+	padding: 16px 12px 8px;
+	min-height: 148px;
 	display: flex;
 	flex-direction: column;
 	cursor: pointer;
@@ -225,10 +227,11 @@
 	overflow: hidden;
 }
 
-/* Titre du module un cran plus grand que sur une carte de quiz (la carte de
-   module est un point d'entrée, pas un item de liste). */
+/* Titre du module : 16px/500 (mesuré sur « math » / « Réseaux » chez
+   StudySmarter). */
 .qbd-module-card .qbd-quiz-card-title {
-	font-size: 15px;
+	font-size: 16px;
+	font-weight: 500;
 }
 
 .qbd-module-card:hover {
@@ -243,7 +246,7 @@
    décalé de ~2px en haut et ~4px sur les côtés. On aligne sa marge sur le
    padding réel pour qu'il coiffe la carte pleine largeur, coins compris. */
 .qbd-module-card .qbd-quiz-card-accent {
-	margin: -18px -20px 14px;
+	margin: -16px -12px 12px;
 }
 
 .qbd-module-card-accent--done { background: var(--color-green, #4ade80); }
@@ -262,18 +265,45 @@
 	white-space: nowrap;
 }
 
-/* Grille de cartes de module. Colonnes plus larges (300 px mini), mais
-   plafonnées à 3 par rangée comme StudySmarter (mesuré 2026-07-18 : carte
-   ~324 px, gap 16 px, 3 max quelle que soit la largeur) : le max() force
-   chaque colonne à au moins un tiers de la rangée, donc jamais plus de 3.
-   Repli en 1 colonne sous .is-mobile (dashboard-base.css). */
+/* Grille de cartes de module. Largeur de rangée plafonnée à 1082 px
+   (3 × 350 + 2 × 16, la largeur de contenu MESURÉE de la Library
+   StudySmarter) : les cartes gardent ainsi les proportions de la référence
+   au lieu de s'étirer sur toute la largeur du panneau. Max 3 colonnes,
+   repli en 1 colonne sous .is-mobile (dashboard-base.css). */
 .qbd-module-grid {
 	display: grid;
+	max-width: 1082px;
 	grid-template-columns: repeat(
 		auto-fill,
 		minmax(max(300px, calc((100% - 2 * 16px) / 3)), 1fr)
 	);
 	gap: 16px;
+}
+
+/* Ligne meta de la carte de module poussée au PIED (footer StudySmarter :
+   filet + padding-top 8, collé en bas de la carte de 148 px). Le body doit
+   s'étirer sur la hauteur de la carte pour que le margin-top:auto agisse. */
+.qbd-module-card .qbd-quiz-card-body {
+	display: flex;
+	flex-direction: column;
+	flex: 1;
+}
+.qbd-module-card .qbd-quiz-card-meta {
+	margin-top: auto;
+	padding-top: 8px;
+}
+
+/* Espacement inter-sections : 16 px au-dessus de chaque en-tête suivant
+   (mesuré : bas des cartes → en-tête « Plus d'un mois » chez StudySmarter). */
+.qbd-quizzes-node + .qbd-quizzes-node {
+	margin-top: 16px;
+}
+
+/* Ligne séparatrice pleine largeur au-dessus de la première section
+   (« la ligne au dessus de last 7 days », capture StudySmarter). */
+.qbd-quizzes-tree {
+	border-top: 1px solid var(--background-modifier-border);
+	margin-top: 12px;
 }
 
 /* ── Fil d'Ariane du drill-down (« Tous les quiz » › nom du module) ── */
