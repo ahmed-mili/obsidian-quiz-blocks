@@ -58,7 +58,7 @@
 }
 
 .qbd-detail-ring-card {
-	background: var(--qbd-card-bg);
+	background: var(--background-secondary);
 	border: 1px solid var(--background-modifier-border);
 	border-radius: var(--radius-l, 12px);
 	padding: 20px 16px 16px;
@@ -93,7 +93,7 @@
 }
 
 .qbd-detail-stat-card {
-	background: var(--qbd-card-bg);
+	background: var(--background-secondary);
 	border: 1px solid var(--background-modifier-border);
 	border-radius: var(--radius-m, 8px);
 	padding: 11px 13px;
@@ -145,7 +145,7 @@
 }
 
 .qbd-detail-question-item {
-	background: var(--qbd-card-bg);
+	background: var(--background-secondary);
 	border: 1px solid var(--background-modifier-border);
 	border-radius: var(--radius-m, 8px);
 	padding: 10px 13px;
@@ -157,14 +157,14 @@
 
 .qbd-detail-question-item:hover {
 	border-color: var(--background-modifier-border-hover);
-	background: var(--qbd-card-bg-hover);
+	background: color-mix(in srgb, var(--background-modifier-hover) 30%, var(--background-secondary));
 }
 
 .qbd-detail-question-num {
 	width: 22px;
 	height: 22px;
 	border-radius: 6px;
-	background: var(--qbd-inset-bg);
+	background: var(--background-primary);
 	border: 1px solid var(--background-modifier-border);
 	display: flex;
 	align-items: center;

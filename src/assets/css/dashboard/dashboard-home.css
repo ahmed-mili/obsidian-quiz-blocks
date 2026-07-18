@@ -153,7 +153,7 @@
 .qbd-onboarding-manual {
 	width: 100%;
 	text-align: left;
-	background: var(--qbd-card-bg);
+	background: var(--background-secondary);
 	border: 1px solid var(--background-modifier-border);
 	border-radius: var(--radius-l, 12px);
 	padding: 16px 18px;
@@ -191,7 +191,7 @@
 }
 
 .qbd-onboarding-code {
-	background: var(--qbd-inset-bg);
+	background: var(--background-primary);
 	border: 1px solid var(--background-modifier-border);
 	border-radius: var(--radius-m, 8px);
 	padding: 12px 40px 12px 14px;
@@ -221,7 +221,7 @@
 	padding: 0;
 	border-radius: 6px;
 	border: 1px solid var(--background-modifier-border);
-	background: var(--qbd-inset-bg);
+	background: var(--background-secondary);
 	color: var(--text-muted);
 	cursor: pointer;
 	transition: background 0.14s ease, color 0.14s ease;

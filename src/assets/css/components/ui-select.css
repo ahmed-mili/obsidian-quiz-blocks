@@ -21,10 +21,7 @@
 	font-size: 12.5px;
 	font-weight: 500;
 	color: var(--text-normal);
-	/* Token dashboard AVEC fallback natif : le trigger vit dans le flux
-	   (sous .qbd-root il prend la surface carte, plus claire que le
-	   panneau) ; hors dashboard le token est vide → native. */
-	background-color: var(--qbd-card-bg, var(--background-primary)) !important;
+	background-color: var(--background-primary) !important;
 	border: 1px solid var(--background-modifier-border);
 	border-radius: var(--radius-m, 8px);
 	box-shadow: none !important;

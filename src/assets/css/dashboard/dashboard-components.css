@@ -97,7 +97,7 @@
 
 /* ── Stat cards ── */
 .qbd-stat-card {
-	background: var(--qbd-card-bg);
+	background: var(--background-secondary);
 	border: 1px solid var(--background-modifier-border);
 	border-radius: var(--radius-l, 12px);
 	padding: 16px 18px 14px;
@@ -179,7 +179,7 @@
 
 /* ── Quiz Card ── */
 .qbd-quiz-card {
-	background: var(--qbd-card-bg);
+	background: var(--background-primary);
 	border: 1px solid var(--background-modifier-border);
 	border-radius: var(--radius-l, 12px);
 	padding: 16px;
@@ -190,7 +190,7 @@
 }
 
 .qbd-quiz-card:hover {
-	background: var(--qbd-card-bg-hover);
+	background: var(--background-secondary);
 	border-color: var(--background-modifier-border-hover);
 	box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
 	transform: translateY(-1px);
@@ -597,7 +597,7 @@
 	width: 48px;
 	height: 48px;
 	border-radius: 14px;
-	background: var(--qbd-card-bg);
+	background: var(--background-secondary);
 	border: 1px solid var(--background-modifier-border);
 	display: flex;
 	align-items: center;
