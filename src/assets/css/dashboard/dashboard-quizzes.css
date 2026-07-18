@@ -69,7 +69,10 @@
    `.qbd-select` (ui-select.css) porte déjà tout le thémage (couleurs claires/
    sombres via variables Obsidian) : seul l'espacement est propre à cette vue. */
 .qbd-quizzes-group {
-	margin-bottom: 10px;
+	/* 24px : espace chip → en-tête de section élargi (annotation Ahmed
+	   2026-07-18 « augmente l'espace ») — la ligne séparatrice est retirée,
+	   c'est l'air qui structure. */
+	margin-bottom: 24px;
 }
 
 /* Géométrie du chip « Recent » MESURÉE sur le crop StudySmarter fourni
@@ -164,10 +167,9 @@
 	text-align: left;
 }
 
-.qbd-root .qbd-quizzes-node-head:hover {
-	background: var(--background-modifier-hover);
-	color: var(--text-normal);
-}
+/* AUCUN effet au survol des en-têtes de section (annotation Ahmed
+   2026-07-18 « retire ces effets au survol ils servent à rien ») : la barre
+   surlignée pleine largeur a été retirée, le curseur pointer suffit. */
 
 /* Pendant une recherche, la bascule de repli est désactivée (cf.
    quizzes.ts) : le curseur doit le dire, sans quoi le bouton reste lisible
@@ -175,18 +177,6 @@
    sinon inchangés — le nœud doit rester informatif. */
 .qbd-root .qbd-quizzes-node-head:disabled {
 	cursor: default;
-}
-
-/* Un button:disabled continue de matcher :hover en CSS, créant un faux positif
-   visuel (l'utilisateur pense que c'est cliquable). On neutralise le survol
-   en revenant au style de repos : fond transparent, texte neutre. Ne pas
-   utiliser opacity/filter (comme action-buttons.css) car le nœud doit rester
-   INFORMATIF pendant la recherche (compte/agrégat/barre lisibles). Préfixée
-   comme les règles ci-dessus pour rester devant :hover en cas de réordonnancement
-   futur, plutôt que de compter sur l'ordre des règles à spécificité égale. */
-.qbd-root .qbd-quizzes-node-head:disabled:hover {
-	background: transparent;
-	color: var(--text-muted);
 }
 
 .qbd-quizzes-node-chevron {
@@ -341,10 +331,10 @@
 	margin-top: 16px;
 }
 
-/* Ligne séparatrice pleine largeur au-dessus de la première section
-   (« la ligne au dessus de last 7 days », capture StudySmarter). */
+/* Plus de ligne séparatrice au-dessus de la première section (annotation
+   Ahmed 2026-07-18 « retire la ligne ») : l'espace sous le chip Recent
+   (marge de .qbd-quizzes-group) structure seul. */
 .qbd-quizzes-tree {
-	border-top: 1px solid var(--background-modifier-border);
 	margin-top: 12px;
 }
 

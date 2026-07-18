@@ -29,11 +29,26 @@
 	cursor: pointer;
 	min-width: 0;
 	max-width: 100%;
-	transition: border-color 0.14s ease, background-color 0.14s ease;
+	transform-origin: center;
+	transition: border-color 0.14s ease, background-color 0.14s ease,
+		transform 0.15s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
+/* Survol StudySmarter (annotation Ahmed 2026-07-18, pipette) : le FOND ne
+   change pas (#161B26 identique au repos chez eux), seule la bordure
+   s'éclaircit (#191E29 → #232732, delta ~+10). Dérivée par color-mix :
+   --background-modifier-border-hover résout à la MÊME valeur que la
+   bordure de repos dans le thème d'Ahmed (vérifié live) → hover mort. */
 .qbd-select:hover {
-	background-color: var(--background-modifier-hover) !important;
+	border-color: color-mix(in srgb, var(--text-normal) 10%, var(--background-modifier-border));
+}
+
+/* Clic StudySmarter : le trigger RÉTRÉCIT pendant l'appui puis reprend sa
+   taille au relâché — « réellement sentir qu'on a cliqué » (annotation).
+   Un <button disabled> ne reçoit pas :active, pas de guard nécessaire. */
+.qbd-select:active {
+	transform: scale(0.95);
+	transition-duration: 0.14s, 0.14s, 90ms;
 }
 
 .qbd-select:focus-visible,
