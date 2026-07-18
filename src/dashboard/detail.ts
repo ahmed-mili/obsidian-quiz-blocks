@@ -1,13 +1,11 @@
-import { Notice, setIcon, TFile } from "obsidian";
-import type { WorkspaceLeaf } from "obsidian";
+import { setIcon, TFile } from "obsidian";
 import JSON5 from "json5";
-import { VIEW_TYPE } from "../editor";
 import { t } from "../i18n";
 import type { DashboardCtx } from "../types/dashboard-ctx";
 import type { QuizIndexEntry } from "./scanner";
 import type { QuizStatRecord } from "./stats-store";
 import { quizTypeLabel } from "./quiz-card";
-import { openQuizForPlay } from "./quiz-open";
+import { openQuizForPlay, openQuizInEditor } from "./quiz-open";
 
 /* ══════════════════════════════════════════════════════════
    DETAIL VIEW — Dashboard
@@ -20,13 +18,6 @@ interface RawQuestionPreview {
 	prompt?: string;
 	title?: string;
 }
-
-/** Accès à `openQuizFile`, greffé au runtime sur QuizBuilderView (editor.ts:239)
- * mais non déclaré sur la classe elle-même — même pattern que editor/modals.ts
- * ViewLike (leaf.view est typé `View`, pas le sous-type concret). */
-type QuizEditorViewLike = {
-	openQuizFile?: (file: TFile, source: string) => Promise<void>;
-};
 
 export interface DetailHandlers {
 	render(container: HTMLElement, quiz: QuizIndexEntry): void;
@@ -61,7 +52,7 @@ export function createDetailHandlers(ctx: DashboardCtx): DetailHandlers {
 		const editIcon = editBtn.createSpan({ cls: "qbd-btn-icon" });
 		setIcon(editIcon, "edit");
 		editBtn.createSpan({ text: t("dashboard.detail.edit") });
-		editBtn.addEventListener("click", () => openInEditor(quiz));
+		editBtn.addEventListener("click", () => { void openQuizInEditor(ctx.app, quiz); });
 
 		const playBtn = topbar.createEl("button", { cls: "qbd-btn qbd-btn--primary" });
 		const playIcon = playBtn.createSpan({ cls: "qbd-btn-icon" });
@@ -159,7 +150,7 @@ export function createDetailHandlers(ctx: DashboardCtx): DetailHandlers {
 					cls: "qbd-detail-more-btn",
 					text: t(extra === 1 ? "dashboard.detail.moreOne" : "dashboard.detail.moreOther", { count: extra })
 				});
-				more.addEventListener("click", () => openInEditor(quiz));
+				more.addEventListener("click", () => { void openQuizInEditor(ctx.app, quiz); });
 			}
 		} catch {
 			wrapper.createEl("p", { cls: "qbd-empty-hint", text: t("dashboard.detail.loadError") });
@@ -198,42 +189,6 @@ export function createDetailHandlers(ctx: DashboardCtx): DetailHandlers {
 		svg.appendChild(fgCircle);
 
 		return svg;
-	}
-
-	async function openInEditor(quiz: QuizIndexEntry): Promise<void> {
-		const file = ctx.app.vault.getAbstractFileByPath(quiz.path);
-		if (!file || !(file instanceof TFile)) {
-			new Notice(t("dashboard.detail.fileNotFound"));
-			return;
-		}
-
-		try {
-			const content = await ctx.app.vault.read(file);
-			const match = content.match(/```quiz-blocks\n([\s\S]*?)\n```/);
-			if (!match) {
-				new Notice(t("dashboard.detail.noBlockInNote"));
-				return;
-			}
-
-			const existing = ctx.app.workspace.getLeavesOfType(VIEW_TYPE);
-			let leaf: WorkspaceLeaf;
-			if (existing.length > 0) {
-				leaf = existing[0];
-				ctx.app.workspace.revealLeaf(leaf);
-			} else {
-				leaf = ctx.app.workspace.getLeaf("tab");
-				await leaf.setViewState({ type: VIEW_TYPE, active: true });
-				ctx.app.workspace.revealLeaf(leaf);
-			}
-
-			const view = leaf.view as QuizEditorViewLike;
-			if (view && view.openQuizFile) {
-				await view.openQuizFile(file, match[1]);
-				new Notice(t("dashboard.detail.opened", { name: file.basename }));
-			}
-		} catch (err) {
-			new Notice(t("dashboard.detail.openError"));
-		}
 	}
 
 	return { render };

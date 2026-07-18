@@ -229,6 +229,9 @@ export interface ActionMenuItem {
 	sub?: string;
 	hint?: string;
 	disabled?: boolean;
+	/** Rangée destructrice, teintée rouge (façon « Delete Study Set » de
+	    StudySmarter) — à placer en dernier dans le menu. */
+	danger?: boolean;
 	onClick?: () => void;
 }
 
@@ -246,7 +249,9 @@ export function openActionMenu(anchorEl: HTMLElement, items: ActionMenuItem[]): 
 
 	for (const item of items) {
 		const btn = menuEl.createEl("button", {
-			cls: "qbd-select-option" + (item.disabled ? " qbd-select-option--disabled" : "")
+			cls: "qbd-select-option"
+				+ (item.disabled ? " qbd-select-option--disabled" : "")
+				+ (item.danger ? " qbd-select-option--danger" : "")
 		});
 		btn.type = "button";
 		btn.setAttribute("role", "menuitem");

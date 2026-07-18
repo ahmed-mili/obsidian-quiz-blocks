@@ -287,6 +287,32 @@
 	border-top: 1px solid var(--background-modifier-border);
 }
 
+/* Bouton ⋯ des cartes (quiz ET module) — coin bas droit de la ligne meta,
+   position StudySmarter. Discret au repos, surface au survol. */
+.qbd-card-more {
+	margin-left: auto;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 24px;
+	height: 24px;
+	padding: 0;
+	border: none;
+	border-radius: 6px;
+	background: transparent;
+	box-shadow: none;
+	color: var(--text-muted);
+	cursor: pointer;
+}
+.qbd-card-more:hover {
+	background: var(--background-modifier-hover);
+	color: var(--text-normal);
+}
+.qbd-card-more svg {
+	width: 16px;
+	height: 16px;
+}
+
 .qbd-quiz-card-meta-item {
 	font-size: 10px;
 	color: var(--text-faint);

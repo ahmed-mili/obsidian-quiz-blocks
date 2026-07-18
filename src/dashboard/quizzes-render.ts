@@ -1,11 +1,12 @@
-import { setIcon } from "obsidian";
+import { Notice, setIcon } from "obsidian";
 import { t } from "../i18n";
 import type { TransKey } from "../i18n";
 import type { DashboardCtx } from "../types/dashboard-ctx";
 import type { QuizIndexEntry } from "./scanner";
 import type { QuizStatRecord } from "./stats-store";
 import { renderQuizCard, quizTypeLabel } from "./quiz-card";
-import { openQuizForPlay } from "./quiz-open";
+import { openQuizForPlay, openQuizInEditor } from "./quiz-open";
+import type { ActionMenuItem } from "./ui-select";
 import { renderModuleCard } from "./module-card";
 import { moduleForQuiz, buildModuleGroups, buildUeGroups } from "./quiz-modules";
 import type { ModuleMap, ModuleGroup, UeGroup } from "./quiz-modules";
@@ -33,6 +34,49 @@ export interface GridDeps {
 	toggleExpanded: (key: string) => void;
 	rerender: () => void;
 	openModule: (folder: string) => void;
+}
+
+/* ── Menus ⋯ des cartes (repris des fonctions pertinentes de StudySmarter :
+   Edit / Delete ; « Share », « Archive », « reminders » n'ont pas d'équivalent
+   chez nous). Bâtis AU CLIC, jamais au rendu : les stats bougent. ── */
+
+/** Menu ⋯ d'une carte de quiz : Éditer + Réinitialiser les stats. */
+function quizCardMenu(ctx: DashboardCtx, rerender: () => void): (quiz: QuizIndexEntry) => ActionMenuItem[] {
+	return (quiz) => [
+		{
+			icon: "pencil",
+			label: t("dashboard.detail.edit"),
+			onClick: () => { void openQuizInEditor(ctx.app, quiz); },
+		},
+		{
+			icon: "rotate-ccw",
+			label: t("dashboard.quizzes.menuResetStats"),
+			danger: true,
+			disabled: !ctx.statsStore || !ctx.statsStore.getRecord(quiz.path),
+			onClick: () => {
+				ctx.statsStore?.deleteRecord(quiz.path);
+				new Notice(t("dashboard.quizzes.statsReset"));
+				rerender();
+			},
+		},
+	];
+}
+
+/** Menu ⋯ d'une carte de module : Réinitialiser les stats de TOUS ses quiz. */
+function moduleCardMenu(ctx: DashboardCtx, rerender: () => void): (g: ModuleGroup) => ActionMenuItem[] {
+	return (g) => [
+		{
+			icon: "rotate-ccw",
+			label: t("dashboard.quizzes.menuResetModule"),
+			danger: true,
+			disabled: !ctx.statsStore || !g.quizzes.some(q => ctx.statsStore?.getRecord(q.path)),
+			onClick: () => {
+				for (const q of g.quizzes) ctx.statsStore?.deleteRecord(q.path);
+				new Notice(t("dashboard.quizzes.statsReset"));
+				rerender();
+			},
+		},
+	];
 }
 
 const RECENT_GROUP_LABEL_KEYS: Record<RecentGroupKey, TransKey> = {
@@ -103,6 +147,7 @@ function renderFlatGroup(
 		// sort le quiz (cf. quiz-card.ts, défaut true).
 		renderQuizCard(grid, quiz, stats[quiz.path], (q) => deps.ctx.navigate("detail", { quiz: q }), {
 			onPlay: (q) => openQuizForPlay(deps.ctx.app, q),
+			menu: quizCardMenu(deps.ctx, deps.rerender),
 		});
 	}
 }
@@ -111,9 +156,10 @@ function renderFlatGroup(
     La carte affiche toujours son sous-titre UE (demande d'Ahmed : l'UE sur la
     carte façon StudySmarter, même sous un en-tête d'UE — comme StudySmarter
     garde le sous-titre d'une carte dans une section groupée). */
-function renderModuleGrid(parent: HTMLElement, groups: ModuleGroup[], onOpen: (folder: string) => void): void {
+function renderModuleGrid(deps: GridDeps, parent: HTMLElement, groups: ModuleGroup[]): void {
 	const grid = parent.createDiv({ cls: "qbd-module-grid" });
-	for (const g of groups) renderModuleCard(grid, g, (m) => onOpen(m.folder));
+	const menu = moduleCardMenu(deps.ctx, deps.rerender);
+	for (const g of groups) renderModuleCard(grid, g, (m) => deps.openModule(m.folder), menu);
 }
 
 /* En-tête d'UE repliable + grille de cartes de module dessous. */
@@ -127,7 +173,7 @@ function renderUeGroup(deps: GridDeps, parent: HTMLElement, ue: UeGroup): void {
 	const collapsed = wireCollapseToggle(deps, head, chev, ue.key);
 	if (collapsed) return;
 	const body = nodeEl.createDiv({ cls: "qbd-quizzes-node-body" });
-	renderModuleGrid(body, ue.modules, deps.openModule);
+	renderModuleGrid(deps, body, ue.modules);
 }
 
 /** Contenu de la grille pour les 4 axes (pas le drill-down) : dispatch par
@@ -165,7 +211,7 @@ export function renderQuizGrid(
 	} else {
 		// Mode « module » (défaut) : grille plate de cartes de module — noms
 		// et UE résolus depuis la note de correspondance (map).
-		renderModuleGrid(treeEl, buildModuleGroups(filtered, stats, map), deps.openModule);
+		renderModuleGrid(deps, treeEl, buildModuleGroups(filtered, stats, map));
 	}
 }
 
@@ -184,7 +230,9 @@ export function renderModuleDrill(
 	map: ModuleMap,
 	openModuleFolder: string,
 	applyFilters: ApplyFilters,
-	onBack: () => void
+	onBack: () => void,
+	/* Re-rendu SANS refermer le drill-down (reset de stats depuis le menu ⋯). */
+	rerender: () => void
 ): void {
 	treeEl.empty();
 
@@ -209,6 +257,7 @@ export function renderModuleDrill(
 	for (const quiz of inModule) {
 		renderQuizCard(grid, quiz, stats[quiz.path], (q) => ctx.navigate("detail", { quiz: q }), {
 			onPlay: (q) => openQuizForPlay(ctx.app, q),
+			menu: quizCardMenu(ctx, rerender),
 		});
 	}
 }

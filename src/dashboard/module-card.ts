@@ -1,6 +1,9 @@
+import { setIcon } from "obsidian";
 import { t } from "../i18n";
 import type { QuizIndexEntry } from "./scanner";
 import type { ModuleGroup } from "./quiz-modules";
+import { openActionMenu } from "./ui-select";
+import type { ActionMenuItem } from "./ui-select";
 
 /* ══════════════════════════════════════════════════════════
    MODULE CARD — une carte = un MODULE (dossier de quiz), nommé
@@ -12,7 +15,10 @@ import type { ModuleGroup } from "./quiz-modules";
 export function renderModuleCard(
 	container: HTMLElement,
 	group: ModuleGroup,
-	onOpen: (group: ModuleGroup) => void
+	onOpen: (group: ModuleGroup) => void,
+	/* menu (opt-in, même patron que quiz-card.ts) : items du menu ⋯, bâtis
+	   par l'appelant au clic. Non fourni = pas de bouton ⋯. */
+	menu?: (group: ModuleGroup) => ActionMenuItem[]
 ): HTMLDivElement {
 	const card = container.createDiv({ cls: "qbd-module-card" });
 	// Liseré coloré selon l'avancement (vert si tout maîtrisé, accent sinon).
@@ -48,6 +54,18 @@ export function renderModuleCard(
 		cls: "qbd-quiz-card-meta-item",
 		text: t(group.mastered === 1 ? "dashboard.quizzes.folderMasteredOne" : "dashboard.quizzes.folderMasteredOther", { count: group.mastered }),
 	});
+
+	// Bouton ⋯ en bout de ligne meta (position StudySmarter : coin bas droit).
+	if (menu) {
+		const moreBtn = meta.createEl("button", { cls: "qbd-card-more" });
+		moreBtn.type = "button";
+		moreBtn.title = t("dashboard.card.more");
+		setIcon(moreBtn, "ellipsis");
+		moreBtn.addEventListener("click", (e) => {
+			e.stopPropagation();
+			openActionMenu(moreBtn, menu(group));
+		});
+	}
 
 	card.addEventListener("click", () => onOpen(group));
 	return card;

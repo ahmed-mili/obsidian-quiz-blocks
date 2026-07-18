@@ -1,5 +1,6 @@
 import { Notice, TFile } from "obsidian";
-import type { App } from "obsidian";
+import type { App, WorkspaceLeaf } from "obsidian";
+import { VIEW_TYPE } from "../editor";
 import { t } from "../i18n";
 import type { QuizIndexEntry } from "./scanner";
 
@@ -21,4 +22,46 @@ export async function openQuizForPlay(app: App, quiz: QuizIndexEntry): Promise<v
 	}
 	const leaf = app.workspace.getLeaf(false);
 	await leaf.openFile(file);
+}
+
+/** Accès à `openQuizFile`, greffé au runtime sur QuizBuilderView (editor.ts:239)
+ * mais non déclaré sur la classe elle-même — même pattern que detail.ts. */
+type QuizEditorViewLike = {
+	openQuizFile?: (file: TFile, source: string) => Promise<void>;
+};
+
+/** Ouvre un quiz dans l'éditeur visuel (vue onglet, réutilisée si déjà ouverte).
+    Extrait de detail.ts (openInEditor) pour être partagé avec le menu ⋯ des
+    cartes de « Mes quiz » — un seul chemin d'édition, jamais deux copies. */
+export async function openQuizInEditor(app: App, quiz: QuizIndexEntry): Promise<void> {
+	const file = app.vault.getAbstractFileByPath(quiz.path);
+	if (!file || !(file instanceof TFile)) {
+		new Notice(t("dashboard.detail.fileNotFound"));
+		return;
+	}
+	try {
+		const content = await app.vault.read(file);
+		const match = content.match(/```quiz-blocks\n([\s\S]*?)\n```/);
+		if (!match) {
+			new Notice(t("dashboard.detail.noBlockInNote"));
+			return;
+		}
+		const existing = app.workspace.getLeavesOfType(VIEW_TYPE);
+		let leaf: WorkspaceLeaf;
+		if (existing.length > 0) {
+			leaf = existing[0];
+			app.workspace.revealLeaf(leaf);
+		} else {
+			leaf = app.workspace.getLeaf("tab");
+			await leaf.setViewState({ type: VIEW_TYPE, active: true });
+			app.workspace.revealLeaf(leaf);
+		}
+		const view = leaf.view as QuizEditorViewLike;
+		if (view && view.openQuizFile) {
+			await view.openQuizFile(file, match[1]);
+			new Notice(t("dashboard.detail.opened", { name: file.basename }));
+		}
+	} catch {
+		new Notice(t("dashboard.detail.openError"));
+	}
 }

@@ -3,6 +3,8 @@ import { t } from "../i18n";
 import type { TransKey } from "../i18n";
 import type { QuizIndexEntry, QuizTypeTag } from "./scanner";
 import type { QuizStatRecord } from "./stats-store";
+import { openActionMenu } from "./ui-select";
+import type { ActionMenuItem } from "./ui-select";
 
 /* Tag de type de quiz (calculé au scan) → clé de traduction, résolue au rendu.
    Table explicite plutôt qu'une clé construite par concaténation : `t()` n'accepte
@@ -47,7 +49,10 @@ export function renderQuizCard(
 	   onPlay : callback de lancement direct, construite par l'appelant à
 	   partir de SON `ctx.app` (renderQuizCard n'a pas accès à `app` — même
 	   patron que `onOpen`, pas de nouveau paramètre positionnel). */
-	opts?: { showPath?: boolean; onPlay?: (quiz: QuizIndexEntry) => void }
+	/* menu (opt-in, même patron que onPlay) : items du menu ⋯ façon
+	   StudySmarter, bâtis par l'appelant AU CLIC (les stats peuvent avoir
+	   changé depuis le rendu de la carte). Non fourni = pas de bouton ⋯. */
+	opts?: { showPath?: boolean; onPlay?: (quiz: QuizIndexEntry) => void; menu?: (quiz: QuizIndexEntry) => ActionMenuItem[] }
 ): HTMLDivElement {
 	const card = container.createDiv({ cls: "qbd-quiz-card" });
 	card.dataset.path = quiz.path;
@@ -151,6 +156,20 @@ export function renderQuizCard(
 		const scoreSpan = meta.createEl("span", { cls: "qbd-quiz-card-score-value" });
 		scoreSpan.style.color = scoreColor;
 		scoreSpan.textContent = t("dashboard.card.best", { score: best });
+	}
+
+	// Bouton ⋯ en bout de ligne meta (position StudySmarter : coin bas droit).
+	// stopPropagation : ouvrir le menu ne doit PAS aussi ouvrir la fiche.
+	if (opts?.menu) {
+		const menu = opts.menu;
+		const moreBtn = meta.createEl("button", { cls: "qbd-card-more" });
+		moreBtn.type = "button";
+		moreBtn.title = t("dashboard.card.more");
+		setIcon(moreBtn, "ellipsis");
+		moreBtn.addEventListener("click", (e) => {
+			e.stopPropagation();
+			openActionMenu(moreBtn, menu(quiz));
+		});
 	}
 
 	// Ouverture (navigation laissée à l'appelant)

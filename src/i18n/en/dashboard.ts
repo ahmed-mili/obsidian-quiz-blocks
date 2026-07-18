@@ -83,12 +83,18 @@ export const EN_DASHBOARD = {
 	"dashboard.quizzes.recentMonth": "Last 30 days",
 	"dashboard.quizzes.recentOlder": "Older",
 
+	/* ── Menu ⋯ des cartes (fonctions reprises de StudySmarter) ── */
+	"dashboard.quizzes.menuResetStats": "Reset stats",
+	"dashboard.quizzes.menuResetModule": "Reset module stats",
+	"dashboard.quizzes.statsReset": "Stats reset",
+
 	/* ── Carte de quiz (état) ── */
 	"dashboard.card.mastered": "Mastered",
 	"dashboard.card.review": "To review",
 	"dashboard.card.progress": "In progress · {pct}%",
 	"dashboard.card.fresh": "Not started",
 	"dashboard.card.best": "Best {score}%",
+	"dashboard.card.more": "More actions",
 
 	/* ── Type de quiz (calculé par le scanner, traduit au rendu) ── */
 	"dashboard.quizType.mixed": "Mixed",

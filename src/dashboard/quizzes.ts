@@ -149,7 +149,7 @@ export function createQuizzesHandlers(ctx: DashboardCtx): QuizzesHandlers {
 			renderModuleDrill(treeEl, ctx, quizzes, stats, effectiveMap(), openModuleFolder, applyFilters, () => {
 				openModuleFolder = null;
 				if (containerRef) render(containerRef);
-			});
+			}, () => { if (containerRef) render(containerRef); });
 		} else {
 			renderQuizGrid({
 				ctx,

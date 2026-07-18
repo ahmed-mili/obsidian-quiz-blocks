@@ -72,12 +72,18 @@ export const FR_DASHBOARD: Record<keyof typeof EN_DASHBOARD, string> = {
 	"dashboard.quizzes.recentMonth": "30 derniers jours",
 	"dashboard.quizzes.recentOlder": "Plus ancien",
 
+	/* ── Menu ⋯ des cartes ── */
+	"dashboard.quizzes.menuResetStats": "Réinitialiser les stats",
+	"dashboard.quizzes.menuResetModule": "Réinitialiser les stats du module",
+	"dashboard.quizzes.statsReset": "Stats réinitialisées",
+
 	/* ── Carte de quiz ── */
 	"dashboard.card.mastered": "Maîtrisé",
 	"dashboard.card.review": "À revoir",
 	"dashboard.card.progress": "En cours · {pct}%",
 	"dashboard.card.fresh": "À commencer",
 	"dashboard.card.best": "Meilleur {score}%",
+	"dashboard.card.more": "Plus d'actions",
 
 	/* ── Type de quiz ── */
 	"dashboard.quizType.mixed": "Mixte",

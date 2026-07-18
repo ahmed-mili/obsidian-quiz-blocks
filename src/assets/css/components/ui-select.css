@@ -237,6 +237,15 @@
 	color: var(--text-muted);
 }
 
+/* Rangée destructrice (façon « Delete Study Set » StudySmarter) : libellé et
+   icône teintés rouge, y compris au survol. */
+.qbd-select-option--danger,
+.qbd-select-option--danger .qbd-select-option-label,
+.qbd-select-option--danger .qbd-action-menu-icon,
+.qbd-select-option--danger:hover .qbd-action-menu-icon {
+	color: var(--color-red, #f87171);
+}
+
 /* ── Menu modèle + effort (façon claude.ai) ── */
 .qbd-model-trigger .qbd-select-label {
 	display: inline-flex;

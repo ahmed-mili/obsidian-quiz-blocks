@@ -263,13 +263,18 @@
 	white-space: nowrap;
 }
 
-/* Grille de cartes de module. Colonnes plus larges (300 px mini) et gouttière
-   plus généreuse que .qbd-home-grid : Ahmed voulait des cartes plus grandes
-   (2026-07-17). Repli en 1 colonne sous .is-mobile (dashboard-base.css). */
+/* Grille de cartes de module. Colonnes plus larges (300 px mini), mais
+   plafonnées à 3 par rangée comme StudySmarter (mesuré 2026-07-18 : carte
+   ~324 px, gap 16 px, 3 max quelle que soit la largeur) : le max() force
+   chaque colonne à au moins un tiers de la rangée, donc jamais plus de 3.
+   Repli en 1 colonne sous .is-mobile (dashboard-base.css). */
 .qbd-module-grid {
 	display: grid;
-	grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-	gap: 14px;
+	grid-template-columns: repeat(
+		auto-fill,
+		minmax(max(300px, calc((100% - 2 * 16px) / 3)), 1fr)
+	);
+	gap: 16px;
 }
 
 /* ── Fil d'Ariane du drill-down (« Tous les quiz » › nom du module) ── */
