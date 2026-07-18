@@ -10,9 +10,13 @@ import { openColorPicker } from "./color-picker";
 /* ══════════════════════════════════════════════════════════
    MODULE EDIT — modal « Modifier dossier », calqué sur celui de
    StudySmarter (capture Excalidraw 2026-07-18) : nom du dossier,
-   UE (leur « Matière »), pastilles de couleur, bouton Enregistrer
-   pleine largeur. SANS le toggle « Rendre ce dossier publique »
-   (exclu explicitement par Ahmed). Persistance : override réglages
+   UE (leur « Matière »), pastilles de couleur. SANS le toggle
+   « Rendre ce dossier publique » (exclu explicitement par Ahmed).
+   AUTO-SAVE (pas de bouton Enregistrer) : tout est local, donc chaque
+   changement est appliqué à l'override EN MÉMOIRE aussitôt (apply()),
+   puis persisté sur disque + grille rafraîchie une seule fois à la
+   fermeture (onClose) — pas de martèlement I/O pendant le drag du
+   picker, où onChange émet ~60×/s. Persistance : override réglages
    (quizzesModuleOverrides) — la note de correspondance n'est JAMAIS
    réécrite par le plugin.
 ══════════════════════════════════════════════════════════ */
@@ -27,6 +31,8 @@ export class ModuleEditModal extends Modal {
 	private name: string;
 	private ue: string | null;
 	private color: string | undefined;
+	/** Un changement au moins a eu lieu → onClose persiste + rafraîchit. */
+	private dirty = false;
 
 	constructor(
 		private ctx: DashboardCtx,
@@ -40,6 +46,25 @@ export class ModuleEditModal extends Modal {
 		this.color = group.color;
 	}
 
+	/** Auto-save : reconstruit l'override depuis l'état courant, l'écrit dans
+	    les settings EN MÉMOIRE (synchrone) et rafraîchit la grille AUSSITÔT —
+	    la carte du dossier se recolore à chaque clic de couleur (temps réel),
+	    sans attendre la fermeture. effectiveMap() relit les overrides à chaque
+	    rendu, donc onSaved() reflète le changement immédiatement. La seule
+	    écriture disque est différée à onClose (pas de martèlement I/O). */
+	private apply(): void {
+		const overrides = { ...(this.ctx.plugin.settings.quizzesModuleOverrides || {}) };
+		const ov: ModuleOverride = {};
+		if (this.name.trim() && this.name.trim() !== this.group.folder) ov.name = this.name.trim();
+		// null (Sans UE) ne se stocke que si la note, elle, donnait une UE.
+		ov.ue = this.ue;
+		if (this.color) ov.color = this.color;
+		overrides[this.group.folder] = ov;
+		this.ctx.plugin.settings.quizzesModuleOverrides = overrides;
+		this.dirty = true;
+		this.onSaved();
+	}
+
 	onOpen(): void {
 		this.modalEl.addClass("qbd-medit-modal");
 		this.titleEl.setText(t("dashboard.quizzes.moduleEditTitle"));
@@ -49,7 +74,7 @@ export class ModuleEditModal extends Modal {
 		c.createEl("p", { cls: "qbd-medit-label", text: t("dashboard.quizzes.moduleEditName") });
 		const nameInput = c.createEl("input", { type: "text", cls: "qbd-medit-input" });
 		nameInput.value = this.name;
-		nameInput.addEventListener("input", () => { this.name = nameInput.value; });
+		nameInput.addEventListener("input", () => { this.name = nameInput.value; this.apply(); });
 
 		// ── UE (la « Matière » de StudySmarter) ──
 		c.createEl("p", { cls: "qbd-medit-label", text: t("dashboard.quizzes.moduleEditUe") });
@@ -67,7 +92,7 @@ export class ModuleEditModal extends Modal {
 			openActionMenu(ueBtn, options.map(ue => ({
 				icon: ue === this.ue ? "check" : undefined,
 				label: ue ?? t("dashboard.quizzes.noUe"),
-				onClick: () => { this.ue = ue; paintUe(); },
+				onClick: () => { this.ue = ue; paintUe(); this.apply(); },
 			})));
 		});
 
@@ -86,6 +111,7 @@ export class ModuleEditModal extends Modal {
 				dot.addEventListener("click", () => {
 					this.color = this.color === col ? undefined : col;
 					paintDots();
+					this.apply();
 				});
 			}
 			// 9e cercle : couleur personnalisée. Roue chromatique au repos ;
@@ -105,29 +131,21 @@ export class ModuleEditModal extends Modal {
 				openColorPicker(custom, this.color ?? COLORS[0], (hex) => {
 					this.color = hex;
 					paintDots();
+					this.apply();
 				});
 			});
 		};
 		paintDots();
-
-		// ── Enregistrer ──
-		const save = c.createEl("button", { cls: "qbd-medit-save", text: t("dashboard.quizzes.moduleEditSave") });
-		save.addEventListener("click", () => {
-			const overrides = { ...(this.ctx.plugin.settings.quizzesModuleOverrides || {}) };
-			const ov: ModuleOverride = {};
-			if (this.name.trim() && this.name.trim() !== this.group.folder) ov.name = this.name.trim();
-			// null (Sans UE) ne se stocke que si la note, elle, donnait une UE.
-			ov.ue = this.ue;
-			if (this.color) ov.color = this.color;
-			overrides[this.group.folder] = ov;
-			this.ctx.plugin.settings.quizzesModuleOverrides = overrides;
-			this.ctx.plugin.saveSettings().catch(() => {});
-			this.close();
-			this.onSaved();
-		});
+		// Pas de bouton « Enregistrer » : auto-save (apply() sur chaque
+		// changement) + flush à onClose. Fermeture par clic-dehors / Échap.
 	}
 
 	onClose(): void {
+		// La grille a déjà été rafraîchie en direct par apply() ; il ne reste
+		// qu'à flusher les settings sur disque UNE fois (pas 60×/s pendant le
+		// drag du picker). saveSettings ne s'appelle que si un changement a eu
+		// lieu.
+		if (this.dirty) this.ctx.plugin.saveSettings().catch(() => {});
 		this.contentEl.empty();
 	}
 }
