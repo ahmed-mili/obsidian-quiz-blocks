@@ -540,7 +540,7 @@
 }
 
 .qbd-ai-hint--info {
-	background: var(--background-primary);
+	background: var(--qbd-card-bg);
 	border: 1px solid var(--background-modifier-border);
 	color: var(--text-muted);
 }
@@ -656,7 +656,7 @@
 	font-weight: 600;
 	font-family: var(--font-interface, inherit);
 	color: var(--text-normal);
-	background: var(--background-primary) !important;
+	background: var(--qbd-inset-bg) !important;
 	border: 1px solid var(--background-modifier-border);
 	box-shadow: none !important;
 	border-radius: var(--radius-m, 8px);
@@ -673,14 +673,14 @@
    --background-modifier-hover d'origine était terne. */
 .qbd-ai-hint-action:hover {
 	border-color: color-mix(in srgb, var(--interactive-accent) 55%, var(--background-modifier-border));
-	background: color-mix(in srgb, var(--text-normal) 6%, var(--background-primary)) !important;
+	background: color-mix(in srgb, var(--text-normal) 6%, var(--qbd-inset-bg)) !important;
 	transform: translateY(-1px);
 	box-shadow: 0 3px 8px -4px rgba(0, 0, 0, 0.4) !important;
 }
 
 .qbd-ai-hint-action:active {
 	transform: translateY(0);
-	background: color-mix(in srgb, var(--text-normal) 10%, var(--background-primary)) !important;
+	background: color-mix(in srgb, var(--text-normal) 10%, var(--qbd-inset-bg)) !important;
 	box-shadow: none !important;
 }
 
@@ -700,7 +700,7 @@
 	flex-direction: column;
 	gap: 6px;
 	padding: 14px 14px 10px;
-	background: var(--background-secondary);
+	background: var(--qbd-card-bg);
 	border: 1px solid var(--background-modifier-border);
 	border-radius: 16px;
 	transition: border-color 0.15s ease, box-shadow 0.15s ease;
@@ -966,7 +966,7 @@
 }
 
 .qbd-ai-editor-embed .qb-editor {
-	background: var(--background-primary);
+	background: var(--qbd-card-bg);
 }
 
 /* Attachements dans le composer — vignettes d'images (rangée normale,
@@ -1030,7 +1030,7 @@
 	align-items: center;
 	gap: 6px;
 	padding: 5px 8px;
-	background: var(--background-primary);
+	background: var(--qbd-inset-bg);
 	border: 1px solid var(--background-modifier-border);
 	border-radius: var(--radius-m, 8px);
 	font-size: 11.5px;
@@ -1325,7 +1325,7 @@
 
 .qbd-opts-count:focus {
 	border-color: var(--interactive-accent);
-	background-color: var(--background-primary);
+	background-color: var(--qbd-inset-bg);
 }
 
 .qbd-opts-count::-webkit-inner-spin-button,
@@ -1377,7 +1377,7 @@
 /* ── Loading state ── */
 .qbd-ai-preview-loading {
 	flex: 1;
-	background: var(--background-secondary);
+	background: var(--qbd-card-bg);
 	border: 1px solid var(--background-modifier-border);
 	border-radius: var(--radius-l, 12px);
 	display: flex;
@@ -1407,7 +1407,7 @@
 	width: 52px;
 	height: 52px;
 	border-radius: 16px;
-	background: var(--background-primary);
+	background: var(--qbd-inset-bg);
 	border: 1px solid var(--background-modifier-border);
 	display: flex;
 	align-items: center;
@@ -1495,7 +1495,7 @@
 }
 
 .qbd-ai-result-item {
-	background: var(--background-secondary);
+	background: var(--qbd-card-bg);
 	border: 1px solid var(--background-modifier-border);
 	border-radius: var(--radius-m, 8px);
 	padding: 10px 13px;
@@ -1520,7 +1520,7 @@
 	width: 22px;
 	height: 22px;
 	border-radius: 6px;
-	background: var(--background-primary);
+	background: var(--qbd-inset-bg);
 	border: 1px solid var(--background-modifier-border);
 	display: flex;
 	align-items: center;
@@ -1567,7 +1567,7 @@
 /* ── Error state ── */
 .qbd-ai-preview-error {
 	flex: 1;
-	background: var(--background-secondary);
+	background: var(--qbd-card-bg);
 	border: 1px solid color-mix(in srgb, var(--color-red, #f87171) 20%, var(--background-modifier-border));
 	border-radius: var(--radius-l, 12px);
 	display: flex;

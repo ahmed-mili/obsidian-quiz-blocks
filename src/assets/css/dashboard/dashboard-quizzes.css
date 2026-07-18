@@ -43,7 +43,7 @@
    (`.theme-dark input`, `button:not(.clickable-icon)`, spécificité ≥ 0,1,1). */
 .qbd-root .qbd-quizzes-search-input {
 	width: 100%;
-	background: var(--background-secondary);
+	background: var(--qbd-card-bg);
 	border: 1px solid var(--background-modifier-border);
 	border-radius: var(--radius-m, 8px);
 	padding: 9px 12px 9px 34px;
@@ -209,7 +209,7 @@
    coins) ; seuls le liseré coloré par avancement et l'étiquette UE lui sont
    propres. */
 .qbd-module-card {
-	background: var(--background-primary);
+	background: var(--qbd-card-bg);
 	border: 1px solid var(--background-modifier-border);
 	/* Dimensions MESURÉES sur une carte de la Library StudySmarter
 	   (2026-07-18, correction « les nôtres sont mal dimensionnées ») :
@@ -235,7 +235,7 @@
 }
 
 .qbd-module-card:hover {
-	background: var(--background-secondary);
+	background: var(--qbd-card-bg-hover);
 	border-color: var(--background-modifier-border-hover);
 	box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
 	transform: translateY(-1px);

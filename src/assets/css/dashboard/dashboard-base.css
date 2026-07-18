@@ -15,6 +15,28 @@
 	font-family: var(--font-interface, inherit);
 	color: var(--text-normal);
 	background: var(--background-primary);
+	/* Colorimétrie StudySmarter (pipette sur leur Library, 2026-07-18) :
+	   TROIS niveaux de profondeur, du plus sombre au plus clair —
+	   panneau central (#0C111D chez eux) < cartes (#161B26, delta +10)
+	   < surfaces encastrées dans une carte (badge, chip, code : #22273x).
+	   Le fond de PAGE (thème/wallpaper) reste au-dessus du panneau en
+	   luminance perçue. Dérivé des natives → theme-aware ; le panneau est
+	   translucide à 6 % pour laisser respirer le wallpaper. */
+	--qbd-panel-bg: color-mix(in srgb, color-mix(in srgb, var(--background-primary) 42%, black) 94%, transparent);
+	--qbd-card-bg: color-mix(in srgb, var(--background-primary) 74%, black);
+	--qbd-card-bg-hover: color-mix(in srgb, var(--qbd-card-bg) 95%, white);
+	--qbd-inset-bg: color-mix(in srgb, var(--qbd-card-bg) 92%, white);
+	--qbd-line: color-mix(in srgb, var(--text-normal) 8%, transparent);
+}
+
+/* En clair, la relation s'inverse comme chez StudySmarter light : panneau
+   gris très léger, cartes BLANCHES (plus claires que le panneau). */
+.theme-light .qbd-root {
+	--qbd-panel-bg: color-mix(in srgb, var(--background-primary) 95%, black);
+	--qbd-card-bg: var(--background-primary);
+	--qbd-card-bg-hover: color-mix(in srgb, var(--background-primary) 97%, black);
+	--qbd-inset-bg: color-mix(in srgb, var(--background-primary) 96%, black);
+	--qbd-line: color-mix(in srgb, var(--text-normal) 10%, transparent);
 }
 
 .qbd-layout {
@@ -53,11 +75,15 @@
 	overflow-x: hidden;
 	padding: 28px 32px;
 	animation: qbd-fade-in 0.2s ease-out;
-	/* Fond de ZONE CENTRALE façon StudySmarter (demande 2026-07-18) : leur
-	   colonne de contenu porte un fond opaque (rgb(12,17,29)) distinct du
-	   fond de page, le rail restant dessus. Version theme-aware et
-	   SEMI-opaque : le wallpaper du thème reste perceptible derrière. */
-	background: color-mix(in srgb, var(--background-primary) 78%, transparent);
+	/* PANNEAU central façon StudySmarter (mesures capture 2026-07-18) : un
+	   panneau ARRONDI (radius ~12, bordure 1px #1F242F chez eux) détaché des
+	   bords (17px haut/bas, jamais collé à droite), PLUS SOMBRE que le fond
+	   de page — le wallpaper reste visible autour (rail, marges) et respire
+	   à ~6 % au travers. */
+	background: var(--qbd-panel-bg);
+	border: 1px solid var(--qbd-line);
+	border-radius: 12px;
+	margin: 14px 18px 16px 0;
 }
 
 /* Plein écran : colonne de contenu CENTRÉE dans l'espace restant après le
@@ -166,8 +192,11 @@
 		flex: 1;
 	}
 
+	/* Nav en haut → plus de rail à gauche : le panneau se détache
+	   symétriquement. */
 	.qbd-content {
 		padding: 16px 12px;
+		margin: 10px 10px 12px;
 	}
 
 	.qbd-home-stats {
@@ -282,6 +311,8 @@
 
 .is-mobile .qbd-content {
 	padding: 16px 14px;
+	/* Nav en haut → panneau détaché symétriquement, marges tactiles réduites. */
+	margin: 10px 10px 12px;
 }
 
 /* ── Grilles de contenu : 1 colonne en mobile ──
