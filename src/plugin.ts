@@ -74,6 +74,12 @@ interface QuizBlocksSettings {
 	    linkpath (résolu comme un lien Obsidian), défaut « Dashboard ». Absente
 	    ou sans encadré → cartes au nom de dossier, sans UE (dégradation propre). */
 	quizzesModuleMapNote: string;
+	/** Chemins de notes dont le quiz est « en pause » (menu ⋯) : sorti du
+	    « To do » et du hero Reprendre de l'accueil, visible partout ailleurs. */
+	quizzesPaused: string[];
+	/** Chemins de notes dont le quiz est « archivé » (menu ⋯) : masqué partout,
+	    ne revient que sous la pilule « Archivés » de « Mes quiz ». */
+	quizzesArchived: string[];
 	voiceEnabled: boolean;
 	voiceBackend: VoiceBackend;
 	voiceModel: VoiceModelId;
@@ -123,6 +129,8 @@ const DEFAULT_SETTINGS: QuizBlocksSettings = {
 	// « module » : le défaut prévisible — une carte par module, cf. spec.
 	quizzesGrouping: "module",
 	quizzesModuleMapNote: "Dashboard",
+	quizzesPaused: [],
+	quizzesArchived: [],
 	// ── Saisie vocale (dictée locale whisper.cpp) — opt-in complet.
 	// Spec : docs/superpowers/specs/2026-07-10-voice-input-design.md
 	voiceEnabled: false,

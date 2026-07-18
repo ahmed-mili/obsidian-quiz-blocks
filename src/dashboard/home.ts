@@ -4,6 +4,7 @@ import type { DashboardCtx } from "../types/dashboard-ctx";
 import type { QuizIndexEntry } from "./scanner";
 import type { QuizStatRecord } from "./stats-store";
 import { renderQuizCard as renderSharedQuizCard } from "./quiz-card";
+import { isArchived, isPaused } from "./quiz-menu";
 
 /* ══════════════════════════════════════════════════════════
    HOME VIEW — Dashboard
@@ -29,21 +30,30 @@ export function createHomeHandlers(ctx: DashboardCtx): HomeHandlers {
 	function render(container: HTMLElement): void {
 		container.empty();
 
-		const quizzes: QuizIndexEntry[] = ctx.scanner ? ctx.scanner.getQuizzes() : [];
+		// Les quiz ARCHIVÉS (menu ⋯ de « Mes quiz ») n'existent plus pour
+		// l'accueil : ni stats, ni sections. Ils ne reviennent que sous la
+		// pilule « Archivés » de « Mes quiz ».
+		const allQuizzes: QuizIndexEntry[] = ctx.scanner ? ctx.scanner.getQuizzes() : [];
+		const quizzes = allQuizzes.filter(q => !isArchived(ctx, q.path));
 		const stats: Record<string, QuizStatRecord> = ctx.statsStore ? ctx.statsStore.getAll() : {};
 
 		// ── Premier usage : aucun quiz → onboarding guidé ──
-		if (quizzes.length === 0) {
+		if (allQuizzes.length === 0) {
 			renderOnboarding(container);
 			return;
 		}
 
 		// ── Classement des quiz par état (utilisé par le hero + les sections) ──
+		// Les quiz EN PAUSE (« Pause study reminders ») restent comptés dans les
+		// stats mais sortent du hero Reprendre et du « À faire » : c'est tout le
+		// sens de la pause. Ils réapparaissent dès la reprise (menu ⋯).
 		const inProgress = quizzes.filter(q => {
+			if (isPaused(ctx, q.path)) return false;
 			const s = stats[q.path];
 			return s && s.questionsDone > 0 && s.questionsDone < q.questions;
 		});
 		const notStarted = quizzes.filter(q => {
+			if (isPaused(ctx, q.path)) return false;
 			const s = stats[q.path];
 			return !s || s.questionsDone === 0;
 		});

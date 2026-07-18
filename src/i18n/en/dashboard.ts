@@ -83,10 +83,20 @@ export const EN_DASHBOARD = {
 	"dashboard.quizzes.recentMonth": "Last 30 days",
 	"dashboard.quizzes.recentOlder": "Older",
 
-	/* ── Menu ⋯ des cartes (fonctions reprises de StudySmarter) ── */
-	"dashboard.quizzes.menuResetStats": "Reset stats",
-	"dashboard.quizzes.menuResetModule": "Reset module stats",
-	"dashboard.quizzes.statsReset": "Stats reset",
+	/* ── Menu ⋯ des cartes — contrat StudySmarter (capture Excalidraw
+	   2026-07-18) : Share / Edit / Pause study reminders / Archive / Delete. ── */
+	"dashboard.quizzes.menuShare": "Share",
+	"dashboard.quizzes.menuPause": "Pause study reminders",
+	"dashboard.quizzes.menuResume": "Resume study reminders",
+	"dashboard.quizzes.menuArchive": "Archive",
+	"dashboard.quizzes.menuUnarchive": "Unarchive",
+	"dashboard.quizzes.menuDelete": "Delete quiz",
+	"dashboard.quizzes.filterArchived": "Archived",
+	"dashboard.quizzes.blockCopied": "Quiz block copied to clipboard",
+	"dashboard.quizzes.deleted": "Quiz deleted",
+	"dashboard.quizzes.deleteConfirmTitle": "Delete quiz",
+	"dashboard.quizzes.deleteConfirmBody": "Remove “{title}” and its stats from the note ? This cannot be undone.",
+	"dashboard.quizzes.deleteConfirmCta": "Delete",
 
 	/* ── Carte de quiz (état) ── */
 	"dashboard.card.mastered": "Mastered",

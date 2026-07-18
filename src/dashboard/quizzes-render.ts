@@ -1,12 +1,12 @@
-import { Notice, setIcon } from "obsidian";
+import { setIcon } from "obsidian";
 import { t } from "../i18n";
 import type { TransKey } from "../i18n";
 import type { DashboardCtx } from "../types/dashboard-ctx";
 import type { QuizIndexEntry } from "./scanner";
 import type { QuizStatRecord } from "./stats-store";
 import { renderQuizCard, quizTypeLabel } from "./quiz-card";
-import { openQuizForPlay, openQuizInEditor } from "./quiz-open";
-import type { ActionMenuItem } from "./ui-select";
+import { openQuizForPlay } from "./quiz-open";
+import { buildQuizCardMenu, buildModuleCardMenu } from "./quiz-menu";
 import { renderModuleCard } from "./module-card";
 import { moduleForQuiz, buildModuleGroups, buildUeGroups } from "./quiz-modules";
 import type { ModuleMap, ModuleGroup, UeGroup } from "./quiz-modules";
@@ -34,49 +34,6 @@ export interface GridDeps {
 	toggleExpanded: (key: string) => void;
 	rerender: () => void;
 	openModule: (folder: string) => void;
-}
-
-/* ── Menus ⋯ des cartes (repris des fonctions pertinentes de StudySmarter :
-   Edit / Delete ; « Share », « Archive », « reminders » n'ont pas d'équivalent
-   chez nous). Bâtis AU CLIC, jamais au rendu : les stats bougent. ── */
-
-/** Menu ⋯ d'une carte de quiz : Éditer + Réinitialiser les stats. */
-function quizCardMenu(ctx: DashboardCtx, rerender: () => void): (quiz: QuizIndexEntry) => ActionMenuItem[] {
-	return (quiz) => [
-		{
-			icon: "pencil",
-			label: t("dashboard.detail.edit"),
-			onClick: () => { void openQuizInEditor(ctx.app, quiz); },
-		},
-		{
-			icon: "rotate-ccw",
-			label: t("dashboard.quizzes.menuResetStats"),
-			danger: true,
-			disabled: !ctx.statsStore || !ctx.statsStore.getRecord(quiz.path),
-			onClick: () => {
-				ctx.statsStore?.deleteRecord(quiz.path);
-				new Notice(t("dashboard.quizzes.statsReset"));
-				rerender();
-			},
-		},
-	];
-}
-
-/** Menu ⋯ d'une carte de module : Réinitialiser les stats de TOUS ses quiz. */
-function moduleCardMenu(ctx: DashboardCtx, rerender: () => void): (g: ModuleGroup) => ActionMenuItem[] {
-	return (g) => [
-		{
-			icon: "rotate-ccw",
-			label: t("dashboard.quizzes.menuResetModule"),
-			danger: true,
-			disabled: !ctx.statsStore || !g.quizzes.some(q => ctx.statsStore?.getRecord(q.path)),
-			onClick: () => {
-				for (const q of g.quizzes) ctx.statsStore?.deleteRecord(q.path);
-				new Notice(t("dashboard.quizzes.statsReset"));
-				rerender();
-			},
-		},
-	];
 }
 
 const RECENT_GROUP_LABEL_KEYS: Record<RecentGroupKey, TransKey> = {
@@ -147,7 +104,7 @@ function renderFlatGroup(
 		// sort le quiz (cf. quiz-card.ts, défaut true).
 		renderQuizCard(grid, quiz, stats[quiz.path], (q) => deps.ctx.navigate("detail", { quiz: q }), {
 			onPlay: (q) => openQuizForPlay(deps.ctx.app, q),
-			menu: quizCardMenu(deps.ctx, deps.rerender),
+			menu: buildQuizCardMenu(deps.ctx, deps.rerender),
 		});
 	}
 }
@@ -158,7 +115,7 @@ function renderFlatGroup(
     garde le sous-titre d'une carte dans une section groupée). */
 function renderModuleGrid(deps: GridDeps, parent: HTMLElement, groups: ModuleGroup[]): void {
 	const grid = parent.createDiv({ cls: "qbd-module-grid" });
-	const menu = moduleCardMenu(deps.ctx, deps.rerender);
+	const menu = buildModuleCardMenu(deps.ctx, deps.rerender);
 	for (const g of groups) renderModuleCard(grid, g, (m) => deps.openModule(m.folder), menu);
 }
 
@@ -257,7 +214,7 @@ export function renderModuleDrill(
 	for (const quiz of inModule) {
 		renderQuizCard(grid, quiz, stats[quiz.path], (q) => ctx.navigate("detail", { quiz: q }), {
 			onPlay: (q) => openQuizForPlay(ctx.app, q),
-			menu: quizCardMenu(ctx, rerender),
+			menu: buildQuizCardMenu(ctx, rerender),
 		});
 	}
 }

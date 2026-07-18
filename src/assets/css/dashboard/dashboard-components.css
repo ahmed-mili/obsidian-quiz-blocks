@@ -288,29 +288,32 @@
 }
 
 /* Bouton ⋯ des cartes (quiz ET module) — coin bas droit de la ligne meta,
-   position StudySmarter. Discret au repos, surface au survol. */
+   façon StudySmarter : trois points NUS, aucun chrome au repos, halo rond
+   discret au survol. Les !important battent `.theme-dark button` (0,1,1),
+   qui repeint sinon fond gris + ombre inset (piège n°1, obsidian:plugin-dev). */
 .qbd-card-more {
 	margin-left: auto;
 	display: inline-flex;
 	align-items: center;
 	justify-content: center;
-	width: 24px;
-	height: 24px;
-	padding: 0;
-	border: none;
-	border-radius: 6px;
-	background: transparent;
-	box-shadow: none;
-	color: var(--text-muted);
+	width: 26px;
+	height: 26px;
+	padding: 0 !important;
+	border: none !important;
+	border-radius: 50%;
+	background: transparent !important;
+	box-shadow: none !important;
+	color: var(--text-muted) !important;
 	cursor: pointer;
+	transition: background-color 120ms, color 120ms;
 }
 .qbd-card-more:hover {
-	background: var(--background-modifier-hover);
-	color: var(--text-normal);
+	background: var(--background-modifier-hover) !important;
+	color: var(--text-normal) !important;
 }
 .qbd-card-more svg {
-	width: 16px;
-	height: 16px;
+	width: 18px;
+	height: 18px;
 }
 
 .qbd-quiz-card-meta-item {

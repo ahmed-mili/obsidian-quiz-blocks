@@ -10,6 +10,7 @@ import { MASTERY_THRESHOLD } from "./quiz-mastery";
 import { parseModuleMap } from "./quiz-modules";
 import type { ModuleMap } from "./quiz-modules";
 import { openActionMenu } from "./ui-select";
+import { isArchived } from "./quiz-menu";
 import { renderQuizGrid, renderModuleDrill } from "./quizzes-render";
 import type { GroupingKey } from "./quizzes-render";
 
@@ -33,7 +34,7 @@ export interface QuizzesHandlers {
 /* Le filtre actif est une CLÉ stable, plus le libellé affiché : celui-ci
    dépend de la langue, et le comparer (`currentFilter === "En cours"`) aurait
    silencieusement rendu tout filtrage inopérant hors du français. */
-type FilterKey = "all" | "progress" | "mastered" | "fresh";
+type FilterKey = "all" | "progress" | "mastered" | "fresh" | "archived";
 
 export function createQuizzesHandlers(ctx: DashboardCtx): QuizzesHandlers {
 	let currentFilter: FilterKey = "all";
@@ -127,9 +128,16 @@ export function createQuizzesHandlers(ctx: DashboardCtx): QuizzesHandlers {
 		if (containerRef) render(containerRef);
 	}
 
-	/** Filtre partagé (recherche + pilule active) — grille ET drill-down. */
+	/** Filtre partagé (recherche + pilule active) — grille ET drill-down.
+	    Les quiz ARCHIVÉS (menu ⋯, façon StudySmarter) sont masqués partout et
+	    ne reviennent que sous la pilule « Archivés » (visible seulement s'il y
+	    en a — cf. FILTERS au rendu). */
 	function applyFilters(quizzes: QuizIndexEntry[], stats: Record<string, QuizStatRecord>): QuizIndexEntry[] {
 		return quizzes.filter(q => {
+			const archived = isArchived(ctx, q.path);
+			if (currentFilter === "archived") return archived
+				&& (!searchQuery || q.title.toLowerCase().includes(searchQuery.toLowerCase()) || q.path.toLowerCase().includes(searchQuery.toLowerCase()));
+			if (archived) return false;
 			if (searchQuery && !q.title.toLowerCase().includes(searchQuery.toLowerCase()) && !q.path.toLowerCase().includes(searchQuery.toLowerCase())) {
 				return false;
 			}
@@ -168,7 +176,10 @@ export function createQuizzesHandlers(ctx: DashboardCtx): QuizzesHandlers {
 		{ key: "all", labelKey: "dashboard.quizzes.filterAll" },
 		{ key: "progress", labelKey: "dashboard.quizzes.filterProgress" },
 		{ key: "mastered", labelKey: "dashboard.quizzes.filterMastered" },
-		{ key: "fresh", labelKey: "dashboard.quizzes.filterFresh" }
+		{ key: "fresh", labelKey: "dashboard.quizzes.filterFresh" },
+		// « Archivés » : rendue seulement s'il existe au moins un quiz archivé
+		// (cf. render) — pas de pilule morte pour l'utilisateur qui n'archive rien.
+		{ key: "archived", labelKey: "dashboard.quizzes.filterArchived" }
 	];
 
 	// Ordre FIXE d'affichage dans le menu du sélecteur (pas alphabétique, pas
@@ -256,8 +267,13 @@ export function createQuizzesHandlers(ctx: DashboardCtx): QuizzesHandlers {
 		}
 
 		// ── Filters ──
+		const hasArchived = quizzes.some(q => isArchived(ctx, q.path));
+		// Garde-fou : si le dernier archivé vient d'être désarchivé pendant que
+		// la pilule « Archivés » était active, elle disparaît → retour à « Tous ».
+		if (currentFilter === "archived" && !hasArchived) currentFilter = "all";
 		const filterBar = container.createDiv({ cls: "qbd-quizzes-filters" });
 		for (const filter of FILTERS) {
+			if (filter.key === "archived" && !hasArchived) continue;
 			const btn = filterBar.createEl("button", {
 				cls: `qbd-filter-pill ${currentFilter === filter.key ? "qbd-filter-pill--active" : ""}`,
 				text: t(filter.labelKey)

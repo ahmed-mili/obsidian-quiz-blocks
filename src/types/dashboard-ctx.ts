@@ -79,6 +79,10 @@ export interface AiSettings extends VoiceSettings {
 	quizzesGrouping?: "module" | "ue" | "recent" | "type";
 	/** Note de correspondance UE → module. Cf. plugin.ts DEFAULT_SETTINGS. */
 	quizzesModuleMapNote?: string;
+	/** Quiz en pause / archivés via le menu ⋯ des cartes (quiz-menu.ts).
+	    Cf. plugin.ts DEFAULT_SETTINGS. */
+	quizzesPaused?: string[];
+	quizzesArchived?: string[];
 }
 
 /**

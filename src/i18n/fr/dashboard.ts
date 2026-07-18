@@ -73,9 +73,18 @@ export const FR_DASHBOARD: Record<keyof typeof EN_DASHBOARD, string> = {
 	"dashboard.quizzes.recentOlder": "Plus ancien",
 
 	/* ── Menu ⋯ des cartes ── */
-	"dashboard.quizzes.menuResetStats": "Réinitialiser les stats",
-	"dashboard.quizzes.menuResetModule": "Réinitialiser les stats du module",
-	"dashboard.quizzes.statsReset": "Stats réinitialisées",
+	"dashboard.quizzes.menuShare": "Partager",
+	"dashboard.quizzes.menuPause": "Suspendre les révisions",
+	"dashboard.quizzes.menuResume": "Reprendre les révisions",
+	"dashboard.quizzes.menuArchive": "Archiver",
+	"dashboard.quizzes.menuUnarchive": "Désarchiver",
+	"dashboard.quizzes.menuDelete": "Supprimer le quiz",
+	"dashboard.quizzes.filterArchived": "Archivés",
+	"dashboard.quizzes.blockCopied": "Bloc quiz copié dans le presse-papier",
+	"dashboard.quizzes.deleted": "Quiz supprimé",
+	"dashboard.quizzes.deleteConfirmTitle": "Supprimer le quiz",
+	"dashboard.quizzes.deleteConfirmBody": "Supprimer « {title} » et ses stats de la note ? Cette action est définitive.",
+	"dashboard.quizzes.deleteConfirmCta": "Supprimer",
 
 	/* ── Carte de quiz ── */
 	"dashboard.card.mastered": "Maîtrisé",
