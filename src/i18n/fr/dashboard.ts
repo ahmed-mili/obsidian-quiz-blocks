@@ -94,6 +94,7 @@ export const FR_DASHBOARD: Record<keyof typeof EN_DASHBOARD, string> = {
 	"dashboard.quizzes.moduleEditName": "Nom du dossier",
 	"dashboard.quizzes.moduleEditUe": "UE",
 	"dashboard.quizzes.moduleEditColor": "Couleur",
+	"dashboard.quizzes.moduleEditCustomColor": "Couleur personnalisée",
 	"dashboard.quizzes.moduleEditSave": "Enregistrer",
 
 	/* ── Carte de quiz ── */

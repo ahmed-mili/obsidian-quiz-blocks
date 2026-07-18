@@ -1,0 +1,106 @@
+/* ═════════════════════════════════════════════════════════
+   COLOR PICKER — popover de couleur personnalisée
+   Port du ColorPicker de neo-calendar (SANS la grille de
+   presets, demande 2026-07-18). Portalé au <body> → couleurs
+   100 % natives Obsidian ; surface = la MÊME glass canonique
+   que .qbd-select-menu (un seul style de menu flottant).
+   ═════════════════════════════════════════════════════════ */
+.qbd-color-picker {
+	position: fixed;
+	/* Au-dessus des menus portalés (1000) : il peut s'ouvrir depuis un modal. */
+	z-index: 1002;
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+	padding: 12px;
+	border-radius: 10px;
+	background: color-mix(in srgb, var(--background-primary) 92%, transparent);
+	backdrop-filter: blur(12px) brightness(1.18);
+	-webkit-backdrop-filter: blur(12px) brightness(1.18);
+	border: 1px solid color-mix(in srgb, var(--background-modifier-border) 55%, transparent);
+	box-shadow: 0 14px 28px -6px rgba(0, 0, 0, 0.4), 0 2px 6px -1px rgba(0, 0, 0, 0.22);
+	color: var(--text-normal);
+	user-select: none;
+}
+
+/* Zone saturation / valeur */
+.qbd-cp-sv {
+	position: relative;
+	width: 100%;
+	height: 140px;
+	border-radius: 8px;
+	cursor: crosshair;
+	overflow: hidden;
+}
+.qbd-cp-sv-thumb {
+	position: absolute;
+	width: 12px;
+	height: 12px;
+	border-radius: 50%;
+	border: 2px solid #fff;
+	box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.45);
+	transform: translate(-50%, -50%);
+	pointer-events: none;
+}
+
+/* Barre de teinte */
+.qbd-cp-hue {
+	position: relative;
+	width: 100%;
+	height: 12px;
+	border-radius: 6px;
+	cursor: pointer;
+	background: linear-gradient(
+		to right,
+		#f00 0%,
+		#ff0 17%,
+		#0f0 33%,
+		#0ff 50%,
+		#00f 67%,
+		#f0f 83%,
+		#f00 100%
+	);
+}
+.qbd-cp-hue-thumb {
+	position: absolute;
+	top: 50%;
+	width: 14px;
+	height: 14px;
+	border-radius: 50%;
+	border: 2px solid #fff;
+	box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.45);
+	transform: translate(-50%, -50%);
+	pointer-events: none;
+}
+
+/* Swatch courant + champ hex */
+.qbd-cp-row {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+.qbd-cp-current {
+	width: 24px;
+	height: 24px;
+	border-radius: 6px;
+	flex-shrink: 0;
+	box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.15);
+}
+/* !important : neutralise le chrome natif des input d'Obsidian
+   (.theme-dark input, spécificité 0,1,1 — fond pilule + inset shadow). */
+.qbd-cp-hex {
+	flex: 1;
+	min-width: 0;
+	padding: 5px 8px;
+	border-radius: 6px;
+	border: 1px solid var(--background-modifier-border);
+	background: var(--background-modifier-form-field) !important;
+	box-shadow: none !important;
+	color: var(--text-normal);
+	font-size: 13px;
+	font-family: var(--font-monospace, monospace);
+	outline: none;
+}
+.qbd-cp-hex:focus {
+	border-color: var(--interactive-accent);
+}

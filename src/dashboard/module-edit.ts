@@ -5,6 +5,7 @@ import type { QuizIndexEntry } from "./scanner";
 import { moduleForQuiz } from "./quiz-modules";
 import type { ModuleGroup, ModuleMap, ModuleOverride } from "./quiz-modules";
 import { openActionMenu } from "./ui-select";
+import { openColorPicker } from "./color-picker";
 
 /* ══════════════════════════════════════════════════════════
    MODULE EDIT — modal « Modifier dossier », calqué sur celui de
@@ -71,7 +72,8 @@ export class ModuleEditModal extends Modal {
 		});
 
 		// ── Couleur (8 pastilles ; re-cliquer la pastille active la retire →
-		// retour au liseré par avancement) ──
+		// retour au liseré par avancement) + pastille « couleur personnalisée »
+		// (roue chromatique) qui ouvre le picker recopié de neo-calendar ──
 		c.createEl("p", { cls: "qbd-medit-label", text: t("dashboard.quizzes.moduleEditColor") });
 		const row = c.createDiv({ cls: "qbd-medit-colors" });
 		const paintDots = () => {
@@ -86,6 +88,25 @@ export class ModuleEditModal extends Modal {
 					paintDots();
 				});
 			}
+			// 9e cercle : couleur personnalisée. Roue chromatique au repos ;
+			// quand une couleur HORS palette est active, il la porte + check.
+			const custom = row.createEl("button", { cls: "qbd-medit-dot qbd-medit-dot--custom" });
+			custom.type = "button";
+			custom.setAttribute("aria-label", t("dashboard.quizzes.moduleEditCustomColor"));
+			custom.title = t("dashboard.quizzes.moduleEditCustomColor");
+			const isCustom = !!this.color && !COLORS.includes(this.color);
+			if (isCustom && this.color) {
+				custom.style.background = this.color;
+				setIcon(custom, "check");
+			}
+			custom.addEventListener("click", () => {
+				// Aperçu live : onChange arrive en continu pendant le drag ;
+				// le repaint recrée les pastilles, le picker (fixed) reste.
+				openColorPicker(custom, this.color ?? COLORS[0], (hex) => {
+					this.color = hex;
+					paintDots();
+				});
+			});
 		};
 		paintDots();
 

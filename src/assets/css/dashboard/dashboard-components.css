@@ -417,6 +417,12 @@
 	width: 14px;
 	height: 14px;
 }
+/* Pastille « couleur personnalisée » : roue chromatique au repos. Quand une
+   couleur custom est active, module-edit pose un background INLINE (la
+   couleur choisie) qui bat cette classe — même patron que les 8 pastilles. */
+.qbd-medit-dot--custom {
+	background: conic-gradient(from 0deg, #f00, #ff0, #0f0, #0ff, #00f, #f0f, #f00);
+}
 /* Bouton Enregistrer pleine largeur, carte inversée theme-aware (le blanc
    sur sombre de StudySmarter, sans hex en dur). */
 .qbd-medit-save {

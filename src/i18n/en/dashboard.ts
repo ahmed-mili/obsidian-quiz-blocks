@@ -106,6 +106,7 @@ export const EN_DASHBOARD = {
 	"dashboard.quizzes.moduleEditName": "Folder name",
 	"dashboard.quizzes.moduleEditUe": "Course unit",
 	"dashboard.quizzes.moduleEditColor": "Color",
+	"dashboard.quizzes.moduleEditCustomColor": "Custom color",
 	"dashboard.quizzes.moduleEditSave": "Save",
 
 	/* ── Carte de quiz (état) ── */
