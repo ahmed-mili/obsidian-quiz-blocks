@@ -10,6 +10,7 @@ import { buildQuizCardMenu, buildModuleCardMenu } from "./quiz-menu";
 import { renderModuleCard } from "./module-card";
 import { moduleForQuiz, buildModuleGroups, buildUeGroups } from "./quiz-modules";
 import type { ModuleMap, ModuleGroup, UeGroup } from "./quiz-modules";
+import { MASTERY_THRESHOLD } from "./quiz-mastery";
 import { buildRecentGroups } from "./quiz-recent";
 import type { RecentGroupKey } from "./quiz-recent";
 import { buildTypeGroups } from "./quiz-type";
@@ -141,10 +142,14 @@ export function renderQuizGrid(
 	mode: GroupingKey,
 	filtered: QuizIndexEntry[],
 	stats: Record<string, QuizStatRecord>,
-	map: ModuleMap
+	map: ModuleMap,
+	/** Quiz archivés (déjà passés au tamis recherche) — rendus dans une
+	    section repliable en PIED de grille, comme la section « Archived »
+	    au bas de la Library StudySmarter. */
+	archived: QuizIndexEntry[] = []
 ): void {
 	treeEl.empty();
-	if (filtered.length === 0) {
+	if (filtered.length === 0 && archived.length === 0) {
 		treeEl.createDiv({ cls: "qbd-empty-state" }, el => { el.createEl("p", { text: t("dashboard.quizzes.empty") }); });
 		return;
 	}
@@ -169,6 +174,17 @@ export function renderQuizGrid(
 		// Mode « module » (défaut) : grille plate de cartes de module — noms
 		// et UE résolus depuis la note de correspondance (map).
 		renderModuleGrid(deps, treeEl, buildModuleGroups(filtered, stats, map));
+	}
+
+	// ── Section « Archivés » en pied de grille (tous les axes) — repliée par
+	// défaut, même en-tête repliable que les groupes plats. Clé « archived: » :
+	// « : » est interdit dans un chemin Obsidian, aucune collision possible.
+	if (archived.length > 0) {
+		const mastered = archived.filter(q => {
+			const s = stats[q.path];
+			return s && s.bestScore >= MASTERY_THRESHOLD;
+		}).length;
+		renderFlatGroup(deps, treeEl, "archived:", t("dashboard.quizzes.archivedSection"), archived.length, mastered, archived, stats);
 	}
 }
 

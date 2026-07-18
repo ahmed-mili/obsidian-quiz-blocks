@@ -95,26 +95,52 @@ async function shareModuleZip(ctx: DashboardCtx, group: ModuleGroup): Promise<vo
 	}
 }
 
-/* ── Delete : confirmation puis retrait du bloc (ou corbeille) ── */
+/* ── Confirmations — même contrat que StudySmarter (vérifié en live le
+   2026-07-18) : Pause et Archive CONFIRMENT avant d'agir, Resume et
+   Unarchive sont directs, Delete confirme en rouge. ── */
 
-class ConfirmDeleteModal extends Modal {
-	constructor(app: App, private body: string, private onConfirm: () => void) {
+interface ConfirmSpec {
+	title: string;
+	body: string;
+	cta: string;
+	/** true = bouton rouge (mod-warning) : Delete uniquement. */
+	warning?: boolean;
+}
+
+class ConfirmModal extends Modal {
+	constructor(app: App, private spec: ConfirmSpec, private onConfirm: () => void) {
 		super(app);
 	}
 
 	onOpen(): void {
-		this.titleEl.setText(t("dashboard.quizzes.deleteConfirmTitle"));
-		this.contentEl.createEl("p", { text: this.body });
+		this.titleEl.setText(this.spec.title);
+		this.contentEl.createEl("p", { text: this.spec.body });
 		const row = this.contentEl.createDiv({ cls: "modal-button-container" });
 		const cancel = row.createEl("button", { text: t("editor.action.cancel") });
 		cancel.addEventListener("click", () => this.close());
-		const del = row.createEl("button", { cls: "mod-warning", text: t("dashboard.quizzes.deleteConfirmCta") });
-		del.addEventListener("click", () => { this.close(); this.onConfirm(); });
+		const ok = row.createEl("button", { cls: this.spec.warning ? "mod-warning" : "mod-cta", text: this.spec.cta });
+		ok.addEventListener("click", () => { this.close(); this.onConfirm(); });
 	}
 
 	onClose(): void {
 		this.contentEl.empty();
 	}
+}
+
+function confirmPause(app: App, name: string, onConfirm: () => void): void {
+	new ConfirmModal(app, {
+		title: t("dashboard.quizzes.pauseConfirmTitle"),
+		body: t("dashboard.quizzes.pauseConfirmBody", { title: name }),
+		cta: t("dashboard.quizzes.pauseConfirmCta"),
+	}, onConfirm).open();
+}
+
+function confirmArchive(app: App, name: string, onConfirm: () => void): void {
+	new ConfirmModal(app, {
+		title: t("dashboard.quizzes.archiveConfirmTitle"),
+		body: t("dashboard.quizzes.archiveConfirmBody", { title: name }),
+		cta: t("dashboard.quizzes.archiveConfirmCta"),
+	}, onConfirm).open();
 }
 
 async function deleteQuiz(ctx: DashboardCtx, quiz: QuizIndexEntry): Promise<void> {
@@ -186,21 +212,32 @@ export function buildQuizCardMenu(ctx: DashboardCtx, rerender: () => void): (qui
 			{
 				icon: paused ? "circle-play" : "circle-pause",
 				label: t(paused ? "dashboard.quizzes.menuResume" : "dashboard.quizzes.menuPause"),
-				onClick: () => { toggleList(ctx, "quizzesPaused", quiz.path, !paused); rerender(); },
+				onClick: () => {
+					const apply = () => { toggleList(ctx, "quizzesPaused", quiz.path, !paused); rerender(); };
+					// Comme StudySmarter : la PAUSE confirme, la reprise est directe.
+					if (paused) apply(); else confirmPause(ctx.app, quiz.title, apply);
+				},
 			},
 			{
 				icon: "archive",
 				label: t(archived ? "dashboard.quizzes.menuUnarchive" : "dashboard.quizzes.menuArchive"),
-				onClick: () => { toggleList(ctx, "quizzesArchived", quiz.path, !archived); rerender(); },
+				onClick: () => {
+					const apply = () => { toggleList(ctx, "quizzesArchived", quiz.path, !archived); rerender(); };
+					// Comme StudySmarter : ARCHIVER confirme, désarchiver est direct.
+					if (archived) apply(); else confirmArchive(ctx.app, quiz.title, apply);
+				},
 			},
 			{
 				icon: "trash-2",
 				label: t("dashboard.quizzes.menuDelete"),
 				danger: true,
 				onClick: () => {
-					new ConfirmDeleteModal(ctx.app, t("dashboard.quizzes.deleteConfirmBody", { title: quiz.title }), () => {
-						void deleteQuiz(ctx, quiz).then(rerender);
-					}).open();
+					new ConfirmModal(ctx.app, {
+						title: t("dashboard.quizzes.deleteConfirmTitle"),
+						body: t("dashboard.quizzes.deleteConfirmBody", { title: quiz.title }),
+						cta: t("dashboard.quizzes.deleteConfirmCta"),
+						warning: true,
+					}, () => { void deleteQuiz(ctx, quiz).then(rerender); }).open();
 				},
 			},
 		];
@@ -231,16 +268,22 @@ export function buildModuleCardMenu(ctx: DashboardCtx, rerender: () => void): (g
 				icon: allPaused ? "circle-play" : "circle-pause",
 				label: t(allPaused ? "dashboard.quizzes.menuResume" : "dashboard.quizzes.menuPause"),
 				onClick: () => {
-					for (const q of g.quizzes) toggleList(ctx, "quizzesPaused", q.path, !allPaused);
-					rerender();
+					const apply = () => {
+						for (const q of g.quizzes) toggleList(ctx, "quizzesPaused", q.path, !allPaused);
+						rerender();
+					};
+					if (allPaused) apply(); else confirmPause(ctx.app, g.name, apply);
 				},
 			},
 			{
 				icon: "archive",
 				label: t(allArchived ? "dashboard.quizzes.menuUnarchive" : "dashboard.quizzes.menuArchive"),
 				onClick: () => {
-					for (const q of g.quizzes) toggleList(ctx, "quizzesArchived", q.path, !allArchived);
-					rerender();
+					const apply = () => {
+						for (const q of g.quizzes) toggleList(ctx, "quizzesArchived", q.path, !allArchived);
+						rerender();
+					};
+					if (allArchived) apply(); else confirmArchive(ctx.app, g.name, apply);
 				},
 			},
 			{
@@ -248,11 +291,12 @@ export function buildModuleCardMenu(ctx: DashboardCtx, rerender: () => void): (g
 				label: t("dashboard.quizzes.menuDeleteModule"),
 				danger: true,
 				onClick: () => {
-					new ConfirmDeleteModal(
-						ctx.app,
-						t("dashboard.quizzes.deleteModuleConfirmBody", { count: g.quizzes.length, name: g.name }),
-						() => { void deleteModuleQuizzes(ctx, g).then(rerender); }
-					).open();
+					new ConfirmModal(ctx.app, {
+						title: t("dashboard.quizzes.deleteConfirmTitle"),
+						body: t("dashboard.quizzes.deleteModuleConfirmBody", { count: g.quizzes.length, name: g.name }),
+						cta: t("dashboard.quizzes.deleteConfirmCta"),
+						warning: true,
+					}, () => { void deleteModuleQuizzes(ctx, g).then(rerender); }).open();
 				},
 			},
 		];
