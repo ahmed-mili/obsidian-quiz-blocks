@@ -8,7 +8,7 @@ import { parseModuleMap, applyModuleOverrides } from "./quiz-modules";
 import type { ModuleMap } from "./quiz-modules";
 import { createSelect, openActionMenu } from "./ui-select";
 import { isArchived } from "./quiz-menu";
-import { CreateFolderModal, createQuizInFolder, importQuizIntoFolder } from "./folder-create";
+import { CreateFolderModal, CreateQuizModal } from "./folder-create";
 import { renderQuizGrid, renderModuleDrill } from "./quizzes-render";
 import type { GroupingKey } from "./quizzes-render";
 
@@ -182,22 +182,17 @@ export function createQuizzesHandlers(ctx: DashboardCtx): QuizzesHandlers {
 			});
 		} else {
 			// Drill-down : créer un dossier ICI n'a pas de sens (demande Ahmed
-			// 2026-07-19) → « Importer » (repli discret) + « Nouveau quiz »
-			// (pilule primaire), tous deux dans le dossier OUVERT.
+			// 2026-07-19) → une seule pilule « Nouveau quiz », qui ouvre le MÊME
+			// modal à trois options que « Nouveau dossier » (IA / vierge /
+			// import), décliné pour le dossier OUVERT — homogénéité demandée.
 			const folder = openModuleFolder;
-			const actions = header.createDiv({ cls: "qbd-quizzes-header-actions" });
-			const importBtn = actions.createEl("button", { cls: "qbd-btn--create qbd-btn--ghost" });
-			const importIcon = importBtn.createSpan({ cls: "qbd-btn-icon" });
-			setIcon(importIcon, "upload");
-			importBtn.createSpan({ text: t("dashboard.quizzes.importQuiz") });
-			importBtn.addEventListener("click", () => {
-				void importQuizIntoFolder(ctx, folder, () => { if (containerRef) render(containerRef); });
-			});
-			const newQuizBtn = actions.createEl("button", { cls: "qbd-btn--create" });
+			const newQuizBtn = header.createEl("button", { cls: "qbd-btn--create" });
 			const newQuizIcon = newQuizBtn.createSpan({ cls: "qbd-btn-icon" });
 			setIcon(newQuizIcon, "plus");
 			newQuizBtn.createSpan({ text: t("dashboard.quizzes.newQuiz") });
-			newQuizBtn.addEventListener("click", () => { void createQuizInFolder(ctx, folder); });
+			newQuizBtn.addEventListener("click", () => {
+				new CreateQuizModal(ctx, folder, () => { if (containerRef) render(containerRef); }).open();
+			});
 		}
 
 		// ── Regroupement (UE / Récent) ──

@@ -19,6 +19,23 @@ import { openQuizPathInEditor } from "./quiz-open";
    violet) posés inline, teinte dérivée en CSS.
 ══════════════════════════════════════════════════════════ */
 
+/** Une carte-option du modal de création (icône teintée + titre + description
+    + chevron) — partagée par CreateFolderModal ET CreateQuizModal : même DOM,
+    mêmes classes, fidélité garantie à la capture StudySmarter (2026-07-19). */
+function createOptionCard(modal: Modal, parent: HTMLElement, icon: string, accent: string, title: string, desc: string, onPick: () => void): void {
+	const card = parent.createEl("button", { cls: "qbd-create-option" });
+	card.type = "button";
+	card.style.setProperty("--accent", accent);
+	const ic = card.createDiv({ cls: "qbd-create-option-icon" });
+	setIcon(ic, icon);
+	const txt = card.createDiv({ cls: "qbd-create-option-text" });
+	txt.createDiv({ cls: "qbd-create-option-title", text: title });
+	txt.createDiv({ cls: "qbd-create-option-desc", text: desc });
+	const chev = card.createDiv({ cls: "qbd-create-option-chevron" });
+	setIcon(chev, "chevron-right");
+	card.addEventListener("click", () => { modal.close(); onPick(); });
+}
+
 export class CreateFolderModal extends Modal {
 	constructor(
 		private ctx: DashboardCtx,
@@ -33,27 +50,42 @@ export class CreateFolderModal extends Modal {
 		this.modalEl.addClass("qbd-create-modal");
 		this.titleEl.setText(t("dashboard.quizzes.createFolderTitle"));
 		const c = this.contentEl;
-
-		const option = (icon: string, accent: string, title: string, desc: string, onPick: () => void) => {
-			const card = c.createEl("button", { cls: "qbd-create-option" });
-			card.type = "button";
-			card.style.setProperty("--accent", accent);
-			const ic = card.createDiv({ cls: "qbd-create-option-icon" });
-			setIcon(ic, icon);
-			const txt = card.createDiv({ cls: "qbd-create-option-text" });
-			txt.createDiv({ cls: "qbd-create-option-title", text: title });
-			txt.createDiv({ cls: "qbd-create-option-desc", text: desc });
-			const chev = card.createDiv({ cls: "qbd-create-option-chevron" });
-			setIcon(chev, "chevron-right");
-			card.addEventListener("click", () => { this.close(); onPick(); });
-		};
-
-		option("sparkles", "#3ddc84", t("dashboard.quizzes.createAiTitle"), t("dashboard.quizzes.createAiDesc"),
+		createOptionCard(this, c, "sparkles", "#3ddc84", t("dashboard.quizzes.createAiTitle"), t("dashboard.quizzes.createAiDesc"),
 			() => this.ctx.navigate("ai"));
-		option("folder-plus", "#4573ff", t("dashboard.quizzes.createEmptyTitle"), t("dashboard.quizzes.createEmptyDesc"),
+		createOptionCard(this, c, "folder-plus", "#4573ff", t("dashboard.quizzes.createEmptyTitle"), t("dashboard.quizzes.createEmptyDesc"),
 			() => new NewFolderModal(this.ctx, this.map, this.quizzes, this.onDone).open());
-		option("download", "#a78bfa", t("dashboard.quizzes.createImportTitle"), t("dashboard.quizzes.createImportDesc"),
+		createOptionCard(this, c, "download", "#a78bfa", t("dashboard.quizzes.createImportTitle"), t("dashboard.quizzes.createImportDesc"),
 			() => void importSharedFolder(this.ctx, this.map, this.quizzes, this.onDone));
+	}
+
+	onClose(): void {
+		this.contentEl.empty();
+	}
+}
+
+/** « Nouveau quiz » (drill-down d'un dossier) — MÊME modal à trois options que
+    « Créer un dossier » (demande d'homogénéité Ahmed, capture 2026-07-19),
+    décliné au niveau quiz : IA / quiz vierge dans CE dossier / import d'un
+    quiz reçu dans CE dossier. */
+export class CreateQuizModal extends Modal {
+	constructor(
+		private ctx: DashboardCtx,
+		private folder: string,
+		private onDone: () => void
+	) {
+		super(ctx.app);
+	}
+
+	onOpen(): void {
+		this.modalEl.addClass("qbd-create-modal");
+		this.titleEl.setText(t("dashboard.quizzes.createQuizTitle"));
+		const c = this.contentEl;
+		createOptionCard(this, c, "sparkles", "#3ddc84", t("dashboard.quizzes.createAiTitle"), t("dashboard.quizzes.createAiDesc"),
+			() => this.ctx.navigate("ai"));
+		createOptionCard(this, c, "file-plus", "#4573ff", t("dashboard.quizzes.createQuizEmptyTitle"), t("dashboard.quizzes.createQuizEmptyDesc"),
+			() => void createQuizInFolder(this.ctx, this.folder));
+		createOptionCard(this, c, "download", "#a78bfa", t("dashboard.quizzes.createQuizImportTitle"), t("dashboard.quizzes.createQuizImportDesc"),
+			() => void importQuizIntoFolder(this.ctx, this.folder, this.onDone));
 	}
 
 	onClose(): void {

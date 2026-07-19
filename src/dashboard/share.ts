@@ -107,31 +107,42 @@ async function saveShared(ctx: DashboardCtx, source: ShareSource): Promise<void>
 	}
 }
 
-/* ── Activation de Discord (Windows) ──
-   CAUSE RACINE mesurée (2026-07-19, GetForegroundWindow/EnumWindows) : quand
-   Discord est réduit dans le tray, sa fenêtre principale (Chrome_WidgetWin_1)
-   est CACHÉE → `Process.MainWindowHandle` vaut 0, et NI `discord://` NI
-   `Update.exe --processStart` ne la ré-affichent (l'instance ignore le signal
-   single-instance) ; de plus l'instance Discord, process d'arrière-plan, n'a
-   pas le droit Windows de se mettre elle-même au premier plan. Donc on ne
-   délègue plus RIEN à Discord : on trouve sa fenêtre par EnumWindows (même
-   cachée), on la ré-affiche (SW_RESTORE si iconique, SW_SHOW sinon — jamais
-   de SW_RESTORE sur une fenêtre visible : ça dé-maximiserait) et on la force
-   au premier plan (SetForegroundWindow, puis SwitchToThisWindow en secours si
-   la restriction de focus a mordu). Le tout en C# compilé (Add-Type) : fiable
-   en PowerShell 5.1 comme 7. Discord fermé → lancement par Update.exe (le
-   lanceur du raccourci officiel), la boucle d'attente attrape la fenêtre au
-   démarrage (15 s). Script passé en -EncodedCommand : aucun escaping shell. */
+/* ── Activation de Discord (Windows) — architecture à 3 couches, chacune
+   MESURÉE le 2026-07-19 (GetForegroundWindow + luminance PrintWindow) :
+   1. SIGNAL single-instance (raccourci Start Menu, sinon Update.exe) : quand
+      Discord TOURNE, c'est la seule voie qui lui fait faire son propre
+      raise + focus + REPAINT. Sans elle, une activation externe met la
+      fenêtre au premier plan mais NOIRE (renderer suspendu, luma=0 mesuré) —
+      le symptôme « fenêtre noire » d'Ahmed. AllowSetForegroundWindow lui
+      transfère au préalable notre droit de focus (hérité d'Obsidian, le
+      process au premier plan au moment du clic) pour que son focus() interne
+      soit accepté.
+   2. RESTAURATION externe (SW_RESTORE/SW_SHOW) : uniquement si la fenêtre
+      est cachée (tray) ou iconique — mesuré : le signal seul ne ré-affiche
+      PAS une fenêtre cachée dans le tray. Jamais de SW_RESTORE sur une
+      fenêtre visible (ça dé-maximiserait).
+   3. ESCALADE de focus en FILET (direct → Alt simulé → AttachThreadInput →
+      SwitchToThisWindow) : ne sert que si, après le signal, Discord n'est
+      toujours pas au premier plan (restriction de focus).
+   Discord FERMÉ → le signal le lance (comme un clic sur le raccourci), la
+   boucle d'attente attrape la fenêtre principale au démarrage en filtrant le
+   SPLASH « Discord Updater » (même classe Chrome_WidgetWin_1, ~300 px). Tout
+   le Win32 vit en C# compilé (Add-Type, fiable PowerShell 5.1 et 7), script
+   passé en -EncodedCommand : aucun escaping shell. */
 
 function buildDiscordScript(dest: string): string {
 	const destPs = dest.replace(/'/g, "''");
 	return `$ErrorActionPreference = 'SilentlyContinue'
 Set-Clipboard -LiteralPath '${destPs}'
-if (-not (Get-Process Discord -ErrorAction SilentlyContinue)) {
-	$up = Join-Path $env:LOCALAPPDATA 'Discord\\Update.exe'
-	if (Test-Path $up) { Start-Process $up -ArgumentList '--processStart','Discord.exe' }
+$lnk = Join-Path $env:APPDATA 'Microsoft\\Windows\\Start Menu\\Programs\\Discord Inc\\Discord.lnk'
+$up = Join-Path $env:LOCALAPPDATA 'Discord\\Update.exe'
+function Send-DiscordSignal {
+	if (Test-Path $lnk) { Invoke-Item $lnk }
+	elseif (Test-Path $up) { Start-Process $up -ArgumentList '--processStart','Discord.exe' }
 	else { try { Start-Process 'discord://' } catch { Start-Process 'https://discord.com/channels/@me' } }
 }
+$wasRunning = [bool](Get-Process Discord -ErrorAction SilentlyContinue)
+if (-not $wasRunning) { Send-DiscordSignal }
 Add-Type -TypeDefinition @'
 using System;
 using System.Diagnostics;
@@ -152,10 +163,11 @@ namespace QuizBlocks {
 		[DllImport("user32.dll")] static extern void keybd_event(byte vk, byte scan, uint flags, UIntPtr extra);
 		[DllImport("user32.dll")] static extern bool AttachThreadInput(uint idAttach, uint idAttachTo, bool attach);
 		[DllImport("user32.dll")] static extern bool BringWindowToTop(IntPtr h);
+		[DllImport("user32.dll")] static extern bool AllowSetForegroundWindow(uint pid);
 		[DllImport("kernel32.dll")] static extern uint GetCurrentThreadId();
 		[StructLayout(LayoutKind.Sequential)] struct RECT { public int L; public int T; public int R; public int B; }
 		[DllImport("user32.dll")] static extern bool GetWindowRect(IntPtr h, out RECT r);
-		static IntPtr Find() {
+		public static IntPtr FindMain() {
 			var pids = new System.Collections.Generic.HashSet<int>();
 			foreach (var p in Process.GetProcessesByName("Discord")) pids.Add(p.Id);
 			if (pids.Count == 0) return IntPtr.Zero;
@@ -165,10 +177,6 @@ namespace QuizBlocks {
 				if (!pids.Contains((int)pid)) return true;
 				var c = new StringBuilder(64); GetClassName(h, c, 64);
 				if (c.ToString() != "Chrome_WidgetWin_1") return true;
-				// Écarte le SPLASH du démarrage (« Discord Updater », ~300 px,
-				// même classe) : fenêtre éphémère, l'activer raterait la vraie.
-				// La principale a un min-width ~940 ; iconique = principale
-				// d'office (le rect d'une fenêtre iconique ment sur sa taille).
 				if (!IsIconic(h)) {
 					RECT r; GetWindowRect(h, out r);
 					if (r.R - r.L < 500) return true;
@@ -177,22 +185,15 @@ namespace QuizBlocks {
 			}, IntPtr.Zero);
 			return found;
 		}
-		public static void Activate(int timeoutMs) {
-			int end = Environment.TickCount + timeoutMs;
-			IntPtr h = IntPtr.Zero;
-			while (Environment.TickCount < end) {
-				h = Find();
-				if (h != IntPtr.Zero) break;
-				System.Threading.Thread.Sleep(150);
-			}
-			if (h == IntPtr.Zero) return;
+		public static void AllowFor(IntPtr h) {
+			uint pid; GetWindowThreadProcessId(h, out pid);
+			if (pid != 0) AllowSetForegroundWindow(pid);
+		}
+		public static void RestoreIfHidden(IntPtr h) {
 			if (IsIconic(h)) ShowWindow(h, 9);
 			else if (!IsWindowVisible(h)) ShowWindow(h, 5);
-			// Escalade mesurée contre la restriction de focus de Windows (un
-			// process d'arrière-plan ne peut pas voler le premier plan) : essai
-			// direct, puis frappe Alt simulée (satisfait « a reçu le dernier
-			// input »), puis AttachThreadInput au thread au premier plan, puis
-			// SwitchToThisWindow (la voie Alt-Tab) en dernier recours.
+		}
+		public static void EnsureFront(IntPtr h) {
 			if (Try(h)) return;
 			keybd_event(0x12, 0, 0, UIntPtr.Zero);
 			keybd_event(0x12, 0, 2, UIntPtr.Zero);
@@ -220,7 +221,19 @@ namespace QuizBlocks {
 	}
 }
 '@
-[QuizBlocks.DiscordFocus]::Activate(15000)
+$deadline = (Get-Date).AddSeconds(20)
+$h = [IntPtr]::Zero
+while ((Get-Date) -lt $deadline) {
+	$h = [QuizBlocks.DiscordFocus]::FindMain()
+	if ($h -ne [IntPtr]::Zero) { break }
+	Start-Sleep -Milliseconds 150
+}
+if ($h -ne [IntPtr]::Zero) {
+	[QuizBlocks.DiscordFocus]::AllowFor($h)
+	[QuizBlocks.DiscordFocus]::RestoreIfHidden($h)
+	if ($wasRunning) { Send-DiscordSignal; Start-Sleep -Milliseconds 1200 }
+	[QuizBlocks.DiscordFocus]::EnsureFront($h)
+}
 `;
 }
 
