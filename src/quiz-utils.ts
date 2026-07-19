@@ -105,4 +105,12 @@ function renderParagraph(container: HTMLElement, text?: string | null): HTMLPara
 	});
 }
 
-export { parseQuizSource, extractExamOptions, renderParagraph };
+/* Premier bloc ```quiz-blocks``` d'une note — groupe 1 = la source JSON5.
+   TOLÉRANT aux fins de ligne CRLF (notes Windows/importées), aux attributs
+   après le nom du langage et à l'indentation de la fence fermante : le
+   scanner (indexOf, scanner.ts) accepte tout ça, et un regex strict `\n`
+   faisait diverger l'index et les actions — le quiz apparaissait dans
+   « Mes quiz » mais Share/Edit/Delete répondaient « bloc introuvable ». */
+const QUIZ_BLOCK_RE = /```quiz-blocks[^\n]*\n([\s\S]*?)\r?\n[ \t]*```/;
+
+export { parseQuizSource, extractExamOptions, renderParagraph, QUIZ_BLOCK_RE };

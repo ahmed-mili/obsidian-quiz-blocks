@@ -1,19 +1,23 @@
 import { Modal, Notice, Platform, TFile, normalizePath, setIcon, setTooltip } from "obsidian";
 import { t } from "../i18n";
+import type { TransKey } from "../i18n";
 import type { DashboardCtx } from "../types/dashboard-ctx";
 import type { ModuleGroup } from "./quiz-modules";
+import type { QuizIndexEntry } from "./scanner";
+import { QUIZ_BLOCK_RE } from "../quiz-utils";
 import { buildZip } from "./zip";
 import type { ZipEntry } from "./zip";
 
 /* ══════════════════════════════════════════════════════════
    SHARE — modal « Partager » calqué sur StudySmarter (capture Ahmed
-   2026-07-19) : une rangée d'apps. Pour l'instant DISCORD (vrai logo
-   Simple Icons) + « Enregistrer le zip » en repli. On n'a pas de lien
-   mais un zip : aucune app ne permet de joindre un fichier à un message
-   par automatisation, donc le maximum faisable (choix Ahmed) = générer
-   le zip, le COPIER dans le presse-papier (Windows) et ouvrir Discord ;
-   l'utilisateur fait Ctrl+V + Entrée. Desktop Windows ; dégrade ailleurs
-   (partage natif / enregistrement), jamais de blocage.
+   2026-07-19) : une rangée d'apps. DISCORD (vrai logo Simple Icons) +
+   « Enregistrer » en repli. On n'a pas de lien mais un FICHIER (zip d'un
+   dossier entier, ou .md d'un quiz seul) : aucune app ne permet de joindre
+   un fichier à un message par automatisation, donc le maximum faisable
+   (choix Ahmed) = le COPIER dans le presse-papier (Windows) et amener
+   Discord au premier plan ; l'utilisateur fait Ctrl+V + Entrée. Desktop
+   Windows ; dégrade ailleurs (partage natif / enregistrement), jamais de
+   blocage.
 ══════════════════════════════════════════════════════════ */
 
 /** Logo Discord — Simple Icons (path unique, fill), couleur de marque blurple. */
@@ -30,84 +34,243 @@ function fillIcon(parent: HTMLElement, path: string): void {
 	parent.appendChild(svg);
 }
 
-/** Octets du zip d'un module + nom de base assaini (null si aucun quiz lisible). */
-async function buildModuleZipBytes(ctx: DashboardCtx, group: ModuleGroup): Promise<{ bytes: Uint8Array; base: string } | null> {
-	const entries: ZipEntry[] = [];
-	for (const q of group.quizzes) {
-		const file = ctx.app.vault.getAbstractFileByPath(q.path);
-		if (file instanceof TFile) entries.push({ name: file.name, content: await ctx.app.vault.read(file) });
-	}
-	if (entries.length === 0) { new Notice(t("dashboard.detail.fileNotFound")); return null; }
-	const base = (group.name || "quizzes").replace(/[\\/:*?"<>|]/g, "-").trim() || "quizzes";
-	return { bytes: buildZip(entries), base };
+/* ── Sources de partage : dossier (zip) ou quiz seul (.md) ── */
+
+/** Fichier prêt à partager, nom déjà assaini. */
+interface SharePayload {
+	fileName: string;
+	bytes: Uint8Array;
+	/** MIME du partage natif mobile. */
+	mime: string;
 }
 
-/** « Enregistrer le zip » : Téléchargements (desktop, révélé) / racine (mobile). */
-async function saveModuleZip(ctx: DashboardCtx, group: ModuleGroup): Promise<void> {
-	const z = await buildModuleZipBytes(ctx, group);
-	if (!z) return;
+/** Ce que le modal doit savoir : son titre + comment produire le fichier. */
+export interface ShareSource {
+	titleKey: TransKey;
+	build(): Promise<SharePayload | null>;
+}
+
+function sanitizeBase(name: string, fallback: string): string {
+	return (name || fallback).replace(/[\\/:*?"<>|]/g, "-").trim() || fallback;
+}
+
+/** Dossier entier → zip de ses notes (null si aucun quiz lisible). */
+export function moduleShareSource(ctx: DashboardCtx, group: ModuleGroup): ShareSource {
+	return {
+		titleKey: "dashboard.quizzes.shareTitle",
+		async build() {
+			const entries: ZipEntry[] = [];
+			for (const q of group.quizzes) {
+				const file = ctx.app.vault.getAbstractFileByPath(q.path);
+				if (file instanceof TFile) entries.push({ name: file.name, content: await ctx.app.vault.read(file) });
+			}
+			if (entries.length === 0) { new Notice(t("dashboard.detail.fileNotFound")); return null; }
+			return { fileName: `${sanitizeBase(group.name, "quizzes")}.zip`, bytes: buildZip(entries), mime: "application/zip" };
+		},
+	};
+}
+
+/** Quiz seul → note .md réduite à son bloc ```quiz-blocks``` (importable telle
+    quelle : le destinataire la dépose dans son vault ou passe par « Import »). */
+export function quizShareSource(ctx: DashboardCtx, quiz: QuizIndexEntry): ShareSource {
+	return {
+		titleKey: "dashboard.quizzes.shareQuizTitle",
+		async build() {
+			const file = ctx.app.vault.getAbstractFileByPath(quiz.path);
+			if (!file || !(file instanceof TFile)) { new Notice(t("dashboard.detail.fileNotFound")); return null; }
+			const content = await ctx.app.vault.read(file);
+			const match = content.match(QUIZ_BLOCK_RE);
+			if (!match) { new Notice(t("dashboard.detail.noBlockInNote")); return null; }
+			const md = match[0].replace(/\r\n/g, "\n") + "\n";
+			return { fileName: `${sanitizeBase(quiz.title, "quiz")}.md`, bytes: new TextEncoder().encode(md), mime: "text/markdown" };
+		},
+	};
+}
+
+/* ── « Enregistrer » : Téléchargements (desktop, révélé) / racine (mobile). ── */
+
+async function saveShared(ctx: DashboardCtx, source: ShareSource): Promise<void> {
+	const payload = await source.build();
+	if (!payload) return;
 	if (Platform.isDesktopApp) {
 		const fs = require("fs") as typeof import("fs");
 		const path = require("path") as typeof import("path");
 		const os = require("os") as typeof import("os");
-		const dest = path.join(os.homedir(), "Downloads", `${z.base}.zip`);
-		fs.writeFileSync(dest, z.bytes);
+		const dest = path.join(os.homedir(), "Downloads", payload.fileName);
+		fs.writeFileSync(dest, payload.bytes);
 		(require("electron") as { shell: { showItemInFolder(p: string): void } }).shell.showItemInFolder(dest);
-		new Notice(t("dashboard.quizzes.zipSaved", { path: dest }));
+		new Notice(t("dashboard.quizzes.fileSaved", { path: dest }));
 	} else {
-		const dest = normalizePath(`${z.base}.zip`);
-		await ctx.app.vault.adapter.writeBinary(dest, z.bytes.buffer as ArrayBuffer);
-		new Notice(t("dashboard.quizzes.zipSaved", { path: dest }));
+		const dest = normalizePath(payload.fileName);
+		await ctx.app.vault.adapter.writeBinary(dest, payload.bytes.buffer as ArrayBuffer);
+		new Notice(t("dashboard.quizzes.fileSaved", { path: dest }));
 	}
 }
 
-/** Partage d'un module. PRIORITÉ au partage NATIF du système
-    (`navigator.share` avec fichier) : sur mobile, il ouvre la feuille « Partager
-    avec » → l'utilisateur choisit Discord, qui affiche son écran contact +
-    message + envoyer. Cette API est ABSENTE d'Obsidian desktop (Electron ne
-    l'expose pas, vérifié) → repli desktop = presse-papier + ouverture de Discord
-    (Ctrl+V + Entrée). Dernier repli : enregistrer le zip. */
-async function shareViaDiscord(ctx: DashboardCtx, group: ModuleGroup): Promise<void> {
-	const z = await buildModuleZipBytes(ctx, group);
-	if (!z) return;
+/* ── Activation de Discord (Windows) ──
+   CAUSE RACINE mesurée (2026-07-19, GetForegroundWindow/EnumWindows) : quand
+   Discord est réduit dans le tray, sa fenêtre principale (Chrome_WidgetWin_1)
+   est CACHÉE → `Process.MainWindowHandle` vaut 0, et NI `discord://` NI
+   `Update.exe --processStart` ne la ré-affichent (l'instance ignore le signal
+   single-instance) ; de plus l'instance Discord, process d'arrière-plan, n'a
+   pas le droit Windows de se mettre elle-même au premier plan. Donc on ne
+   délègue plus RIEN à Discord : on trouve sa fenêtre par EnumWindows (même
+   cachée), on la ré-affiche (SW_RESTORE si iconique, SW_SHOW sinon — jamais
+   de SW_RESTORE sur une fenêtre visible : ça dé-maximiserait) et on la force
+   au premier plan (SetForegroundWindow, puis SwitchToThisWindow en secours si
+   la restriction de focus a mordu). Le tout en C# compilé (Add-Type) : fiable
+   en PowerShell 5.1 comme 7. Discord fermé → lancement par Update.exe (le
+   lanceur du raccourci officiel), la boucle d'attente attrape la fenêtre au
+   démarrage (15 s). Script passé en -EncodedCommand : aucun escaping shell. */
+
+function buildDiscordScript(dest: string): string {
+	const destPs = dest.replace(/'/g, "''");
+	return `$ErrorActionPreference = 'SilentlyContinue'
+Set-Clipboard -LiteralPath '${destPs}'
+if (-not (Get-Process Discord -ErrorAction SilentlyContinue)) {
+	$up = Join-Path $env:LOCALAPPDATA 'Discord\\Update.exe'
+	if (Test-Path $up) { Start-Process $up -ArgumentList '--processStart','Discord.exe' }
+	else { try { Start-Process 'discord://' } catch { Start-Process 'https://discord.com/channels/@me' } }
+}
+Add-Type -TypeDefinition @'
+using System;
+using System.Diagnostics;
+using System.Runtime.InteropServices;
+using System.Text;
+namespace QuizBlocks {
+	public static class DiscordFocus {
+		delegate bool EnumProc(IntPtr hWnd, IntPtr lParam);
+		[DllImport("user32.dll")] static extern bool EnumWindows(EnumProc cb, IntPtr lParam);
+		[DllImport("user32.dll")] static extern uint GetWindowThreadProcessId(IntPtr h, out uint pid);
+		[DllImport("user32.dll")] static extern int GetClassName(IntPtr h, StringBuilder s, int n);
+		[DllImport("user32.dll")] static extern bool IsWindowVisible(IntPtr h);
+		[DllImport("user32.dll")] static extern bool IsIconic(IntPtr h);
+		[DllImport("user32.dll")] static extern bool ShowWindow(IntPtr h, int cmd);
+		[DllImport("user32.dll")] static extern bool SetForegroundWindow(IntPtr h);
+		[DllImport("user32.dll")] static extern IntPtr GetForegroundWindow();
+		[DllImport("user32.dll")] static extern void SwitchToThisWindow(IntPtr h, bool alt);
+		[DllImport("user32.dll")] static extern void keybd_event(byte vk, byte scan, uint flags, UIntPtr extra);
+		[DllImport("user32.dll")] static extern bool AttachThreadInput(uint idAttach, uint idAttachTo, bool attach);
+		[DllImport("user32.dll")] static extern bool BringWindowToTop(IntPtr h);
+		[DllImport("kernel32.dll")] static extern uint GetCurrentThreadId();
+		[StructLayout(LayoutKind.Sequential)] struct RECT { public int L; public int T; public int R; public int B; }
+		[DllImport("user32.dll")] static extern bool GetWindowRect(IntPtr h, out RECT r);
+		static IntPtr Find() {
+			var pids = new System.Collections.Generic.HashSet<int>();
+			foreach (var p in Process.GetProcessesByName("Discord")) pids.Add(p.Id);
+			if (pids.Count == 0) return IntPtr.Zero;
+			IntPtr found = IntPtr.Zero;
+			EnumWindows(delegate(IntPtr h, IntPtr l) {
+				uint pid; GetWindowThreadProcessId(h, out pid);
+				if (!pids.Contains((int)pid)) return true;
+				var c = new StringBuilder(64); GetClassName(h, c, 64);
+				if (c.ToString() != "Chrome_WidgetWin_1") return true;
+				// Écarte le SPLASH du démarrage (« Discord Updater », ~300 px,
+				// même classe) : fenêtre éphémère, l'activer raterait la vraie.
+				// La principale a un min-width ~940 ; iconique = principale
+				// d'office (le rect d'une fenêtre iconique ment sur sa taille).
+				if (!IsIconic(h)) {
+					RECT r; GetWindowRect(h, out r);
+					if (r.R - r.L < 500) return true;
+				}
+				found = h; return false;
+			}, IntPtr.Zero);
+			return found;
+		}
+		public static void Activate(int timeoutMs) {
+			int end = Environment.TickCount + timeoutMs;
+			IntPtr h = IntPtr.Zero;
+			while (Environment.TickCount < end) {
+				h = Find();
+				if (h != IntPtr.Zero) break;
+				System.Threading.Thread.Sleep(150);
+			}
+			if (h == IntPtr.Zero) return;
+			if (IsIconic(h)) ShowWindow(h, 9);
+			else if (!IsWindowVisible(h)) ShowWindow(h, 5);
+			// Escalade mesurée contre la restriction de focus de Windows (un
+			// process d'arrière-plan ne peut pas voler le premier plan) : essai
+			// direct, puis frappe Alt simulée (satisfait « a reçu le dernier
+			// input »), puis AttachThreadInput au thread au premier plan, puis
+			// SwitchToThisWindow (la voie Alt-Tab) en dernier recours.
+			if (Try(h)) return;
+			keybd_event(0x12, 0, 0, UIntPtr.Zero);
+			keybd_event(0x12, 0, 2, UIntPtr.Zero);
+			if (Try(h)) return;
+			IntPtr fg = GetForegroundWindow();
+			if (fg != IntPtr.Zero) {
+				uint pid; uint fgT = GetWindowThreadProcessId(fg, out pid);
+				uint curT = GetCurrentThreadId();
+				if (fgT != 0 && fgT != curT) {
+					AttachThreadInput(curT, fgT, true);
+					BringWindowToTop(h);
+					SetForegroundWindow(h);
+					AttachThreadInput(curT, fgT, false);
+					System.Threading.Thread.Sleep(60);
+					if (GetForegroundWindow() == h) return;
+				}
+			}
+			SwitchToThisWindow(h, true);
+		}
+		static bool Try(IntPtr h) {
+			SetForegroundWindow(h);
+			System.Threading.Thread.Sleep(60);
+			return GetForegroundWindow() == h;
+		}
+	}
+}
+'@
+[QuizBlocks.DiscordFocus]::Activate(15000)
+`;
+}
+
+/* ── Partage. PRIORITÉ au partage NATIF du système (`navigator.share` avec
+   fichier) : sur mobile il ouvre la feuille « Partager avec » → l'utilisateur
+   choisit Discord. Cette API est ABSENTE d'Obsidian desktop (Electron ne
+   l'expose pas, vérifié) → repli desktop = presse-papier + Discord au premier
+   plan (Ctrl+V + Entrée). Dernier repli : enregistrer le fichier. ── */
+
+async function shareViaDiscord(ctx: DashboardCtx, source: ShareSource): Promise<void> {
+	const payload = await source.build();
+	if (!payload) return;
 
 	// 1. Partage natif du système (mobile) — l'expérience « Partager avec ».
-	const file = new File([z.bytes as BlobPart], `${z.base}.zip`, { type: "application/zip" });
+	const file = new File([payload.bytes as BlobPart], payload.fileName, { type: payload.mime });
 	const nav = navigator as Navigator & { canShare?: (d: unknown) => boolean; share?: (d: unknown) => Promise<void> };
 	if (nav.canShare && nav.share && nav.canShare({ files: [file] })) {
-		try { await nav.share({ files: [file], title: z.base }); } catch { /* annulé par l'utilisateur */ }
+		try { await nav.share({ files: [file], title: payload.fileName }); } catch { /* annulé par l'utilisateur */ }
 		return;
 	}
 
-	// 2. Desktop (pas de Web Share) : zip → presse-papier → ouvrir Discord.
+	// 2. Desktop : fichier → presse-papier + Discord au premier plan (script
+	//    asynchrone, fenêtre cachée — la Notice part tout de suite).
 	if (Platform.isDesktopApp) {
 		const fs = require("fs") as typeof import("fs");
 		const path = require("path") as typeof import("path");
 		const os = require("os") as typeof import("os");
 		const cp = require("child_process") as typeof import("child_process");
-		const dest = path.join(os.tmpdir(), `${z.base}.zip`);
-		fs.writeFileSync(dest, z.bytes);
+		const dest = path.join(os.tmpdir(), payload.fileName);
+		fs.writeFileSync(dest, payload.bytes);
 		try {
-			cp.execFileSync("powershell", ["-NoProfile", "-Command", `Set-Clipboard -LiteralPath ${JSON.stringify(dest)}`]);
+			const encoded = Buffer.from(buildDiscordScript(dest), "utf16le").toString("base64");
+			cp.execFile("powershell", ["-NoProfile", "-WindowStyle", "Hidden", "-EncodedCommand", encoded], { windowsHide: true }, () => { /* fire-and-forget */ });
 		} catch { /* pas Windows / PowerShell indispo */ }
-		const shell = (require("electron") as { shell: { openExternal(u: string): Promise<void> } }).shell;
-		shell.openExternal("discord://").catch(() => shell.openExternal("https://discord.com/channels/@me"));
 		new Notice(t("dashboard.quizzes.discordReady"));
 		return;
 	}
 
-	// 3. Repli ultime : enregistrer le zip.
-	await saveModuleZip(ctx, group);
+	// 3. Repli ultime : enregistrer le fichier.
+	await saveShared(ctx, source);
 }
 
 export class ShareModal extends Modal {
-	constructor(private ctx: DashboardCtx, private group: ModuleGroup) {
+	constructor(private ctx: DashboardCtx, private source: ShareSource) {
 		super(ctx.app);
 	}
 
 	onOpen(): void {
 		this.modalEl.addClass("qbd-share-modal");
-		this.titleEl.setText(t("dashboard.quizzes.shareTitle"));
+		this.titleEl.setText(t(this.source.titleKey));
 		const c = this.contentEl;
 		c.createEl("p", { cls: "qbd-share-hint", text: t("dashboard.quizzes.shareHint") });
 		const row = c.createDiv({ cls: "qbd-share-apps" });
@@ -129,7 +292,7 @@ export class ShareModal extends Modal {
 		}
 		discord.createSpan({ cls: "qbd-share-app-label", text: "Discord" });
 		discord.addEventListener("click", () => {
-			void shareViaDiscord(this.ctx, this.group);
+			void shareViaDiscord(this.ctx, this.source);
 			if (Platform.isDesktopApp) {
 				// Confirmation « copié » : le badge passe au vert (is-copied) + une
 				// ligne message sous les apps, puis fermeture douce.
@@ -146,13 +309,13 @@ export class ShareModal extends Modal {
 			}
 		});
 
-		// ── Enregistrer le zip ──
+		// ── Enregistrer le fichier ──
 		const save = row.createEl("button", { cls: "qbd-share-app" });
 		save.type = "button";
 		const sIcon = save.createDiv({ cls: "qbd-share-app-icon" });
 		setIcon(sIcon, "download");
 		save.createSpan({ cls: "qbd-share-app-label", text: t("dashboard.quizzes.shareSave") });
-		save.addEventListener("click", () => { this.close(); void saveModuleZip(this.ctx, this.group); });
+		save.addEventListener("click", () => { this.close(); void saveShared(this.ctx, this.source); });
 	}
 
 	onClose(): void {

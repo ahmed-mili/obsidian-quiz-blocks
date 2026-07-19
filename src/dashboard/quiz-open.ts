@@ -3,6 +3,7 @@ import type { App, WorkspaceLeaf } from "obsidian";
 import { VIEW_TYPE } from "../editor";
 import { t } from "../i18n";
 import type { QuizIndexEntry } from "./scanner";
+import { QUIZ_BLOCK_RE } from "../quiz-utils";
 
 /* ══════════════════════════════════════════════════════════
    QUIZ OPEN — lancement direct d'un quiz (ouverture de sa note)
@@ -34,14 +35,20 @@ type QuizEditorViewLike = {
     Extrait de detail.ts (openInEditor) pour être partagé avec le menu ⋯ des
     cartes de « Mes quiz » — un seul chemin d'édition, jamais deux copies. */
 export async function openQuizInEditor(app: App, quiz: QuizIndexEntry): Promise<void> {
-	const file = app.vault.getAbstractFileByPath(quiz.path);
+	return openQuizPathInEditor(app, quiz.path);
+}
+
+/** Même ouverture, par chemin de note — pour un quiz qui vient d'être créé et
+    que le scanner n'a pas encore indexé (bouton « New quiz » du drill-down). */
+export async function openQuizPathInEditor(app: App, path: string): Promise<void> {
+	const file = app.vault.getAbstractFileByPath(path);
 	if (!file || !(file instanceof TFile)) {
 		new Notice(t("dashboard.detail.fileNotFound"));
 		return;
 	}
 	try {
 		const content = await app.vault.read(file);
-		const match = content.match(/```quiz-blocks\n([\s\S]*?)\n```/);
+		const match = content.match(QUIZ_BLOCK_RE);
 		if (!match) {
 			new Notice(t("dashboard.detail.noBlockInNote"));
 			return;

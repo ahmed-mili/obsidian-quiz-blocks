@@ -2,7 +2,7 @@ import { Modal, FuzzySuggestModal, Notice } from "obsidian";
 import type { App, TFile, FuzzyMatch, WorkspaceLeaf } from "obsidian";
 import { Q_TYPES, _setIcon, makeDefault, defaultSlots } from "./utils";
 import type { QuestionTypeKey, DraftQuestion } from "./utils";
-import { parseQuizSource } from "../quiz-utils";
+import { parseQuizSource, QUIZ_BLOCK_RE } from "../quiz-utils";
 import { t } from "../i18n";
 import type { EditorHostView, EditorExamOptions } from "../types/editor-ctx";
 import type { ResourceButton } from "../types/quiz";
@@ -205,7 +205,7 @@ export class ImportQuizModal extends Modal {
 	async loadQuiz(text: string): Promise<void> {
 		try {
 			let jsonText = text;
-			const fenceMatch = text.match(/```quiz-blocks\n([\s\S]*?)\n```/);
+			const fenceMatch = text.match(QUIZ_BLOCK_RE);
 			if (fenceMatch) {
 				jsonText = fenceMatch[1];
 			}
@@ -439,7 +439,7 @@ export class ImportFromNoteModal extends Modal {
 		new QuizFileSuggestModal(this.app, async (file) => {
 			try {
 				const content = await this.app.vault.read(file);
-				const match = content.match(/```quiz-blocks\n([\s\S]*?)\n```/);
+				const match = content.match(QUIZ_BLOCK_RE);
 				if (!match) {
 					new Notice(t("editor.notice.noBlockInNote"));
 					return;
@@ -629,7 +629,7 @@ export class OpenQuizFromNoteModal extends FuzzySuggestModal<TFile> {
 	async onChooseItem(file: TFile): Promise<void> {
 		try {
 			const content = await this.app.vault.read(file);
-			const match = content.match(/```quiz-blocks\n([\s\S]*?)\n```/);
+			const match = content.match(QUIZ_BLOCK_RE);
 			if (!match) {
 				new Notice(t("editor.notice.noBlockInNote"));
 				return;

@@ -1,6 +1,6 @@
 import { Modal, Notice, TFile } from "obsidian";
 import type { App } from "obsidian";
-import { ShareModal } from "./share";
+import { ShareModal, moduleShareSource, quizShareSource } from "./share";
 import { t } from "../i18n";
 import type { DashboardCtx } from "../types/dashboard-ctx";
 import type { QuizIndexEntry } from "./scanner";
@@ -8,6 +8,7 @@ import type { ModuleGroup, ModuleMap } from "./quiz-modules";
 import { ModuleEditModal } from "./module-edit";
 import type { ActionMenuItem } from "./ui-select";
 import { openQuizInEditor } from "./quiz-open";
+import { QUIZ_BLOCK_RE } from "../quiz-utils";
 
 /* ══════════════════════════════════════════════════════════
    QUIZ MENU — contenu du menu ⋯ des cartes de « Mes quiz ».
@@ -41,24 +42,6 @@ export function isPaused(ctx: DashboardCtx, path: string): boolean {
 
 export function isArchived(ctx: DashboardCtx, path: string): boolean {
 	return readList(ctx, "quizzesArchived").has(path);
-}
-
-/* ── Share : copier le bloc quiz complet (délimiteurs compris) ── */
-
-async function copyQuizBlock(app: App, quiz: QuizIndexEntry): Promise<void> {
-	const file = app.vault.getAbstractFileByPath(quiz.path);
-	if (!file || !(file instanceof TFile)) {
-		new Notice(t("dashboard.detail.fileNotFound"));
-		return;
-	}
-	const content = await app.vault.read(file);
-	const match = content.match(/```quiz-blocks\n[\s\S]*?\n```/);
-	if (!match) {
-		new Notice(t("dashboard.detail.noBlockInNote"));
-		return;
-	}
-	await navigator.clipboard.writeText(match[0]);
-	new Notice(t("dashboard.quizzes.blockCopied"));
 }
 
 /* ── Confirmations — même contrat que StudySmarter (vérifié en live le
@@ -122,7 +105,7 @@ async function deleteQuiz(ctx: DashboardCtx, quiz: QuizIndexEntry): Promise<void
 
 /** Cœur du delete, sans Notice (partagé quiz seul / module entier). */
 async function deleteQuizCore(ctx: DashboardCtx, quiz: QuizIndexEntry, file: TFile, content: string): Promise<void> {
-	const remaining = content.replace(/```quiz-blocks\n[\s\S]*?\n```/, "");
+	const remaining = content.replace(QUIZ_BLOCK_RE, "");
 	if (remaining.trim().length === 0) {
 		// La note ne contenait que le quiz : corbeille (récupérable), jamais
 		// de suppression définitive.
@@ -157,7 +140,10 @@ export function buildQuizCardMenu(ctx: DashboardCtx, rerender: () => void): (qui
 			{
 				icon: "share-2",
 				label: t("dashboard.quizzes.menuShare"),
-				onClick: () => { void copyQuizBlock(ctx.app, quiz); },
+				// Même modal de partage que les dossiers (Discord / enregistrer),
+				// avec le .md du quiz seul — remplace l'ancienne copie de bloc
+				// texte, jugée insuffisante (demande Ahmed 2026-07-19).
+				onClick: () => { new ShareModal(ctx, quizShareSource(ctx, quiz)).open(); },
 			},
 			{
 				icon: "pencil",
@@ -173,15 +159,15 @@ export function buildQuizCardMenu(ctx: DashboardCtx, rerender: () => void): (qui
 					if (paused) apply(); else confirmPause(ctx.app, quiz.title, apply);
 				},
 			},
-			{
+			// L'archivage à l'unité est retiré (décision Ahmed 2026-07-19 : il n'a
+			// d'intérêt qu'au niveau dossier). On garde UNIQUEMENT la sortie de
+			// secours : un quiz déjà archivé (par un archivage de dossier, ou
+			// hérité d'avant) reste désarchivable depuis la section « Archivés ».
+			...(archived ? [{
 				icon: "archive",
-				label: t(archived ? "dashboard.quizzes.menuUnarchive" : "dashboard.quizzes.menuArchive"),
-				onClick: () => {
-					const apply = () => { toggleList(ctx, "quizzesArchived", quiz.path, !archived); rerender(); };
-					// Comme StudySmarter : ARCHIVER confirme, désarchiver est direct.
-					if (archived) apply(); else confirmArchive(ctx.app, quiz.title, apply);
-				},
-			},
+				label: t("dashboard.quizzes.menuUnarchive"),
+				onClick: () => { toggleList(ctx, "quizzesArchived", quiz.path, false); rerender(); },
+			} satisfies ActionMenuItem] : []),
 			{
 				icon: "trash-2",
 				label: t("dashboard.quizzes.menuDelete"),
@@ -212,7 +198,7 @@ export function buildModuleCardMenu(ctx: DashboardCtx, rerender: () => void, map
 			{
 				icon: "share-2",
 				label: t("dashboard.quizzes.menuShare"),
-				onClick: () => { new ShareModal(ctx, g).open(); },
+				onClick: () => { new ShareModal(ctx, moduleShareSource(ctx, g)).open(); },
 			},
 			{
 				icon: "pencil",

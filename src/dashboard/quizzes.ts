@@ -8,7 +8,7 @@ import { parseModuleMap, applyModuleOverrides } from "./quiz-modules";
 import type { ModuleMap } from "./quiz-modules";
 import { createSelect, openActionMenu } from "./ui-select";
 import { isArchived } from "./quiz-menu";
-import { CreateFolderModal } from "./folder-create";
+import { CreateFolderModal, createQuizInFolder, importQuizIntoFolder } from "./folder-create";
 import { renderQuizGrid, renderModuleDrill } from "./quizzes-render";
 import type { GroupingKey } from "./quizzes-render";
 
@@ -170,15 +170,35 @@ export function createQuizzesHandlers(ctx: DashboardCtx): QuizzesHandlers {
 		const header = container.createDiv({ cls: "qbd-quizzes-header" });
 		header.createEl("h2", { cls: "qbd-quizzes-title", text: t("dashboard.quizzes.title") });
 
-		// Bouton « Nouveau dossier » — même bouton pilule blanc que « Create
-		// Study Set » de StudySmarter (capture 2026-07-18), libellé adapté.
-		const newBtn = header.createEl("button", { cls: "qbd-btn--create" });
-		const newIcon = newBtn.createSpan({ cls: "qbd-btn-icon" });
-		setIcon(newIcon, "plus");
-		newBtn.createSpan({ text: t("dashboard.quizzes.new") });
-		newBtn.addEventListener("click", () => {
-			new CreateFolderModal(ctx, effectiveMap(), quizzes, () => { if (containerRef) render(containerRef); }).open();
-		});
+		if (openModuleFolder === null) {
+			// Grille : « Nouveau dossier » — même bouton pilule blanc que « Create
+			// Study Set » de StudySmarter (capture 2026-07-18), libellé adapté.
+			const newBtn = header.createEl("button", { cls: "qbd-btn--create" });
+			const newIcon = newBtn.createSpan({ cls: "qbd-btn-icon" });
+			setIcon(newIcon, "plus");
+			newBtn.createSpan({ text: t("dashboard.quizzes.new") });
+			newBtn.addEventListener("click", () => {
+				new CreateFolderModal(ctx, effectiveMap(), quizzes, () => { if (containerRef) render(containerRef); }).open();
+			});
+		} else {
+			// Drill-down : créer un dossier ICI n'a pas de sens (demande Ahmed
+			// 2026-07-19) → « Importer » (repli discret) + « Nouveau quiz »
+			// (pilule primaire), tous deux dans le dossier OUVERT.
+			const folder = openModuleFolder;
+			const actions = header.createDiv({ cls: "qbd-quizzes-header-actions" });
+			const importBtn = actions.createEl("button", { cls: "qbd-btn--create qbd-btn--ghost" });
+			const importIcon = importBtn.createSpan({ cls: "qbd-btn-icon" });
+			setIcon(importIcon, "upload");
+			importBtn.createSpan({ text: t("dashboard.quizzes.importQuiz") });
+			importBtn.addEventListener("click", () => {
+				void importQuizIntoFolder(ctx, folder, () => { if (containerRef) render(containerRef); });
+			});
+			const newQuizBtn = actions.createEl("button", { cls: "qbd-btn--create" });
+			const newQuizIcon = newQuizBtn.createSpan({ cls: "qbd-btn-icon" });
+			setIcon(newQuizIcon, "plus");
+			newQuizBtn.createSpan({ text: t("dashboard.quizzes.newQuiz") });
+			newQuizBtn.addEventListener("click", () => { void createQuizInFolder(ctx, folder); });
+		}
 
 		// ── Regroupement (UE / Récent) ──
 		// Masqué en drill-down : l'axe de regroupement n'a pas de sens à

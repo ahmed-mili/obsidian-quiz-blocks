@@ -18,6 +18,7 @@ import type {
 
 import { parseQuizSource, renderInteractiveQuiz } from "./engine";
 import { QuizBuilderView, VIEW_TYPE } from "./editor";
+import { QUIZ_BLOCK_RE } from "./quiz-utils";
 import { QuizDashboardView, VIEW_TYPE_DASHBOARD } from "./dashboard";
 import { createScanner } from "./dashboard/scanner";
 import type { Scanner } from "./dashboard/scanner";
@@ -1254,7 +1255,7 @@ export default class InteractiveQuizPlugin extends Plugin {
 				try {
 					const content = await this.app.vault.read(activeFile);
 					// Premier bloc quiz-blocks de la note.
-					const match = content.match(/```quiz-blocks\n([\s\S]*?)\n```/);
+					const match = content.match(QUIZ_BLOCK_RE);
 					if (!match) {
 						new Notice(t("plugin.notice.noQuizBlock"));
 						return;

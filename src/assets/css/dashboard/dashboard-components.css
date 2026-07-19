@@ -355,6 +355,25 @@
 	height: 15px;
 }
 
+/* Paire d'actions du header en drill-down (« Importer » + « Nouveau quiz »). */
+.qbd-quizzes-header-actions {
+	display: inline-flex;
+	align-items: center;
+	gap: 8px;
+}
+
+/* Variante fantôme de la pilule (action secondaire) : mêmes métriques, fond
+   transparent bordé. Les !important répondent à ceux de la base (.qbd-btn--create),
+   eux-mêmes imposés par le chrome natif des button d'Obsidian. */
+.qbd-btn--create.qbd-btn--ghost {
+	background: transparent !important;
+	color: var(--text-normal) !important;
+	box-shadow: inset 0 0 0 1px var(--background-modifier-border) !important;
+}
+.qbd-btn--create.qbd-btn--ghost:hover {
+	background: var(--background-modifier-hover) !important;
+}
+
 /* ── Modal « Modifier dossier » (référence StudySmarter, sans toggle public).
    Champs façon Notion (obsidian:plugin-design §2) ; !important contre le
    chrome natif des input/button d'Obsidian (0,1,1). ── */
