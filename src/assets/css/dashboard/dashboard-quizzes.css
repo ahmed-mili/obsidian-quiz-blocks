@@ -376,7 +376,10 @@
 
 /* Spacer pousse le pied en bas ; ligne séparatrice ; pied avec le bouton •••. */
 .qbd-module-card__spacer { flex: 1; }
-.qbd-module-card__divider { margin: 0 16px; border-top: 1px solid #262d3f; }
+/* Filet de séparation : MÊME variable que les cartes de l'accueil/quiz
+   (.qbd-quiz-card-meta) — thémable, visible clair ET sombre. Une carte
+   dossier n'a JAMAIS de barre de progression (règle Ahmed 2026-07-19). */
+.qbd-module-card__divider { margin: 0 16px; border-top: 1px solid var(--background-modifier-border); }
 .qbd-module-card__footer {
 	padding: 5px 12px 8px;
 	display: flex;
