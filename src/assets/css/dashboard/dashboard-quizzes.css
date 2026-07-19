@@ -13,11 +13,29 @@
 	/* Même police serif que le titre « Generate a quiz » (.qbd-ai-title) —
 	   Constantia + replis old-style pour macOS/mobile. */
 	font-family: Constantia, "Iowan Old Style", "Palatino Linotype", Georgia, serif;
-	font-size: 18px;
+	font-size: 28px;
 	font-weight: 700;
 	color: var(--text-normal);
 	margin: 0;
 	letter-spacing: -0.02em;
+	display: flex;
+	align-items: center;
+	gap: 10px;
+}
+
+/* Icône bleue (accent) à gauche du titre « My quizzes ». */
+.qbd-quizzes-title-icon {
+	display: inline-flex;
+	align-items: center;
+	color: var(--interactive-accent);
+	flex: 0 0 auto;
+}
+
+.qbd-quizzes-title-icon svg {
+	width: 28px;
+	height: 28px;
+	stroke: var(--interactive-accent);
+	color: var(--interactive-accent);
 }
 
 /* ── Search ── */

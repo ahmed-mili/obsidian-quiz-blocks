@@ -172,7 +172,10 @@ export function createQuizzesHandlers(ctx: DashboardCtx): QuizzesHandlers {
 
 		// ── Header ──
 		const header = container.createDiv({ cls: "qbd-quizzes-header" });
-		header.createEl("h2", { cls: "qbd-quizzes-title", text: t("dashboard.quizzes.title") });
+		const titleEl = header.createEl("h2", { cls: "qbd-quizzes-title" });
+		const titleIcon = titleEl.createSpan({ cls: "qbd-quizzes-title-icon" });
+		setIcon(titleIcon, "library");
+		titleEl.createSpan({ text: t("dashboard.quizzes.title") });
 
 		if (openModuleFolder === null) {
 			// Grille : « Nouveau dossier » — même bouton pilule blanc que « Create
