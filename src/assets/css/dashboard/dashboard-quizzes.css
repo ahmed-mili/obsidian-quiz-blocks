@@ -10,6 +10,9 @@
 }
 
 .qbd-quizzes-title {
+	/* Même police serif que le titre « Generate a quiz » (.qbd-ai-title) —
+	   Constantia + replis old-style pour macOS/mobile. */
+	font-family: Constantia, "Iowan Old Style", "Palatino Linotype", Georgia, serif;
 	font-size: 18px;
 	font-weight: 700;
 	color: var(--text-normal);
