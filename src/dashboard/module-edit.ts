@@ -182,7 +182,7 @@ export class ModuleEditModal extends Modal {
 
 /** Parent le plus fréquent des dossiers de module (déduit des chemins de
     quiz) ; "" = racine du vault si rien n'est déductible. */
-function commonModuleParent(quizzes: QuizIndexEntry[], map: ModuleMap): string {
+export function commonModuleParent(quizzes: QuizIndexEntry[], map: ModuleMap): string {
 	const counts = new Map<string, number>();
 	for (const q of quizzes) {
 		const folder = moduleForQuiz(q.path, map).folder;

@@ -8,7 +8,7 @@ import { parseModuleMap, applyModuleOverrides } from "./quiz-modules";
 import type { ModuleMap } from "./quiz-modules";
 import { createSelect, openActionMenu } from "./ui-select";
 import { isArchived } from "./quiz-menu";
-import { NewFolderModal } from "./module-edit";
+import { CreateFolderModal } from "./folder-create";
 import { renderQuizGrid, renderModuleDrill } from "./quizzes-render";
 import type { GroupingKey } from "./quizzes-render";
 
@@ -177,7 +177,7 @@ export function createQuizzesHandlers(ctx: DashboardCtx): QuizzesHandlers {
 		setIcon(newIcon, "plus");
 		newBtn.createSpan({ text: t("dashboard.quizzes.new") });
 		newBtn.addEventListener("click", () => {
-			new NewFolderModal(ctx, effectiveMap(), quizzes, () => { if (containerRef) render(containerRef); }).open();
+			new CreateFolderModal(ctx, effectiveMap(), quizzes, () => { if (containerRef) render(containerRef); }).open();
 		});
 
 		// ── Regroupement (UE / Récent) ──

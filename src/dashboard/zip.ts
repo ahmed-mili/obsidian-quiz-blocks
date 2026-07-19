@@ -73,3 +73,29 @@ export function buildZip(entries: ZipEntry[]): Uint8Array {
 	]);
 	return concat([...chunks, centralBlob, end]);
 }
+
+/** Lit une archive ZIP « store » (inverse de buildZip) : parcourt les en-têtes
+    de fichier locaux (signature 0x04034b50), extrait nom + contenu texte. Les
+    entrées compressées (method ≠ 0) sont ignorées — on n'importe que nos propres
+    archives, toujours « store ». Robuste aux zips d'autres outils tant que le
+    contenu texte est en store ; sinon l'entrée est simplement sautée. */
+export function parseZip(bytes: Uint8Array): ZipEntry[] {
+	const dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+	const decoder = new TextDecoder();
+	const out: ZipEntry[] = [];
+	let off = 0;
+	while (off + 30 <= bytes.length && dv.getUint32(off, true) === 0x04034b50) {
+		const method = dv.getUint16(off + 8, true);
+		const compSize = dv.getUint32(off + 18, true);
+		const nameLen = dv.getUint16(off + 26, true);
+		const extraLen = dv.getUint16(off + 28, true);
+		const nameStart = off + 30;
+		const name = decoder.decode(bytes.subarray(nameStart, nameStart + nameLen));
+		const dataStart = nameStart + nameLen + extraLen;
+		if (method === 0 && !name.endsWith("/")) {
+			out.push({ name, content: decoder.decode(bytes.subarray(dataStart, dataStart + compSize)) });
+		}
+		off = dataStart + compSize;
+	}
+	return out;
+}

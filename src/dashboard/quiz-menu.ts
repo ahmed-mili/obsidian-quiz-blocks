@@ -1,7 +1,6 @@
-import { Modal, Notice, Platform, TFile, normalizePath } from "obsidian";
+import { Modal, Notice, TFile } from "obsidian";
 import type { App } from "obsidian";
-import { buildZip } from "./zip";
-import type { ZipEntry } from "./zip";
+import { ShareModal } from "./share";
 import { t } from "../i18n";
 import type { DashboardCtx } from "../types/dashboard-ctx";
 import type { QuizIndexEntry } from "./scanner";
@@ -60,40 +59,6 @@ async function copyQuizBlock(app: App, quiz: QuizIndexEntry): Promise<void> {
 	}
 	await navigator.clipboard.writeText(match[0]);
 	new Notice(t("dashboard.quizzes.blockCopied"));
-}
-
-/* ── Share (module) : zip des notes du module, prêt à envoyer (Discord…) ──
-   Desktop : écrit dans Téléchargements puis révèle le fichier dans
-   l'Explorateur. Mobile : à la racine du vault (pas de Node) — la feature
-   DÉGRADE, elle ne bloque jamais (règle « jamais desktop-only »). */
-
-async function shareModuleZip(ctx: DashboardCtx, group: ModuleGroup): Promise<void> {
-	const entries: ZipEntry[] = [];
-	for (const q of group.quizzes) {
-		const file = ctx.app.vault.getAbstractFileByPath(q.path);
-		if (file instanceof TFile) entries.push({ name: file.name, content: await ctx.app.vault.read(file) });
-	}
-	if (entries.length === 0) {
-		new Notice(t("dashboard.detail.fileNotFound"));
-		return;
-	}
-	const zip = buildZip(entries);
-	// Nom de fichier depuis le nom du module, débarrassé des caractères interdits.
-	const base = (group.name || "quizzes").replace(/[\\/:*?"<>|]/g, "-").trim() || "quizzes";
-	if (Platform.isDesktopApp) {
-		// require paresseux : ces modules n'existent pas sur mobile.
-		const fs = require("fs") as typeof import("fs");
-		const path = require("path") as typeof import("path");
-		const os = require("os") as typeof import("os");
-		const dest = path.join(os.homedir(), "Downloads", `${base}.zip`);
-		fs.writeFileSync(dest, zip);
-		(require("electron") as { shell: { showItemInFolder(p: string): void } }).shell.showItemInFolder(dest);
-		new Notice(t("dashboard.quizzes.zipSaved", { path: dest }));
-	} else {
-		const dest = normalizePath(`${base}.zip`);
-		await ctx.app.vault.adapter.writeBinary(dest, zip.buffer as ArrayBuffer);
-		new Notice(t("dashboard.quizzes.zipSaved", { path: dest }));
-	}
 }
 
 /* ── Confirmations — même contrat que StudySmarter (vérifié en live le
@@ -247,7 +212,7 @@ export function buildModuleCardMenu(ctx: DashboardCtx, rerender: () => void, map
 			{
 				icon: "share-2",
 				label: t("dashboard.quizzes.menuShare"),
-				onClick: () => { void shareModuleZip(ctx, g); },
+				onClick: () => { new ShareModal(ctx, g).open(); },
 			},
 			{
 				icon: "pencil",
