@@ -14,11 +14,24 @@ import type { EffortTrackFx } from "./effort-canvas";
 /** Fonction de fermeture d'un menu/popover portalé (identité dans openMenus). */
 type CloseFn = () => void;
 
-const openMenus = new Set<CloseFn>();
+const openMenus = new Map<CloseFn, HTMLElement | null>();
 
 /* Ferme tous les menus ouverts (appelé à chaque re-render). */
 export function closeAllSelects(): void {
-	for (const close of Array.from(openMenus)) close();
+	for (const close of Array.from(openMenus.keys())) close();
+}
+
+/** Toggle : si un menu/popover portalé est DÉJÀ ouvert pour cette ancre (le
+    bouton déclencheur), le ferme et renvoie true — l'appelant s'abstient alors
+    de rouvrir. Un reclic sur le même bouton referme donc, au lieu de fermer puis
+    rouvrir. L'ancre reste exemptée du dismiss clic-dehors (onDocDown), sinon le
+    mousedown fermerait avant que ce toggle ne s'exécute. */
+function toggleCloseForAnchor(anchorEl: HTMLElement): boolean {
+	let closed = false;
+	for (const [close, anchor] of Array.from(openMenus.entries())) {
+		if (anchor === anchorEl) { close(); closed = true; }
+	}
+	return closed;
 }
 
 /** Poignée commune de tous les menus/popovers portalés ci-dessous. */
@@ -195,7 +208,7 @@ export function createSelect<T extends SelectOption = SelectOption>(parent: HTML
 		}
 
 		trigger.setAttribute("aria-expanded", "true");
-		openMenus.add(closeMenu);
+		openMenus.set(closeMenu, trigger);
 		document.addEventListener("mousedown", onDocDown, true);
 		document.addEventListener("keydown", onKeyDown, true);
 		window.addEventListener("scroll", onScroll, true);
@@ -243,6 +256,7 @@ export interface ActionMenuItem {
  * [{ icon, label, sub?, disabled?, onClick }]
  */
 export function openActionMenu(anchorEl: HTMLElement, items: ActionMenuItem[]): MenuHandle {
+	if (toggleCloseForAnchor(anchorEl)) return { close() {} };
 	closeAllSelects();
 
 	const rect = anchorEl.getBoundingClientRect();
@@ -314,7 +328,7 @@ export function openActionMenu(anchorEl: HTMLElement, items: ActionMenuItem[]): 
 		closeMenu();
 	}
 
-	openMenus.add(closeMenu);
+	openMenus.set(closeMenu, anchorEl);
 	document.addEventListener("mousedown", onDocDown, true);
 	document.addEventListener("keydown", onKeyDown, true);
 	window.addEventListener("scroll", onScroll, true);
@@ -370,6 +384,7 @@ export interface OpenModelMenuOptions {
  * ouvre un drill-in dans le même menu, puis « Plus de modèles ».
  */
 export function openModelMenu(anchorEl: HTMLElement, opts: OpenModelMenuOptions): MenuHandle {
+	if (toggleCloseForAnchor(anchorEl)) return { close() {} };
 	closeAllSelects();
 
 	const menuEl = document.body.createDiv({ cls: "qbd-select-menu qbd-model-menu" });
@@ -669,7 +684,7 @@ export function openModelMenu(anchorEl: HTMLElement, opts: OpenModelMenuOptions)
 	renderMain();
 	reposition();
 
-	openMenus.add(closeMenu);
+	openMenus.set(closeMenu, anchorEl);
 	document.addEventListener("mousedown", onDocDown, true);
 	document.addEventListener("keydown", onKeyDown, true);
 	window.addEventListener("scroll", onScroll, true);
@@ -712,6 +727,7 @@ export interface OpenEffortSliderOptions {
  * onPickEffort est notifié à chaque niveau retenu (relâchement/clavier).
  */
 export function openEffortSlider(anchorEl: HTMLElement, opts: OpenEffortSliderOptions): MenuHandle | null {
+	if (toggleCloseForAnchor(anchorEl)) return { close() {} };
 	closeAllSelects();
 
 	const efforts = opts.efforts || [];
@@ -1063,7 +1079,7 @@ export function openEffortSlider(anchorEl: HTMLElement, opts: OpenEffortSliderOp
 		closeMenu();
 	}
 
-	openMenus.add(closeMenu);
+	openMenus.set(closeMenu, anchorEl);
 	document.addEventListener("mousedown", onDocDown, true);
 	document.addEventListener("keydown", onKeyDown, true);
 	window.addEventListener("scroll", onScroll, true);
@@ -1096,6 +1112,7 @@ export interface OpenOptionsMenuOptions {
  * qui fermerait ce popover.
  */
 export function openOptionsMenu(anchorEl: HTMLElement, opts: OpenOptionsMenuOptions): MenuHandle {
+	if (toggleCloseForAnchor(anchorEl)) return { close() {} };
 	closeAllSelects();
 
 	const menuEl = document.body.createDiv({ cls: "qbd-select-menu qbd-options-pop" });
@@ -1262,7 +1279,7 @@ export function openOptionsMenu(anchorEl: HTMLElement, opts: OpenOptionsMenuOpti
 		closeMenu();
 	}
 
-	openMenus.add(closeMenu);
+	openMenus.set(closeMenu, anchorEl);
 	document.addEventListener("mousedown", onDocDown, true);
 	document.addEventListener("keydown", onKeyDown, true);
 	window.addEventListener("scroll", onScroll, true);
@@ -1291,6 +1308,7 @@ export interface OpenNotePickerOptions {
  * tête, et une recherche qui fouille tout le vault en dessous.
  */
 export function openNotePicker(anchorEl: HTMLElement, opts: OpenNotePickerOptions): MenuHandle {
+	if (toggleCloseForAnchor(anchorEl)) return { close() {} };
 	closeAllSelects();
 
 	const menuEl = document.body.createDiv({
@@ -1402,7 +1420,7 @@ export function openNotePicker(anchorEl: HTMLElement, opts: OpenNotePickerOption
 		closeMenu();
 	}
 
-	openMenus.add(closeMenu);
+	openMenus.set(closeMenu, anchorEl);
 	document.addEventListener("mousedown", onDocDown, true);
 	document.addEventListener("keydown", onKeyDown, true);
 	window.addEventListener("scroll", onScroll, true);
@@ -1522,7 +1540,7 @@ export function openMentionMenu(anchorEl: HTMLElement, onClose?: () => void): Me
 		closeMenu();
 	}
 
-	openMenus.add(closeMenu);
+	openMenus.set(closeMenu, anchorEl);
 	document.addEventListener("mousedown", onDocDown, true);
 	window.addEventListener("scroll", onScroll, true);
 	window.addEventListener("resize", closeMenu);
