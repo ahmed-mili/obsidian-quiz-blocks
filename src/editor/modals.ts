@@ -1,4 +1,5 @@
-import { Modal, FuzzySuggestModal, Notice } from "obsidian";
+import { FuzzySuggestModal, Notice } from "obsidian";
+import { QbdModal } from "../modal-base";
 import type { App, TFile, FuzzyMatch, WorkspaceLeaf } from "obsidian";
 import { Q_TYPES, _setIcon, makeDefault, defaultSlots } from "./utils";
 import type { QuestionTypeKey, DraftQuestion } from "./utils";
@@ -78,7 +79,7 @@ function _htmlToText(html: string): string {
 /* ════════════════════════════════════════════════════════
    CONFIRM MODAL
    ════════════════════════════════════════════════════════ */
-export class ConfirmModal extends Modal {
+export class ConfirmModal extends QbdModal {
 	modalTitle: string;
 	message: string;
 	confirmText: string;
@@ -134,7 +135,7 @@ export class ConfirmModal extends Modal {
 /* ════════════════════════════════════════════════════════
    TYPE PICKER MODAL
    ════════════════════════════════════════════════════════ */
-export class TypePickerModal extends Modal {
+export class TypePickerModal extends QbdModal {
 	onPick: (key: QuestionTypeKey) => void;
 
 	constructor(app: App, onPick: (key: QuestionTypeKey) => void) {
@@ -168,7 +169,7 @@ export class TypePickerModal extends Modal {
 /* ════════════════════════════════════════════════════════
    IMPORT QUIZ MODAL
    ════════════════════════════════════════════════════════ */
-export class ImportQuizModal extends Modal {
+export class ImportQuizModal extends QbdModal {
 	builderView: EditorHostView;
 
 	constructor(app: App, builderView: EditorHostView) {
@@ -422,7 +423,7 @@ export class QuizFileSuggestModal extends FuzzySuggestModal<TFile> {
 /* ════════════════════════════════════════════════════════
    IMPORT FROM NOTE MODAL
    ════════════════════════════════════════════════════════ */
-export class ImportFromNoteModal extends Modal {
+export class ImportFromNoteModal extends QbdModal {
 	builderView: EditorHostView;
 
 	constructor(app: App, builderView: EditorHostView) {

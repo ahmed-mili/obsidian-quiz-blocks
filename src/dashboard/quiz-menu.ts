@@ -1,4 +1,5 @@
-import { Modal, Notice, TFile } from "obsidian";
+import { Notice, TFile } from "obsidian";
+import { QbdModal } from "../modal-base";
 import type { App } from "obsidian";
 import { ShareModal, moduleShareSource, quizShareSource } from "./share";
 import { t } from "../i18n";
@@ -61,7 +62,7 @@ interface ConfirmSpec {
 	warning?: boolean;
 }
 
-class ConfirmModal extends Modal {
+class ConfirmModal extends QbdModal {
 	constructor(app: App, private spec: ConfirmSpec, private onConfirm: () => void) {
 		super(app);
 	}

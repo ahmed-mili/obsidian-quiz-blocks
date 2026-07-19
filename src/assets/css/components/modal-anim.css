@@ -1,0 +1,50 @@
+/* ══════════════════════════════════════════════════════════
+   MODALES DU PLUGIN — apparition / disparition animées
+   Ne cible QUE les modales du plugin (classe `qbd-anim-modal` posée sur le
+   panneau par QbdModal, src/modal-base.ts) — jamais les modales natives
+   d'Obsidian. La disparition est pilotée par `qbd-closing`, posé dans close()
+   AVANT le détachement du DOM (sinon aucune transition de sortie ne peut jouer,
+   Obsidian détache immédiatement).
+   Panneau : fondu + léger rise/scale (référence claude.ai). Fond : fondu pur,
+   le `to`/`from` implicite reprend l'opacité NATIVE du .modal-bg (jamais forcée
+   à une valeur en dur).
+══════════════════════════════════════════════════════════ */
+
+/* ── Entrée ── */
+.modal.qbd-anim-modal {
+	animation: qbd-modal-in 0.19s cubic-bezier(0.22, 1, 0.36, 1);
+}
+/* `:where()` neutralise la spécificité du `:has()` (sinon 0,4,0 écraserait la
+   règle de sortie du fond en 0,3,0 → le fond ne se fondrait pas à la fermeture). */
+.modal-container:where(:has(> .modal.qbd-anim-modal)) .modal-bg {
+	animation: qbd-modal-bg-in 0.19s ease;
+}
+
+/* ── Sortie (qbd-closing posé sur le panneau ET le conteneur). `forwards`
+   fige l'état final le temps qu'Obsidian détache le DOM. ── */
+.modal.qbd-anim-modal.qbd-closing {
+	animation: qbd-modal-out 0.16s ease forwards;
+}
+.modal-container.qbd-closing .modal-bg {
+	animation: qbd-modal-bg-out 0.16s ease forwards;
+}
+
+@keyframes qbd-modal-in {
+	from { opacity: 0; transform: translateY(8px) scale(0.97); }
+	to   { opacity: 1; transform: none; }
+}
+@keyframes qbd-modal-out {
+	to { opacity: 0; transform: translateY(6px) scale(0.98); }
+}
+/* `from` seul → `to` implicite = opacité native du fond (ni 0 ni 1 forcés). */
+@keyframes qbd-modal-bg-in  { from { opacity: 0; } }
+@keyframes qbd-modal-bg-out { to   { opacity: 0; } }
+
+@media (prefers-reduced-motion: reduce) {
+	.modal.qbd-anim-modal,
+	.modal.qbd-anim-modal.qbd-closing,
+	.modal-container:where(:has(> .modal.qbd-anim-modal)) .modal-bg,
+	.modal-container.qbd-closing .modal-bg {
+		animation: none !important;
+	}
+}

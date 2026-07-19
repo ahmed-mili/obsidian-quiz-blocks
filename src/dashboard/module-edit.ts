@@ -1,4 +1,5 @@
-import { Modal, Notice, setIcon } from "obsidian";
+import { Notice, setIcon } from "obsidian";
+import { QbdModal } from "../modal-base";
 import { t } from "../i18n";
 import type { DashboardCtx } from "../types/dashboard-ctx";
 import type { QuizIndexEntry } from "./scanner";
@@ -24,7 +25,7 @@ import { suggestIcons } from "./icon-suggest";
    réécrite par le plugin.
 ══════════════════════════════════════════════════════════ */
 
-export class ModuleEditModal extends Modal {
+export class ModuleEditModal extends QbdModal {
 	private name: string;
 	private ue: string | null;
 	private color: string | undefined;
@@ -197,7 +198,7 @@ export function commonModuleParent(quizzes: QuizIndexEntry[], map: ModuleMap): s
 	return best;
 }
 
-export class NewFolderModal extends Modal {
+export class NewFolderModal extends QbdModal {
 	private name = "";
 
 	constructor(

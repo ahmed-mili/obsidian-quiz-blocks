@@ -1,4 +1,5 @@
 import { Modal, Notice, setIcon } from "obsidian";
+import { QbdModal } from "../modal-base";
 import { t } from "../i18n";
 import type { DashboardCtx } from "../types/dashboard-ctx";
 import type { QuizIndexEntry } from "./scanner";
@@ -36,7 +37,7 @@ function createOptionCard(modal: Modal, parent: HTMLElement, icon: string, accen
 	card.addEventListener("click", () => { modal.close(); onPick(); });
 }
 
-export class CreateFolderModal extends Modal {
+export class CreateFolderModal extends QbdModal {
 	constructor(
 		private ctx: DashboardCtx,
 		private map: ModuleMap,
@@ -67,7 +68,7 @@ export class CreateFolderModal extends Modal {
     « Créer un dossier » (demande d'homogénéité Ahmed, capture 2026-07-19),
     décliné au niveau quiz : IA / quiz vierge dans CE dossier / import d'un
     quiz reçu dans CE dossier. */
-export class CreateQuizModal extends Modal {
+export class CreateQuizModal extends QbdModal {
 	constructor(
 		private ctx: DashboardCtx,
 		private folder: string,

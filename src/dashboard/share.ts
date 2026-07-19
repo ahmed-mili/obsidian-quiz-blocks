@@ -1,4 +1,5 @@
-import { Modal, Notice, Platform, TFile, normalizePath, setIcon, setTooltip } from "obsidian";
+import { Notice, Platform, TFile, normalizePath, setIcon, setTooltip } from "obsidian";
+import { QbdModal } from "../modal-base";
 import { t } from "../i18n";
 import type { TransKey } from "../i18n";
 import type { DashboardCtx } from "../types/dashboard-ctx";
@@ -276,7 +277,7 @@ async function shareViaDiscord(ctx: DashboardCtx, source: ShareSource): Promise<
 	await saveShared(ctx, source);
 }
 
-export class ShareModal extends Modal {
+export class ShareModal extends QbdModal {
 	constructor(private ctx: DashboardCtx, private source: ShareSource) {
 		super(ctx.app);
 	}
