@@ -90,8 +90,8 @@ function wireCollapseToggle(deps: GridDeps, nodeEl: HTMLElement, head: HTMLButto
 }
 
 /* Section repliable générique : en-tête (chevron + libellé + badge) + corps.
-   Renvoie le corps, TOUJOURS monté (même replié) — c'est ce qui permet
-   d'animer la hauteur dans les deux sens (.is-collapsed le réduit à 0). */
+   Le corps reste TOUJOURS monté pour animer la hauteur. Son enfant dédié
+   sépare le clipping de la grille qui peint les bordures des cartes. */
 function renderCollapsibleSection(deps: GridDeps, parent: HTMLElement, key: string, label: string, total: number, defaultOpen = true): HTMLElement {
 	const nodeEl = parent.createDiv({ cls: "qbd-quizzes-node" });
 	const head = nodeEl.createEl("button", { cls: "qbd-quizzes-node-head" });
@@ -100,7 +100,8 @@ function renderCollapsibleSection(deps: GridDeps, parent: HTMLElement, key: stri
 	head.createSpan({ cls: "qbd-quizzes-node-label", text: label });
 	fillNodeHeadStats(head, total);
 	wireCollapseToggle(deps, nodeEl, head, chev, key, defaultOpen);
-	return nodeEl.createDiv({ cls: "qbd-quizzes-node-body" });
+	const body = nodeEl.createDiv({ cls: "qbd-quizzes-node-body" });
+	return body.createDiv({ cls: "qbd-quizzes-node-clip" });
 }
 
 /** Grille plate de cartes de module (mode « module » et corps d'un groupe d'UE).

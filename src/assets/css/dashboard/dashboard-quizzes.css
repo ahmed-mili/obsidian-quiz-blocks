@@ -197,23 +197,22 @@
 }
 
 /* Corps repliable — hauteur animée par grid-template-rows (1fr↔0fr) : pas de
-   hauteur magique en dur, easing parfait dans les deux sens. L'enfant (grille
-   de cartes) doit pouvoir se comprimer sous sa hauteur mini et est clippé. */
+   hauteur magique en dur, easing parfait dans les deux sens. Un wrapper dédié
+   sépare le clipping de la grille qui peint les bordures des cartes. */
 .qbd-quizzes-node-body {
 	display: grid;
 	grid-template-rows: 1fr;
 	transition: grid-template-rows 240ms cubic-bezier(0.4, 0, 0.2, 1);
 }
-.qbd-quizzes-node-body > * {
+.qbd-quizzes-node-clip {
 	min-height: 0;
 }
-/* overflow:hidden UNIQUEMENT pendant l'animation ou quand replié : à l'état
-   ouvert stable, le corps doit rester `overflow: visible` sinon il ROGNE la
-   carte quand elle se surélève au survol (translateY -3px) — la carte
-   « sortait » coupée. Hors de ces deux états, rien ne clippe. */
-.qbd-quizzes-node.is-collapsed .qbd-quizzes-node-body > *,
-.qbd-quizzes-node.is-animating .qbd-quizzes-node-body > * {
-	overflow: hidden;
+/* Clipping strict UNIQUEMENT pendant l'animation ou quand replié. À l'état
+   ouvert stable, le wrapper garde `overflow: visible` afin de ne pas rogner
+   l'élévation translateY(-3px) des cartes au survol. */
+.qbd-quizzes-node.is-collapsed .qbd-quizzes-node-clip,
+.qbd-quizzes-node.is-animating .qbd-quizzes-node-clip {
+	overflow: clip;
 }
 .qbd-quizzes-node.is-collapsed .qbd-quizzes-node-body {
 	grid-template-rows: 0fr;
