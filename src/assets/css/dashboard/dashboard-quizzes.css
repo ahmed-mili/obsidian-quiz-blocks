@@ -282,7 +282,9 @@
    reste dérivé par color-mix in oklab. Halo radial dans l'angle HAUT-GAUCHE,
    intégré au fond (pas un div). */
 .qbd-module-card {
-	--card-bg: #1c2130;
+	--card-bg: #1e1e2e; /* base alignée sur les cartes de quiz StudySmarter
+	                       (#1e1e2e, pipette) — teinte neutre, l'ancien #1c2130
+	                       tirait trop sur le bleu. Halo/icône/bordures inchangés. */
 	--card-mix-base: #181d2b;
 	--tile-bg:     color-mix(in oklab, var(--accent) 12%, var(--card-mix-base));
 	--icon-bg:     color-mix(in oklab, var(--accent) 22%, var(--card-mix-base));
