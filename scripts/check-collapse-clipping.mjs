@@ -19,6 +19,26 @@ const checks = [
 		/\.qbd-quizzes-node\.is-collapsed \.qbd-quizzes-node-clip,\s*\.qbd-quizzes-node\.is-animating \.qbd-quizzes-node-clip\s*\{[^}]*overflow:\s*clip;/s,
 		css,
 	],
+	[
+		"l'animation promeut le contenu sur son propre layer compositeur",
+		/\.qbd-quizzes-node\.is-animating \.qbd-quizzes-node-clip\s*\{[^}]*will-change:\s*transform;/s,
+		css,
+	],
+	[
+		"l'état replié STABLE ne peint rien (visibility hidden hors animation)",
+		/\.qbd-quizzes-node\.is-collapsed:not\(\.is-animating\) \.qbd-quizzes-node-clip\s*\{[^}]*visibility:\s*hidden;/s,
+		css,
+	],
+	[
+		"chaque clic purge le filet et le listener du cycle précédent",
+		/window\.clearTimeout\(animTimer\);\s*offEnd\?\.\(\);/s,
+		render,
+	],
+	[
+		"le transitionend écouté est celui du corps lui-même (pas un descendant)",
+		/te\.target !== body \|\| te\.propertyName !== "grid-template-rows"/s,
+		render,
+	],
 ];
 
 const failed = checks.filter(([, pattern, source]) => !pattern.test(source));

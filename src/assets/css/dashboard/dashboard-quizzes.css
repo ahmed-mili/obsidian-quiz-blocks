@@ -214,6 +214,23 @@
 .qbd-quizzes-node.is-animating .qbd-quizzes-node-clip {
 	overflow: clip;
 }
+/* Pendant l'animation, le contenu vit sur SON layer compositeur : la
+   destruction du layer à la fin force la recomposition de toute la zone
+   qu'il couvrait. Sans ça, la dernière frame de la transition de repli
+   laisse des pixels orphelins dans le buffer du compositeur (bordures
+   supérieures des cartes, ~2 px sous l'en-tête) : le raté d'invalidation
+   est au niveau compositeur, pas DOM — reproduit 8/8 sous charge de
+   composition (2026-07-19), géométrie et visibility DOM pourtant saines. */
+.qbd-quizzes-node.is-animating .qbd-quizzes-node-clip {
+	will-change: transform;
+}
+/* Replié STABLE (animation finie) : le contenu ne se peint plus DU TOUT.
+   Défense en profondeur du même bug (un sous-arbre hidden n'a aucun pixel
+   à laisser traîner) + économise peinture et hit-testing des sections
+   repliées. Pendant l'animation, le contenu reste visible : c'est l'effet. */
+.qbd-quizzes-node.is-collapsed:not(.is-animating) .qbd-quizzes-node-clip {
+	visibility: hidden;
+}
 .qbd-quizzes-node.is-collapsed .qbd-quizzes-node-body {
 	grid-template-rows: 0fr;
 }

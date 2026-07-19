@@ -63,11 +63,21 @@ function wireCollapseToggle(deps: GridDeps, nodeEl: HTMLElement, head: HTMLButto
 	setIcon(chev, "chevron-right");
 	nodeEl.classList.toggle("is-collapsed", collapsed);
 	head.setAttribute("aria-expanded", String(!collapsed));
+	// Un SEUL filet et un SEUL listener transitionend vivants par nœud : des
+	// clics enchaînés accumulaient les stopAnim des clics précédents, et un
+	// filet orphelin retirait is-animating EN PLEINE animation suivante —
+	// l'overflow (et désormais la visibility du repli stable) basculait en
+	// plein mouvement.
+	let animTimer = 0;
+	let offEnd: (() => void) | null = null;
 	head.addEventListener("click", () => {
 		// Bascule PUREMENT CSS : le corps reste monté, sa hauteur s'anime
 		// (grid-template-rows). On persiste l'état (toggleExpanded) mais SANS
 		// rerender — un rerender détruirait le DOM et tuerait la transition.
 		deps.toggleExpanded(key);
+		// Purge du cycle d'animation précédent avant d'en ouvrir un nouveau.
+		window.clearTimeout(animTimer);
+		offEnd?.();
 		// Clip pendant TOUTE la transition (is-animating), retiré à la fin : à
 		// l'état ouvert stable le corps repasse en overflow visible, sinon il
 		// rogne la carte quand elle se surélève au survol.
@@ -75,17 +85,27 @@ function wireCollapseToggle(deps: GridDeps, nodeEl: HTMLElement, head: HTMLButto
 		const nowCollapsed = nodeEl.classList.toggle("is-collapsed");
 		head.setAttribute("aria-expanded", String(!nowCollapsed));
 		const body = nodeEl.querySelector(".qbd-quizzes-node-body");
-		const stopAnim = () => nodeEl.classList.remove("is-animating");
+		const stopAnim = () => {
+			window.clearTimeout(animTimer);
+			offEnd?.();
+			nodeEl.classList.remove("is-animating");
+		};
 		if (body) {
 			const onEnd = (e: Event) => {
-				if ((e as TransitionEvent).propertyName !== "grid-template-rows") return;
-				body.removeEventListener("transitionend", onEnd);
+				const te = e as TransitionEvent;
+				// Cibler le corps LUI-MÊME : un transitionend d'un descendant
+				// bouillonne jusqu'ici et arrêterait l'animation trop tôt.
+				if (te.target !== body || te.propertyName !== "grid-template-rows") return;
 				stopAnim();
+			};
+			offEnd = () => {
+				body.removeEventListener("transitionend", onEnd);
+				offEnd = null;
 			};
 			body.addEventListener("transitionend", onEnd);
 		}
 		// Filet : reduced-motion (pas de transitionend) ou transition coupée.
-		window.setTimeout(stopAnim, 320);
+		animTimer = window.setTimeout(stopAnim, 320);
 	});
 }
 
