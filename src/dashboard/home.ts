@@ -4,7 +4,9 @@ import type { DashboardCtx } from "../types/dashboard-ctx";
 import type { QuizIndexEntry } from "./scanner";
 import type { QuizStatRecord } from "./stats-store";
 import { renderQuizCard as renderSharedQuizCard } from "./quiz-card";
-import { isArchived, isPaused } from "./quiz-menu";
+import { isFolderArchived, isPaused } from "./quiz-menu";
+import { moduleForQuiz } from "./quiz-modules";
+import type { ModuleMap } from "./quiz-modules";
 
 /* ══════════════════════════════════════════════════════════
    HOME VIEW — Dashboard
@@ -30,11 +32,16 @@ export function createHomeHandlers(ctx: DashboardCtx): HomeHandlers {
 	function render(container: HTMLElement): void {
 		container.empty();
 
-		// Les quiz ARCHIVÉS (menu ⋯ de « Mes quiz ») n'existent plus pour
-		// l'accueil : ni stats, ni sections. Ils ne reviennent que sous la
-		// pilule « Archivés » de « Mes quiz ».
+		// Les quiz des DOSSIERS ARCHIVÉS (menu ⋯ d'une carte de dossier de
+		// « Mes quiz ») n'existent plus pour l'accueil : ni stats, ni sections.
+		// Ils ne reviennent que sous la section « Archivés » de « Mes quiz ».
+		// Map vide : le home n'a pas la note de correspondance sous la main —
+		// moduleForQuiz retombe alors sur le dossier parent direct, qui est la
+		// clé `folder` réelle dans la quasi-totalité des vaults (les quiz
+		// vivent directement dans le dossier de leur module).
+		const emptyMap: ModuleMap = { byFolder: new Map(), ueOrder: [] };
 		const allQuizzes: QuizIndexEntry[] = ctx.scanner ? ctx.scanner.getQuizzes() : [];
-		const quizzes = allQuizzes.filter(q => !isArchived(ctx, q.path));
+		const quizzes = allQuizzes.filter(q => !isFolderArchived(ctx, moduleForQuiz(q.path, emptyMap).folder));
 		const stats: Record<string, QuizStatRecord> = ctx.statsStore ? ctx.statsStore.getAll() : {};
 
 		// ── Premier usage : aucun quiz → onboarding guidé ──

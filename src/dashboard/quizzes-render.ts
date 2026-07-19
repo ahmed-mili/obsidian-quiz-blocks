@@ -89,21 +89,10 @@ function wireCollapseToggle(deps: GridDeps, nodeEl: HTMLElement, head: HTMLButto
 	});
 }
 
-/* Rendu partagé des modes « recent » et « type » : groupe PLAT (pas de
-   sous-groupes), même en-tête visuel qu'un en-tête d'UE. */
-function renderFlatGroup(
-	deps: GridDeps,
-	parent: HTMLElement,
-	key: string,
-	label: string,
-	total: number,
-	quizzes: QuizIndexEntry[],
-	stats: Record<string, QuizStatRecord>,
-	/** Carte quiz teintée de l'accent de son dossier parent (via cette map). */
-	map: ModuleMap,
-	/** false = section repliée par défaut (seulement « Archivés »). */
-	defaultOpen = true
-): void {
+/* Section repliable générique : en-tête (chevron + libellé + badge) + corps.
+   Renvoie le corps, TOUJOURS monté (même replié) — c'est ce qui permet
+   d'animer la hauteur dans les deux sens (.is-collapsed le réduit à 0). */
+function renderCollapsibleSection(deps: GridDeps, parent: HTMLElement, key: string, label: string, total: number, defaultOpen = true): HTMLElement {
 	const nodeEl = parent.createDiv({ cls: "qbd-quizzes-node" });
 	const head = nodeEl.createEl("button", { cls: "qbd-quizzes-node-head" });
 	head.type = "button";
@@ -111,21 +100,7 @@ function renderFlatGroup(
 	head.createSpan({ cls: "qbd-quizzes-node-label", text: label });
 	fillNodeHeadStats(head, total);
 	wireCollapseToggle(deps, nodeEl, head, chev, key, defaultOpen);
-
-	// Corps TOUJOURS monté (même replié) : c'est ce qui permet d'animer la
-	// hauteur dans les deux sens ; la classe .is-collapsed le réduit à 0.
-	const body = nodeEl.createDiv({ cls: "qbd-quizzes-node-body" });
-	const grid = body.createDiv({ cls: "qbd-home-grid" });
-	for (const quiz of quizzes) {
-		// PAS de { showPath: false } : ni titre de dossier ni sous-groupe
-		// au-dessus dans ces modes, le chemin reste la seule indication d'où
-		// sort le quiz (cf. quiz-card.ts, défaut true).
-		renderQuizCard(grid, quiz, stats[quiz.path], (q) => deps.ctx.navigate("detail", { quiz: q }), {
-			onPlay: (q) => openQuizForPlay(deps.ctx.app, q),
-			menu: buildQuizCardMenu(deps.ctx, deps.rerender),
-			accent: moduleAccent(moduleForQuiz(quiz.path, map)),
-		});
-	}
+	return nodeEl.createDiv({ cls: "qbd-quizzes-node-body" });
 }
 
 /** Grille plate de cartes de module (mode « module » et corps d'un groupe d'UE).
@@ -149,18 +124,11 @@ function renderModuleGrid(deps: GridDeps, parent: HTMLElement, groups: ModuleGro
 	for (const g of groups) renderModuleCard(grid, g, (m) => deps.openModule(m.folder), menu, pickIcon);
 }
 
-/* En-tête d'UE repliable + grille de cartes de module dessous. */
+/* En-tête d'UE repliable + grille de cartes de module dessous. Badge = nombre
+   d'éléments DIRECTS de la section (les modules), comme le compteur des
+   sections « Mes dossiers » de StudySmarter. */
 function renderUeGroup(deps: GridDeps, parent: HTMLElement, ue: UeGroup, map: ModuleMap): void {
-	const nodeEl = parent.createDiv({ cls: "qbd-quizzes-node" });
-	const head = nodeEl.createEl("button", { cls: "qbd-quizzes-node-head" });
-	head.type = "button";
-	const chev = head.createSpan({ cls: "qbd-quizzes-node-chevron" });
-	head.createSpan({ cls: "qbd-quizzes-node-label", text: ue.ue ?? t("dashboard.quizzes.noUe") });
-	// Badge = nombre d'éléments DIRECTS de la section (les modules), comme le
-	// compteur des sections « Mes dossiers » de StudySmarter.
-	fillNodeHeadStats(head, ue.modules.length);
-	wireCollapseToggle(deps, nodeEl, head, chev, ue.key);
-	const body = nodeEl.createDiv({ cls: "qbd-quizzes-node-body" });
+	const body = renderCollapsibleSection(deps, parent, ue.key, ue.ue ?? t("dashboard.quizzes.noUe"), ue.modules.length);
 	renderModuleGrid(deps, body, ue.modules, map);
 }
 
@@ -173,13 +141,14 @@ export function renderQuizGrid(
 	filtered: QuizIndexEntry[],
 	stats: Record<string, QuizStatRecord>,
 	map: ModuleMap,
-	/** Quiz archivés (déjà passés au tamis recherche) — rendus dans une
-	    section repliable en PIED de grille, comme la section « Archived »
-	    au bas de la Library StudySmarter. */
-	archived: QuizIndexEntry[] = []
+	/** Quiz des DOSSIERS archivés — rendus en CARTES DE DOSSIER dans une
+	    section repliable en pied de grille (jamais de cartes de quiz :
+	    l'archivage n'existe qu'au niveau dossier, Ahmed 2026-07-19). */
+	archivedQuizzes: QuizIndexEntry[] = []
 ): void {
 	treeEl.empty();
-	if (filtered.length === 0 && archived.length === 0) {
+	const archivedFolders = deps.ctx.plugin.settings.quizzesArchivedFolders || [];
+	if (filtered.length === 0 && archivedQuizzes.length === 0 && archivedFolders.length === 0) {
 		treeEl.createDiv({ cls: "qbd-empty-state" }, el => { el.createEl("p", { text: t("dashboard.quizzes.empty") }); });
 		return;
 	}
@@ -187,20 +156,15 @@ export function renderQuizGrid(
 	// Les deux axes affichent des cartes de MODULE (règle Ahmed 2026-07-18 :
 	// « Recent » ne montre que les dossiers, jamais des quiz). Les dossiers
 	// déclarés par le modal Nouveau dossier / Modifier dossier existent même
-	// sans quiz (alwaysInclude).
-	const alwaysInclude = Object.keys(deps.ctx.plugin.settings.quizzesModuleOverrides || {});
+	// sans quiz (alwaysInclude) — SAUF archivés : leur carte vit uniquement
+	// dans la section « Archivés » (sinon elle resterait en grille à 0 quiz).
+	const alwaysInclude = Object.keys(deps.ctx.plugin.settings.quizzesModuleOverrides || {})
+		.filter(f => !archivedFolders.includes(f));
 	const modules = buildModuleGroups(filtered, stats, map, alwaysInclude);
 
 	if (mode === "recent") {
 		for (const g of buildRecentModuleGroups(modules, stats)) {
-			const nodeEl = treeEl.createDiv({ cls: "qbd-quizzes-node" });
-			const head = nodeEl.createEl("button", { cls: "qbd-quizzes-node-head" });
-			head.type = "button";
-			const chev = head.createSpan({ cls: "qbd-quizzes-node-chevron" });
-			head.createSpan({ cls: "qbd-quizzes-node-label", text: t(RECENT_GROUP_LABEL_KEYS[g.key]) });
-			fillNodeHeadStats(head, g.modules.length);
-			wireCollapseToggle(deps, nodeEl, head, chev, g.key);
-			const body = nodeEl.createDiv({ cls: "qbd-quizzes-node-body" });
+			const body = renderCollapsibleSection(deps, treeEl, g.key, t(RECENT_GROUP_LABEL_KEYS[g.key]), g.modules.length);
 			renderModuleGrid(deps, body, g.modules, map);
 		}
 	} else {
@@ -210,10 +174,14 @@ export function renderQuizGrid(
 	}
 
 	// ── Section « Archivés » en pied de grille (tous les axes) — repliée par
-	// défaut, même en-tête repliable que les groupes plats. Clé « archived: » :
-	// « : » est interdit dans un chemin Obsidian, aucune collision possible.
-	if (archived.length > 0) {
-		renderFlatGroup(deps, treeEl, "archived:", t("dashboard.quizzes.archivedSection"), archived.length, archived, stats, map, false);
+	// défaut, CARTES DE DOSSIER (menu ⋯ complet : Unarchive direct, drill au
+	// clic). Les dossiers archivés sans quiz restent listés (alwaysInclude =
+	// tous les dossiers du flag). Clé « archived: » : « : » est interdit dans
+	// un chemin Obsidian, aucune collision possible.
+	if (archivedQuizzes.length > 0 || archivedFolders.length > 0) {
+		const archivedModules = buildModuleGroups(archivedQuizzes, stats, map, archivedFolders);
+		const body = renderCollapsibleSection(deps, treeEl, "archived:", t("dashboard.quizzes.archivedSection"), archivedModules.length, false);
+		renderModuleGrid(deps, body, archivedModules, map);
 	}
 }
 

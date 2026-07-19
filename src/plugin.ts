@@ -79,9 +79,12 @@ interface QuizBlocksSettings {
 	/** Chemins de notes dont le quiz est « en pause » (menu ⋯) : sorti du
 	    « To do » et du hero Reprendre de l'accueil, visible partout ailleurs. */
 	quizzesPaused: string[];
-	/** Chemins de notes dont le quiz est « archivé » (menu ⋯) : masqué partout,
-	    ne revient que sous la pilule « Archivés » de « Mes quiz ». */
-	quizzesArchived: string[];
+	/** DOSSIERS (clé `folder` de module) archivés via le menu ⋯ d'une carte de
+	    dossier : leurs quiz sont masqués partout, le dossier ne revient que
+	    comme CARTE dans la section « Archivés » de « Mes quiz ». L'archivage
+	    n'existe QU'AU niveau dossier (décision Ahmed 2026-07-19 — jamais de
+	    quiz archivé individuellement). */
+	quizzesArchivedFolders: string[];
 	/** Overrides du modal « Modifier dossier » (nom / UE / couleur par module),
 	    appliqués PAR-DESSUS la note de correspondance. Cf. quiz-modules.ts. */
 	quizzesModuleOverrides: Record<string, ModuleOverride>;
@@ -95,6 +98,7 @@ interface QuizBlocksSettings {
 	enableDebugLogs?: unknown;
 	aiCompatibleUrl?: unknown;
 	aiApiKey?: unknown;
+	quizzesArchived?: unknown;
 }
 
 const DEFAULT_SETTINGS: QuizBlocksSettings = {
@@ -135,7 +139,7 @@ const DEFAULT_SETTINGS: QuizBlocksSettings = {
 	quizzesGrouping: "module",
 	quizzesModuleMapNote: "Dashboard",
 	quizzesPaused: [],
-	quizzesArchived: [],
+	quizzesArchivedFolders: [],
 	quizzesModuleOverrides: {},
 	// ── Saisie vocale (dictée locale whisper.cpp) — opt-in complet.
 	// Spec : docs/superpowers/specs/2026-07-10-voice-input-design.md
@@ -1190,6 +1194,15 @@ export default class InteractiveQuizPlugin extends Plugin {
 		if (hf && hf.key === "f" && Array.isArray(hf.modifiers)
 			&& hf.modifiers.length === 1 && hf.modifiers[0] === "Mod") {
 			this.settings.hotkeyAddFiles = { modifiers: ["Mod"], key: "u" };
+			await this.saveSettings();
+		}
+
+		// Migration 2026-07-19 : l'archivage PAR QUIZ (quizzesArchived, chemins
+		// de notes) disparaît au profit de l'archivage PAR DOSSIER
+		// (quizzesArchivedFolders). L'ancien état est simplement abandonné
+		// (feature d'un jour, jamais publiée) : rien n'est converti.
+		if ("quizzesArchived" in this.settings) {
+			delete this.settings.quizzesArchived;
 			await this.saveSettings();
 		}
 	}

@@ -4,10 +4,10 @@ import type { TransKey } from "../i18n";
 import type { DashboardCtx } from "../types/dashboard-ctx";
 import type { QuizIndexEntry } from "./scanner";
 import type { QuizStatRecord } from "./stats-store";
-import { parseModuleMap, applyModuleOverrides } from "./quiz-modules";
+import { parseModuleMap, applyModuleOverrides, moduleForQuiz } from "./quiz-modules";
 import type { ModuleMap } from "./quiz-modules";
 import { createSelect, openActionMenu } from "./ui-select";
-import { isArchived } from "./quiz-menu";
+import { isFolderArchived } from "./quiz-menu";
 import { CreateFolderModal, CreateQuizModal } from "./folder-create";
 import { renderQuizGrid, renderModuleDrill } from "./quizzes-render";
 import type { GroupingKey } from "./quizzes-render";
@@ -119,30 +119,34 @@ export function createQuizzesHandlers(ctx: DashboardCtx): QuizzesHandlers {
 		if (containerRef) render(containerRef);
 	}
 
-	/** Filtre partagé — grille ET drill-down. Recherche et pilules d'état ont
-	    été RETIRÉES (demande Ahmed 2026-07-18) : il ne reste que l'exclusion
-	    des ARCHIVÉS, qui ne vivent que dans la section « Archivés » en bas de
-	    la grille (contrat StudySmarter vérifié en live). */
+	/** Filtre de la GRILLE : exclut les quiz des DOSSIERS archivés (l'archivage
+	    n'existe qu'au niveau dossier). Recherche et pilules d'état ont été
+	    RETIRÉES (demande Ahmed 2026-07-18). */
 	function applyFilters(quizzes: QuizIndexEntry[]): QuizIndexEntry[] {
-		return quizzes.filter(q => !isArchived(ctx, q.path));
+		const map = effectiveMap();
+		return quizzes.filter(q => !isFolderArchived(ctx, moduleForQuiz(q.path, map).folder));
 	}
 
 	/* Bascule entre la grille et le drill-down d'un module ouvert. */
 	function renderContent(treeEl: HTMLElement, quizzes: QuizIndexEntry[], stats: Record<string, QuizStatRecord>): void {
 		if (openModuleFolder !== null) {
-			renderModuleDrill(treeEl, ctx, quizzes, stats, effectiveMap(), openModuleFolder, applyFilters, () => {
+			// PAS d'applyFilters au drill : on entre aussi dans un dossier
+			// ARCHIVÉ (depuis sa carte de la section « Archivés ») et on y voit
+			// son contenu.
+			renderModuleDrill(treeEl, ctx, quizzes, stats, effectiveMap(), openModuleFolder, (q) => q, () => {
 				openModuleFolder = null;
 				if (containerRef) render(containerRef);
 			}, () => { if (containerRef) render(containerRef); });
 		} else {
-			const archived = quizzes.filter(q => isArchived(ctx, q.path));
+			const map = effectiveMap();
+			const archivedQuizzes = quizzes.filter(q => isFolderArchived(ctx, moduleForQuiz(q.path, map).folder));
 			renderQuizGrid({
 				ctx,
 				isExpanded: (key) => expandedSet().has(key),
 				toggleExpanded,
 				rerender: () => { if (containerRef) render(containerRef); },
 				openModule,
-			}, treeEl, currentGrouping(), applyFilters(quizzes), stats, effectiveMap(), archived);
+			}, treeEl, currentGrouping(), applyFilters(quizzes), stats, map, archivedQuizzes);
 		}
 	}
 
