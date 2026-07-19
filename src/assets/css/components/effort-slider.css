@@ -231,14 +231,6 @@
 	touch-action: none; /* le drag du pouce ne doit pas scroller la page */
 }
 
-/* Pendant le drag du pouce : resize horizontal maintenu sur tout le
-   slider (ui-select.js pose le même curseur au survol du pouce seul,
-   par hit-test — le pouce est pointer-events: none). */
-.qbd-effort-slider.is-dragging,
-.qbd-effort-slider.is-dragging * {
-	cursor: ew-resize;
-}
-
 .qbd-effort-track {
 	position: absolute;
 	left: 0;
