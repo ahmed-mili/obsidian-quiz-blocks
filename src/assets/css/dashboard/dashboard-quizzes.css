@@ -452,14 +452,18 @@
 	margin-top: 12px;
 }
 
+/* PAS de transform dans `to` : avec fill-mode both il resterait figé après
+   l'animation et écraserait le translateY(-3px) du :hover des cartes tant
+   que .qbd-quizzes-enter est posée. Sans lui, transform interpole vers la
+   valeur sous-jacente (rendu identique) puis est relâché au fill. */
 @keyframes qbd-folder-hero-in {
 	from { opacity: 0; transform: translateY(-10px); }
-	to { opacity: 1; transform: none; }
+	to { opacity: 1; }
 }
 
 @keyframes qbd-folder-card-in {
 	from { opacity: 0; transform: translateY(16px) scale(0.98); }
-	to { opacity: 1; transform: none; }
+	to { opacity: 1; }
 }
 
 /* ── Transition d'ENTRÉE — classe posée par quizzes.ts sur le contenant
@@ -471,6 +475,12 @@
 .qbd-quizzes-enter .qbd-quizzes-folder-hero,
 .qbd-quizzes-enter > .qbd-quizzes-header,
 .qbd-quizzes-enter > .qbd-quizzes-group {
+	animation: qbd-folder-hero-in 0.35s ease both;
+}
+
+/* L'empty state entre avec le header (règle séparée : le contrat regex
+   verrouille la forme du groupe ci-dessus). */
+.qbd-quizzes-enter .qbd-empty-state {
 	animation: qbd-folder-hero-in 0.35s ease both;
 }
 
