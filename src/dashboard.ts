@@ -192,6 +192,10 @@ export class QuizDashboardView extends ItemView implements DashboardView {
 		if (!contentEl) return;
 		contentEl.empty();
 
+		// La classe d'entrée de « Mes quiz » ne doit pas survivre sur une
+		// autre page (le contentEl est partagé par toutes les vues).
+		contentEl.removeClass("qbd-quizzes-enter");
+
 		switch (this.currentView) {
 			case "home":
 				this.home.render(contentEl);

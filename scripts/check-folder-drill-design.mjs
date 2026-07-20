@@ -5,6 +5,7 @@ const render = readFileSync("src/dashboard/quizzes-render.ts", "utf8");
 const card = readFileSync("src/dashboard/quiz-card.ts", "utf8");
 const css = readFileSync("src/assets/css/dashboard/dashboard-quizzes.css", "utf8");
 const components = readFileSync("src/assets/css/dashboard/dashboard-components.css", "utf8");
+const dashboard = readFileSync("src/dashboard.ts", "utf8");
 
 const checks = [
 	["le dossier ouvert possède une bannière et son halo dédiés", /qbd-quizzes-folder-hero[\s\S]*qbd-quizzes-folder-halo/, quizzes],
@@ -28,6 +29,9 @@ const checks = [
 	["les cartes reçoivent le délai 120 ms + index × 60 ms", /entryIndex:\s*index[\s\S]*120 \+ \(opts\.entryIndex \?\? 0\) \* 60/, `${render}\n${card}`],
 	["le panneau Progrès entre après 220 ms", /\.qbd-progress-panel\s*\{[^}]*animation-delay:\s*220ms;/s, css],
 	["la grille passe de deux à trois colonnes à 1200 px", /\.qbd-quizzes-drill-grid\s*\{[^}]*repeat\(2,[^}]*\}[\s\S]*@media \(min-width:\s*1200px\)[\s\S]*\.qbd-quizzes-drill-grid\s*\{[^}]*repeat\(3,/s, css],
+	["le contrôleur distingue l'entrée du re-render interne", /const viewKey = openModuleFolder \?\? "root";[\s\S]*?const entering = viewKey !== lastPaintedView;[\s\S]*?classList\.toggle\("qbd-quizzes-enter", entering\)/, quizzes],
+	["nav entrante, bascule d'axe et note de correspondance ré-arment l'entrée", /(?:[\s\S]*?lastPaintedView = null\b){3}/, quizzes],
+	["une autre page ne garde jamais la classe d'entrée", /removeClass\("qbd-quizzes-enter"\)/, dashboard],
 ];
 
 const failed = checks.filter(([, pattern, source]) => !pattern.test(source));

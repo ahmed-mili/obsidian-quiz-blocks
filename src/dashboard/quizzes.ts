@@ -62,6 +62,9 @@ export function createQuizzesHandlers(ctx: DashboardCtx): QuizzesHandlers {
 
 	function setGrouping(g: GroupingKey): void {
 		ctx.plugin.settings.quizzesGrouping = g;
+		// La bascule d'axe reconstruit toute la grille : la cascade d'entrée
+		// accompagne le changement (décision Ahmed, spec 2026-07-20).
+		lastPaintedView = null;
 		ctx.plugin.saveSettings().catch(() => {});
 	}
 
@@ -82,6 +85,13 @@ export function createQuizzesHandlers(ctx: DashboardCtx): QuizzesHandlers {
 	/* Module ouvert (drill-down) : null = grille ; sinon on affiche les quiz de
 	   ce module + un fil d'Ariane. État d'interface, non persisté. */
 	let openModuleFolder: string | null = null;
+
+	/* Dernière vue PEINTE ("root" ou chemin du dossier ouvert) : render() la
+	   compare à la vue courante pour distinguer une ENTRÉE (navigation, drill
+	   in/out, bascule d'axe — la transition d'entrée joue) d'un re-render
+	   interne (renommage, archivage, icône — aucun replay). null = la
+	   prochaine peinture est une entrée. */
+	let lastPaintedView: string | null = null;
 
 	async function loadModuleMap(): Promise<void> {
 		moduleMapLoaded = true;
@@ -106,6 +116,10 @@ export function createQuizzesHandlers(ctx: DashboardCtx): QuizzesHandlers {
 		} catch {
 			moduleMap = { byFolder: new Map(), ueOrder: [] };
 		}
+		// Le premier rendu (map absente) est repeint ici quelques ms plus
+		// tard : sans ré-armement, ce second rendu couperait net la transition
+		// d'entrée à peine commencée (cartes soudain opaques).
+		lastPaintedView = null;
 		if (containerRef) render(containerRef);
 	}
 
@@ -162,6 +176,14 @@ export function createQuizzesHandlers(ctx: DashboardCtx): QuizzesHandlers {
 	function render(container: HTMLElement): void {
 		containerRef = container;
 		container.empty();
+
+		// Transition d'entrée (spec 2026-07-20) : classe posée SEULEMENT quand
+		// la vue change. toggle(force) la retire sur un re-render interne —
+		// jamais de replay, jamais de classe résiduelle.
+		const viewKey = openModuleFolder ?? "root";
+		const entering = viewKey !== lastPaintedView;
+		lastPaintedView = viewKey;
+		container.classList.toggle("qbd-quizzes-enter", entering);
 
 		const quizzes: QuizIndexEntry[] = ctx.scanner ? ctx.scanner.getQuizzes() : [];
 		const stats: Record<string, QuizStatRecord> = ctx.statsStore ? ctx.statsStore.getAll() : {};
@@ -301,6 +323,6 @@ export function createQuizzesHandlers(ctx: DashboardCtx): QuizzesHandlers {
 
 	return {
 		render,
-		resetDrilldown() { openModuleFolder = null; },
+		resetDrilldown() { openModuleFolder = null; lastPaintedView = null; },
 	};
 }
