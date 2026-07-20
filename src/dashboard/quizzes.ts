@@ -232,20 +232,18 @@ export function createQuizzesHandlers(ctx: DashboardCtx): QuizzesHandlers {
 		}
 
 		// ── Header ──
+		// Racine : AUCUN titre — l'icône library vit désormais dans le rail
+		// (demande Ahmed 2026-07-20), le header ne porte que la pilule « + New »
+		// (calée à droite par margin-left:auto, cf. dashboard-quizzes.css).
 		const header = headerParent.createDiv({ cls: "qbd-quizzes-header" });
-		const titleBlock = openModuleFolder === null
-			? header
-			: header.createDiv({ cls: "qbd-quizzes-title-block" });
-		const titleEl = titleBlock.createEl("h2", { cls: "qbd-quizzes-title" });
-		const titleIcon = titleEl.createSpan({ cls: "qbd-quizzes-title-icon" });
-		if (openModuleFolder === null) {
-			// Racine « Mes quiz » : icône générique seule (libellé retiré).
-			setIcon(titleIcon, "library");
-		} else {
+		if (openModuleFolder !== null) {
 			// Dans un dossier : le header EST le titre du dossier — icône + nom du
 			// module, teinte à l'accent du dossier (comme sa carte). Le nom n'est
 			// donc plus répété dans le fil d'Ariane (cf. quizzes-render.ts).
 			// Colonne texte + soulignement dégradé (référence claude.ai) sous le nom.
+			const titleBlock = header.createDiv({ cls: "qbd-quizzes-title-block" });
+			const titleEl = titleBlock.createEl("h2", { cls: "qbd-quizzes-title" });
+			const titleIcon = titleEl.createSpan({ cls: "qbd-quizzes-title-icon" });
 			setIcon(titleIcon, openModuleInfo?.icon || DEFAULT_MODULE_ICON);
 			titleEl.createSpan({ cls: "qbd-quizzes-title-text", text: openModuleInfo?.name || openModuleFolder });
 			titleBlock.createDiv({ cls: "qbd-quizzes-title-underline" });

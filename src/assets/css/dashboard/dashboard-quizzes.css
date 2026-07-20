@@ -609,12 +609,16 @@
 	fill: none;
 }
 
-/* Stats + bouton pilule, groupés à droite du header. */
+/* Stats + bouton pilule, groupés à droite du header. margin-left:auto : à la
+   racine le header n'a PLUS de titre (icône retirée, elle vit dans le rail) —
+   space-between seul collerait l'unique enfant à gauche. Sans effet en drill
+   (le title-block flex:1 consomme déjà tout l'espace). */
 .qbd-quizzes-header-actions {
 	display: flex;
 	align-items: center;
 	gap: 20px;
 	flex-shrink: 0;
+	margin-left: auto;
 }
 
 .qbd-quizzes-header-stats {
