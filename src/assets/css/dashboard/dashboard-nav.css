@@ -112,19 +112,24 @@
 	flex-direction: column;
 }
 
-/* Badge : collé au coin haut-droit de l'icône (l'icône est centrée
-   dans le rail → on part du centre). */
+/* Badge : ancré au coin haut-droit INTÉRIEUR de la tuile (right/top),
+   pas en offset depuis le centre — l'ancien calc(50% + 8px) le faisait
+   déborder de la tuile active (retour Ahmed 2026-07-21). Taille montée
+   9px → 11px pour la lisibilité du compte. */
 .qbd-nav-badge {
 	position: absolute;
-	left: calc(50% + 8px);
-	top: 2px;
-	font-size: 9px;
+	right: 5px;
+	top: 4px;
+	font-size: 11px;
 	font-weight: 700;
-	padding: 1px 5px;
-	border-radius: 8px;
+	font-variant-numeric: tabular-nums;
+	padding: 1px 6px;
+	border-radius: 10px;
 	background: var(--interactive-accent);
 	color: var(--text-on-accent);
-	line-height: 1.3;
-	min-width: 16px;
+	line-height: 1.45;
+	min-width: 20px;
 	text-align: center;
+	box-sizing: border-box;
+	box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
 }
