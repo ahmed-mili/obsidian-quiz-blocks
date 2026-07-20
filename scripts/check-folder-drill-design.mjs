@@ -32,6 +32,8 @@ const checks = [
 	["le contrôleur distingue l'entrée du re-render interne", /const viewKey = openModuleFolder \?\? "root";[\s\S]*?const entering = viewKey !== lastPaintedView;[\s\S]*?classList\.toggle\("qbd-quizzes-enter", entering\)/, quizzes],
 	["nav entrante, bascule d'axe et note de correspondance ré-arment l'entrée", /(?:[\s\S]*?lastPaintedView = null\b){3}/, quizzes],
 	["une autre page ne garde jamais la classe d'entrée", /removeClass\("qbd-quizzes-enter"\)/, dashboard],
+	["la cascade racine traverse toutes les sections avec la formule du drill", /let entryIndex = 0;\s*\n\s*const entryDelay = \(\): string => `\$\{120 \+ entryIndex\+\+ \* 60\}ms`;/, render],
+	["chaque en-tête de section et chaque carte de dossier prend son cran", /nodeEl\.style\.setProperty\("--qbd-card-delay", entryDelay\(\)\)[\s\S]*card\.style\.setProperty\("--qbd-card-delay", entryDelay\(\)\)/, render],
 ];
 
 const failed = checks.filter(([, pattern, source]) => !pattern.test(source));

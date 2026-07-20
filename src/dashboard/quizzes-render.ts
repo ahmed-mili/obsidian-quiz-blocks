@@ -113,8 +113,11 @@ function wireCollapseToggle(deps: GridDeps, nodeEl: HTMLElement, head: HTMLButto
 /* Section repliable générique : en-tête (chevron + libellé + badge) + corps.
    Le corps reste TOUJOURS monté pour animer la hauteur. Son enfant dédié
    sépare le clipping de la grille qui peint les bordures des cartes. */
-function renderCollapsibleSection(deps: GridDeps, parent: HTMLElement, key: string, label: string, total: number, defaultOpen = true): HTMLElement {
+function renderCollapsibleSection(deps: GridDeps, parent: HTMLElement, key: string, label: string, total: number, entryDelay: () => string, defaultOpen = true): HTMLElement {
 	const nodeEl = parent.createDiv({ cls: "qbd-quizzes-node" });
+	// Cran de cascade d'entrée : la variable vit sur le nœud (héritée par le
+	// head qui porte l'animation, cf. dashboard-quizzes.css).
+	nodeEl.style.setProperty("--qbd-card-delay", entryDelay());
 	const head = nodeEl.createEl("button", { cls: "qbd-quizzes-node-head" });
 	head.type = "button";
 	const chev = head.createSpan({ cls: "qbd-quizzes-node-chevron" });
@@ -129,7 +132,7 @@ function renderCollapsibleSection(deps: GridDeps, parent: HTMLElement, key: stri
     La carte affiche toujours son sous-titre UE (demande d'Ahmed : l'UE sur la
     carte façon StudySmarter, même sous un en-tête d'UE — comme StudySmarter
     garde le sous-titre d'une carte dans une section groupée). */
-function renderModuleGrid(deps: GridDeps, parent: HTMLElement, groups: ModuleGroup[], map: ModuleMap): void {
+function renderModuleGrid(deps: GridDeps, parent: HTMLElement, groups: ModuleGroup[], map: ModuleMap, entryDelay: () => string): void {
 	const grid = parent.createDiv({ cls: "qbd-module-grid" });
 	const menu = buildModuleCardMenu(deps.ctx, deps.rerender, map);
 	// Raccourci « changer l'icône » depuis la pastille de la carte : picker
@@ -143,15 +146,18 @@ function renderModuleGrid(deps: GridDeps, parent: HTMLElement, groups: ModuleGro
 			deps.rerender();
 		}, document.body, suggestIcons(group.name, group.ue));
 	};
-	for (const g of groups) renderModuleCard(grid, g, (m) => deps.openModule(m.folder), menu, pickIcon);
+	for (const g of groups) {
+		const card = renderModuleCard(grid, g, (m) => deps.openModule(m.folder), menu, pickIcon);
+		card.style.setProperty("--qbd-card-delay", entryDelay());
+	}
 }
 
 /* En-tête d'UE repliable + grille de cartes de module dessous. Badge = nombre
    d'éléments DIRECTS de la section (les modules), comme le compteur des
    sections « Mes dossiers » de StudySmarter. */
-function renderUeGroup(deps: GridDeps, parent: HTMLElement, ue: UeGroup, map: ModuleMap): void {
-	const body = renderCollapsibleSection(deps, parent, ue.key, ue.ue ?? t("dashboard.quizzes.noUe"), ue.modules.length);
-	renderModuleGrid(deps, body, ue.modules, map);
+function renderUeGroup(deps: GridDeps, parent: HTMLElement, ue: UeGroup, map: ModuleMap, entryDelay: () => string): void {
+	const body = renderCollapsibleSection(deps, parent, ue.key, ue.ue ?? t("dashboard.quizzes.noUe"), ue.modules.length, entryDelay);
+	renderModuleGrid(deps, body, ue.modules, map, entryDelay);
 }
 
 /** Contenu de la grille pour les 4 axes (pas le drill-down) : dispatch par
@@ -169,6 +175,12 @@ export function renderQuizGrid(
 	archivedQuizzes: QuizIndexEntry[] = []
 ): void {
 	treeEl.empty();
+	// Cascade d'ENTRÉE globale : un seul compteur traverse toutes les
+	// sections (en-têtes ET cartes de dossier) — même formule que les cartes
+	// du drill (quiz-card.ts). Les délais sont posés à chaque rendu mais
+	// restent inertes hors .qbd-quizzes-enter (aucune animation à consommer).
+	let entryIndex = 0;
+	const entryDelay = (): string => `${120 + entryIndex++ * 60}ms`;
 	const archivedFolders = deps.ctx.plugin.settings.quizzesArchivedFolders || [];
 	if (filtered.length === 0 && archivedQuizzes.length === 0 && archivedFolders.length === 0) {
 		treeEl.createDiv({ cls: "qbd-empty-state" }, el => { el.createEl("p", { text: t("dashboard.quizzes.empty") }); });
@@ -186,13 +198,13 @@ export function renderQuizGrid(
 
 	if (mode === "recent") {
 		for (const g of buildRecentModuleGroups(modules, stats)) {
-			const body = renderCollapsibleSection(deps, treeEl, g.key, t(RECENT_GROUP_LABEL_KEYS[g.key]), g.modules.length);
-			renderModuleGrid(deps, body, g.modules, map);
+			const body = renderCollapsibleSection(deps, treeEl, g.key, t(RECENT_GROUP_LABEL_KEYS[g.key]), g.modules.length, entryDelay);
+			renderModuleGrid(deps, body, g.modules, map, entryDelay);
 		}
 	} else {
 		// Axe UE (défaut) : en-tête d'UE repliable, cartes de module dessous ;
 		// « Sans UE » (modules non résolus) en dernier (garanti par buildUeGroups).
-		for (const ue of buildUeGroups(modules, map)) renderUeGroup(deps, treeEl, ue, map);
+		for (const ue of buildUeGroups(modules, map)) renderUeGroup(deps, treeEl, ue, map, entryDelay);
 	}
 
 	// ── Section « Archivés » en pied de grille (tous les axes) — repliée par
@@ -202,8 +214,8 @@ export function renderQuizGrid(
 	// un chemin Obsidian, aucune collision possible.
 	if (archivedQuizzes.length > 0 || archivedFolders.length > 0) {
 		const archivedModules = buildModuleGroups(archivedQuizzes, stats, map, archivedFolders);
-		const body = renderCollapsibleSection(deps, treeEl, "archived:", t("dashboard.quizzes.archivedSection"), archivedModules.length, false);
-		renderModuleGrid(deps, body, archivedModules, map);
+		const body = renderCollapsibleSection(deps, treeEl, "archived:", t("dashboard.quizzes.archivedSection"), archivedModules.length, entryDelay, false);
+		renderModuleGrid(deps, body, archivedModules, map, entryDelay);
 	}
 }
 
