@@ -184,7 +184,11 @@
 	border-radius: var(--radius-l, 12px);
 	padding: 16px;
 	cursor: pointer;
-	transition: background 0.15s ease, border-color 0.15s ease, box-shadow 0.2s ease, transform 0.08s ease;
+	/* Lift : transform et box-shadow sur la MÊME durée/courbe, sinon l'ombre
+	   traîne derrière la carte et le survol paraît saccadé. */
+	transition: background 0.15s ease, border-color 0.15s ease,
+		box-shadow 0.2s cubic-bezier(0.2, 0.7, 0.3, 1),
+		transform 0.2s cubic-bezier(0.2, 0.7, 0.3, 1);
 	position: relative;
 	overflow: hidden;
 }
@@ -192,12 +196,14 @@
 .qbd-quiz-card:hover {
 	background: var(--background-secondary);
 	border-color: var(--background-modifier-border-hover);
-	box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
-	transform: translateY(-1px);
+	box-shadow: 0 10px 24px -10px rgba(0, 0, 0, 0.28);
+	transform: translateY(-3px);
 }
 
+/* Press : retombée quasi immédiate (60ms), sinon le clic semble mou. */
 .qbd-quiz-card:active {
-	transform: translateY(0) scale(0.985);
+	transform: translateY(-1px) scale(0.985);
+	transition-duration: 60ms;
 }
 
 /* Épaissi à 4px (StudySmarter : barre nette, pas un filet) ; le
@@ -811,7 +817,7 @@
 	border: 1px solid rgba(255, 255, 255, 0.13);
 	border-radius: 15px;
 	box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.14);
-	transition: transform 0.15s ease, border-color 0.15s ease;
+	transition: transform 0.2s cubic-bezier(0.2, 0.7, 0.3, 1), border-color 0.15s ease;
 }
 
 .qbd-quiz-card.qbd-quiz-card--folder:hover {
@@ -819,6 +825,11 @@
 	border-color: color-mix(in srgb, var(--accent) 50%, transparent);
 	box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.14);
 	transform: translateY(-3px);
+}
+
+.qbd-quiz-card.qbd-quiz-card--folder:active {
+	transform: translateY(-1px) scale(0.985);
+	transition-duration: 60ms;
 }
 
 /* L'apparition ne joue qu'à l'ENTRÉE de la vue (classe posée par

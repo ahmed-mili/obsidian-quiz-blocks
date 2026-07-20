@@ -253,16 +253,21 @@
 	background: linear-gradient(135deg,
 		color-mix(in srgb, var(--interactive-accent) 12%, transparent),
 		color-mix(in srgb, var(--interactive-accent) 4%, transparent));
-	transition: border-color 0.15s ease, box-shadow 0.2s ease, transform 0.08s ease;
+	transition: border-color 0.15s ease,
+		box-shadow 0.2s cubic-bezier(0.2, 0.7, 0.3, 1),
+		transform 0.2s cubic-bezier(0.2, 0.7, 0.3, 1);
 }
 
 .qbd-resume-hero:hover {
 	border-color: color-mix(in srgb, var(--interactive-accent) 50%, transparent);
 	box-shadow: 0 6px 20px color-mix(in srgb, var(--interactive-accent) 18%, transparent);
-	transform: translateY(-1px);
+	transform: translateY(-2px);
 }
 
-.qbd-resume-hero:active { transform: translateY(0) scale(0.995); }
+.qbd-resume-hero:active {
+	transform: translateY(0) scale(0.99);
+	transition-duration: 60ms;
+}
 
 .qbd-resume-info {
 	min-width: 0;
