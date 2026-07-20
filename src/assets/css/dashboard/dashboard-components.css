@@ -811,15 +811,16 @@
 	min-width: 0;
 	max-width: 100%;
 	padding: 15px 17px 11px;
-	/* Mêmes couleurs que les cartes de MODULE de la racine (.qbd-module-card,
-	   demande Ahmed 2026-07-21) : fond #1e1e2e et bordure teintée à l'accent
-	   du dossier — SANS le halo radial haut-gauche ni la pastille d'icône,
-	   propres aux cartes de module. */
-	--card-bg: #1e1e2e;
+	/* Fond = celui du panneau « Progress » (.qbd-progress-panel — choix
+	   Ahmed 2026-07-21) ; contours teintés à l'accent du dossier conservés
+	   (formule des cartes de module). */
+	--card-bg: rgba(16, 22, 40, 0.5);
 	--border-c: color-mix(in oklab, var(--accent) 55%, #232939);
 	--border-soft: color-mix(in oklab, var(--accent) 25%, #262d3f);
 	--glow: color-mix(in oklab, var(--accent) 45%, transparent);
 	background: var(--card-bg);
+	backdrop-filter: blur(20px) saturate(140%);
+	-webkit-backdrop-filter: blur(20px) saturate(140%);
 	border: 1px solid var(--border-soft);
 	border-radius: 15px;
 	box-shadow: none;

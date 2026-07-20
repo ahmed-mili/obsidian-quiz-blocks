@@ -310,11 +310,12 @@
    reste dérivé par color-mix in oklab. Halo radial dans l'angle HAUT-GAUCHE,
    intégré au fond (pas un div). */
 .qbd-module-card {
-	--card-bg: #1e1e2e; /* base alignée sur les cartes de quiz StudySmarter
-	                       (#1e1e2e, pipette) — teinte neutre, l'ancien #1c2130
-	                       tirait trop sur le bleu. Halo/icône/bordures inchangés. */
+	/* Base = fond du panneau « Progress » (choix Ahmed 2026-07-21) ; le halo
+	   d'angle haut-gauche est recomposé PAR-DESSUS en couche translucide
+	   (l'ancien --tile-bg opaque rendrait le coin opaque sur ce fond verre). */
+	--card-bg: rgba(16, 22, 40, 0.5);
 	--card-mix-base: #181d2b;
-	--tile-bg:     color-mix(in oklab, var(--accent) 12%, var(--card-mix-base));
+	--tile-bg:     color-mix(in oklab, var(--accent) 12%, transparent);
 	--icon-bg:     color-mix(in oklab, var(--accent) 22%, var(--card-mix-base));
 	--border-c:    color-mix(in oklab, var(--accent) 55%, #232939);
 	--border-soft: color-mix(in oklab, var(--accent) 25%, #262d3f);
@@ -326,7 +327,11 @@
 	flex-direction: column;
 	border: 1px solid var(--border-soft);
 	border-radius: 10px;
-	background: radial-gradient(360px 150px at 0% 0%, var(--tile-bg) 0%, var(--card-bg) 68%);
+	background:
+		radial-gradient(360px 150px at 0% 0%, var(--tile-bg) 0%, transparent 68%),
+		var(--card-bg);
+	backdrop-filter: blur(20px) saturate(140%);
+	-webkit-backdrop-filter: blur(20px) saturate(140%);
 	cursor: pointer;
 	transition: border-color .2s cubic-bezier(0.2, 0.7, 0.3, 1),
 		box-shadow .2s cubic-bezier(0.2, 0.7, 0.3, 1),
