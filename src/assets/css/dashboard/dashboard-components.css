@@ -812,8 +812,6 @@
 	border-radius: 15px;
 	box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.14);
 	transition: transform 0.15s ease, border-color 0.15s ease;
-	animation: qbd-folder-card-in 0.5s cubic-bezier(0.2, 0.7, 0.3, 1) both;
-	animation-delay: var(--qbd-card-delay, 120ms);
 }
 
 .qbd-quiz-card.qbd-quiz-card--folder:hover {
@@ -821,6 +819,14 @@
 	border-color: color-mix(in srgb, var(--accent) 50%, transparent);
 	box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.14);
 	transform: translateY(-3px);
+}
+
+/* L'apparition ne joue qu'à l'ENTRÉE de la vue (classe posée par
+   quizzes.ts) : un re-render interne du drill (reset de stats) ne fait plus
+   clignoter les cartes. Keyframes définis dans dashboard-quizzes.css. */
+.qbd-quizzes-enter .qbd-quiz-card.qbd-quiz-card--folder {
+	animation: qbd-folder-card-in 0.5s cubic-bezier(0.2, 0.7, 0.3, 1) both;
+	animation-delay: var(--qbd-card-delay, 120ms);
 }
 
 .qbd-quiz-card--folder .qbd-quiz-card-body {

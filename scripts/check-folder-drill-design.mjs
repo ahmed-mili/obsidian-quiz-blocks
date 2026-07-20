@@ -34,6 +34,13 @@ const checks = [
 	["une autre page ne garde jamais la classe d'entrée", /removeClass\("qbd-quizzes-enter"\)/, dashboard],
 	["la cascade racine traverse toutes les sections avec la formule du drill", /let entryIndex = 0;\s*\n\s*const entryDelay = \(\): string => `\$\{120 \+ entryIndex\+\+ \* 60\}ms`;/, render],
 	["chaque en-tête de section et chaque carte de dossier prend son cran", /nodeEl\.style\.setProperty\("--qbd-card-delay", entryDelay\(\)\)[\s\S]*card\.style\.setProperty\("--qbd-card-delay", entryDelay\(\)\)/, render],
+	["hero, header racine et sélecteur d'axe entrent ensemble", /\.qbd-quizzes-enter \.qbd-quizzes-folder-hero,\s*\.qbd-quizzes-enter > \.qbd-quizzes-header,\s*\.qbd-quizzes-enter > \.qbd-quizzes-group\s*\{[^}]*animation:\s*qbd-folder-hero-in 0\.45s ease both;/s, css],
+	["hors entrée le hero n'a plus d'animation propre", /\.qbd-quizzes-folder-hero\s*\{(?=[^}]*position:\s*relative)(?![^}]*animation)[^}]*\}/s, css],
+	["en-têtes de section et cartes de dossier entrent en cascade", /\.qbd-quizzes-enter \.qbd-quizzes-node-head,\s*\.qbd-quizzes-enter \.qbd-module-card\s*\{[^}]*animation:\s*qbd-folder-card-in 0\.5s cubic-bezier\(0\.2, 0\.7, 0\.3, 1\) both;[^}]*animation-delay:\s*var\(--qbd-card-delay, 120ms\);/s, css],
+	["le panneau Progrès n'entre que sous la classe d'entrée", /\.qbd-quizzes-enter \.qbd-progress-panel\s*\{[^}]*animation:\s*qbd-folder-card-in[^}]*animation-delay:\s*220ms;/s, css],
+	["les cartes quiz du drill n'animent qu'à l'entrée", /\.qbd-quizzes-enter \.qbd-quiz-card\.qbd-quiz-card--folder\s*\{[^}]*animation:\s*qbd-folder-card-in[^}]*animation-delay:\s*var\(--qbd-card-delay, 120ms\);/s, components],
+	["hors entrée la carte dossier n'a plus d'animation propre", /\.qbd-quiz-card\.qbd-quiz-card--folder\s*\{(?=[^}]*backdrop-filter)(?![^}]*animation)[^}]*\}/s, components],
+	["reduced-motion neutralise toute la transition d'entrée", /prefers-reduced-motion[\s\S]*\.qbd-quizzes-enter \.qbd-module-card,[\s\S]*animation:\s*none/, css],
 ];
 
 const failed = checks.filter(([, pattern, source]) => !pattern.test(source));
