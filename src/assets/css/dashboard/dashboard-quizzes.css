@@ -532,13 +532,14 @@
    arête de coupe est impossible par construction. */
 .qbd-quizzes-folder-halo {
 	position: absolute;
-	/* -32px/-28px = le padding du conteneur scrollable .qbd-content (28px
-	   32px, mesuré in-app 2026-07-21) : la boîte s'étend jusqu'au bord de
-	   clip SANS le franchir — au-delà, retour de la ligne de coupe. */
-	left: -32px;
-	top: -28px;
-	width: min(1200px, calc(100% + 64px));
-	height: 280px;
+	/* -8px : débordement discret seulement — à -32px (tout le padding de
+	   .qbd-content) la lueur envahissait le couloir du rail (retour Ahmed
+	   2026-07-21). Le padding fait 28/32px, donc toujours aucun clip ;
+	   les ellipses restent contenues dans la boîte, donc aucun bord dur. */
+	left: -8px;
+	top: -8px;
+	width: min(1150px, calc(100% + 16px));
+	height: 260px;
 	/* Source lumineuse = l'ICÔNE (demande Ahmed 2026-07-21) : toutes les
 	   ellipses partagent le MÊME centre (l'icône, ~5.5%/32% de la boîte) —
 	   l'intensité décroît donc de façon monotone en s'éloignant d'elle,
