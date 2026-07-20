@@ -45,7 +45,6 @@ export function createNavHandlers(ctx: DashboardCtx): NavHandlers {
 
 		// Nav items
 		const navList = container.createDiv({ cls: "qbd-nav-items" });
-		const quizzes = ctx.scanner ? ctx.scanner.getQuizzes() : [];
 
 		for (const item of NAV_ITEMS) {
 			const btn = navList.createEl("button", {
@@ -56,10 +55,6 @@ export function createNavHandlers(ctx: DashboardCtx): NavHandlers {
 			setIcon(iconWrap, item.icon);
 
 			btn.createSpan({ cls: "qbd-nav-label", text: t(item.labelKey) });
-
-			if (item.key === "quizzes" && quizzes.length > 0) {
-				btn.createSpan({ cls: "qbd-nav-badge", text: String(quizzes.length) });
-			}
 
 			btn.addEventListener("click", () => {
 				activeNav = item.key;

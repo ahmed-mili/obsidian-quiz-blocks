@@ -541,23 +541,34 @@
 	width: min(1150px, calc(100% + 16px));
 	height: 260px;
 	/* Source lumineuse = l'ICÔNE (demande Ahmed 2026-07-21) : toutes les
-	   ellipses partagent le MÊME centre (l'icône, ~5.5%/32% de la boîte) —
-	   l'intensité décroît donc de façon monotone en s'éloignant d'elle,
-	   les stops intermédiaires adoucissent le falloff (sinon la pente
-	   linéaire des radial-gradients se voit à faible alpha sur fond sombre).
-	   Chaque ellipse garde ≥ 1% de marge aux bords de la boîte. */
+	   ellipses partagent le MÊME centre (l'icône, ~5.5%/32% de la boîte).
+	   EXTINCTION À DÉRIVÉE NULLE : un radial-gradient interpole
+	   LINÉAIREMENT entre stops, donc sans correction la lueur atteint 0
+	   avec une pente franche — l'œil voit cette rupture (bandes de Mach)
+	   sur fond sombre. Les stops suivent (1-t)^2.5 (profil quasi gaussien,
+	   pente → 0 à l'extinction) et le blur fusionne les couches et casse
+	   les micro-frontières restantes. Ellipses contenues dans la boîte. */
 	background:
-		radial-gradient(ellipse 5% 18% at 5.5% 32%, color-mix(in srgb, var(--accent) 34%, transparent), transparent 100%),
+		radial-gradient(ellipse 5% 18% at 5.5% 32%,
+			color-mix(in srgb, var(--accent) 34%, transparent) 0%,
+			color-mix(in srgb, var(--accent) 14%, transparent) 30%,
+			color-mix(in srgb, var(--accent) 3.4%, transparent) 60%,
+			color-mix(in srgb, var(--accent) 0.2%, transparent) 85%,
+			transparent 100%),
 		radial-gradient(ellipse 14% 26% at 6% 32%,
 			color-mix(in srgb, var(--accent) 16%, transparent) 0%,
-			color-mix(in srgb, var(--accent) 10%, transparent) 40%,
+			color-mix(in srgb, var(--accent) 7.8%, transparent) 25%,
+			color-mix(in srgb, var(--accent) 2.8%, transparent) 50%,
+			color-mix(in srgb, var(--accent) 0.5%, transparent) 75%,
 			transparent 100%),
 		radial-gradient(ellipse 58% 30% at 6% 33%,
 			color-mix(in srgb, var(--accent) 12%, transparent) 0%,
-			color-mix(in srgb, var(--accent) 7%, transparent) 30%,
-			color-mix(in srgb, var(--accent) 3.5%, transparent) 60%,
-			color-mix(in srgb, var(--accent) 1.5%, transparent) 80%,
+			color-mix(in srgb, var(--accent) 6.9%, transparent) 20%,
+			color-mix(in srgb, var(--accent) 3.3%, transparent) 40%,
+			color-mix(in srgb, var(--accent) 1.2%, transparent) 60%,
+			color-mix(in srgb, var(--accent) 0.2%, transparent) 80%,
 			transparent 100%);
+	filter: blur(12px);
 	pointer-events: none;
 }
 

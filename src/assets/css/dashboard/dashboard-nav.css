@@ -112,26 +112,4 @@
 	flex-direction: column;
 }
 
-/* Badge : ancré au coin haut-droit INTÉRIEUR de la tuile (right/top),
-   pas en offset depuis le centre — l'ancien calc(50% + 8px) le faisait
-   déborder de la tuile active (retour Ahmed 2026-07-21). Taille montée
-   9px → 11px pour la lisibilité du compte. */
-.qbd-nav-badge {
-	position: absolute;
-	right: 5px;
-	top: 4px;
-	font-size: 12.5px;
-	font-weight: 800;
-	font-variant-numeric: tabular-nums;
-	padding: 2px 7px;
-	border-radius: 11px;
-	/* Accent ASSOMBRI + blanc pur : l'accent nu (bleu pâle sur ce thème)
-	   se fondait dans la tuile active claire (retour Ahmed 2026-07-21). */
-	background: color-mix(in srgb, var(--interactive-accent) 72%, #101728);
-	color: #fff;
-	line-height: 1.4;
-	min-width: 23px;
-	text-align: center;
-	box-sizing: border-box;
-	box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
-}
+/* (Badge compteur retiré — demande Ahmed 2026-07-21.) */
