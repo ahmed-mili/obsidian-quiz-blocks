@@ -102,14 +102,11 @@
 	min-width: max-content;
 	max-width: min(340px, calc(100vw - 16px));
 	overflow-y: auto;
-	/* Surface glass canonique (obsidian:plugin-design §3) : fond natif
-	   translucide + backdrop brightness — l'éclaircissement vient de ce qui
-	   TRAVERSE, donc theme-aware clair/sombre par construction (remplace
-	   l'ancien +5 % de blanc, correct seulement en sombre). Conserve le
-	   « menu plus clair que la carte » de la cible SS (#1F242F vs #161B26). */
-	background: color-mix(in srgb, var(--background-primary) 92%, transparent);
-	backdrop-filter: blur(12px) brightness(1.18);
-	-webkit-backdrop-filter: blur(12px) brightness(1.18);
+	/* Fond aligné sur le panneau « Progress » du dashboard (choix Ahmed
+	   2026-07-21) : même verre que les cartes de My quizzes. */
+	background: rgba(16, 22, 40, 0.5);
+	backdrop-filter: blur(20px) saturate(140%);
+	-webkit-backdrop-filter: blur(20px) saturate(140%);
 	/* Bordure ADOUCIE : sur la cible SS le menu n'a quasi pas de liseré,
 	   c'est la surface plus claire qui le détache (comparaison Excalidraw). */
 	border: 1px solid color-mix(in srgb, var(--background-modifier-border) 55%, transparent);
