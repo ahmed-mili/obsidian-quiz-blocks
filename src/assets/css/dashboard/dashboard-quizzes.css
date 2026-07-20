@@ -532,18 +532,22 @@
    arête de coupe est impossible par construction. */
 .qbd-quizzes-folder-halo {
 	position: absolute;
-	left: 0;
-	top: 0;
-	width: min(860px, 100%);
-	height: 210px;
+	/* -32px/-28px = le padding du conteneur scrollable .qbd-content (28px
+	   32px, mesuré in-app 2026-07-21) : la boîte s'étend jusqu'au bord de
+	   clip SANS le franchir — au-delà, retour de la ligne de coupe. */
+	left: -32px;
+	top: -28px;
+	width: min(1200px, calc(100% + 64px));
+	height: 280px;
 	/* Source lumineuse = l'ICÔNE (demande Ahmed 2026-07-21) : cœur intense
-	   calé sur elle (~8% de la boîte), les couches suivantes de moins en
-	   moins denses vers la droite — le néon semble émaner de l'icône. */
+	   calé sur elle (~5% de la boîte), les couches suivantes de moins en
+	   moins denses vers la droite — le néon semble émaner de l'icône.
+	   Chaque ellipse garde ≥ 1% de marge aux bords de la boîte. */
 	background:
-		radial-gradient(ellipse 8% 26% at 8% 40%, color-mix(in srgb, var(--accent) 30%, transparent), transparent 100%),
-		radial-gradient(ellipse 18% 32% at 12% 42%, color-mix(in srgb, var(--accent) 14%, transparent), transparent 100%),
-		radial-gradient(ellipse 32% 32% at 32% 42%, color-mix(in srgb, var(--accent) 7%, transparent), transparent 100%),
-		radial-gradient(ellipse 18% 16% at 18% 62%, color-mix(in srgb, var(--accent) 10%, transparent), transparent 100%);
+		radial-gradient(ellipse 5% 20% at 5.5% 32%, color-mix(in srgb, var(--accent) 30%, transparent), transparent 100%),
+		radial-gradient(ellipse 12% 28% at 12.5% 33%, color-mix(in srgb, var(--accent) 14%, transparent), transparent 100%),
+		radial-gradient(ellipse 26% 30% at 27% 36%, color-mix(in srgb, var(--accent) 7%, transparent), transparent 100%),
+		radial-gradient(ellipse 13% 12% at 15% 44%, color-mix(in srgb, var(--accent) 10%, transparent), transparent 100%);
 	pointer-events: none;
 }
 
