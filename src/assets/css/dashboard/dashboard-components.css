@@ -811,13 +811,16 @@
 	min-width: 0;
 	max-width: 100%;
 	padding: 15px 17px 11px;
-	/* Même effet que le hero « Reprendre » de l'accueil (.qbd-resume-hero,
-	   essai Ahmed 2026-07-21), décliné à l'accent DU DOSSIER (--accent posé
-	   par le wrapper du drill) : dégradé translucide teinté + bordure teintée. */
-	background: linear-gradient(135deg,
-		color-mix(in srgb, var(--accent) 12%, transparent),
-		color-mix(in srgb, var(--accent) 4%, transparent));
-	border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--background-modifier-border));
+	/* Mêmes couleurs que les cartes de MODULE de la racine (.qbd-module-card,
+	   demande Ahmed 2026-07-21) : fond #1e1e2e et bordure teintée à l'accent
+	   du dossier — SANS le halo radial haut-gauche ni la pastille d'icône,
+	   propres aux cartes de module. */
+	--card-bg: #1e1e2e;
+	--border-c: color-mix(in oklab, var(--accent) 55%, #232939);
+	--border-soft: color-mix(in oklab, var(--accent) 25%, #262d3f);
+	--glow: color-mix(in oklab, var(--accent) 45%, transparent);
+	background: var(--card-bg);
+	border: 1px solid var(--border-soft);
 	border-radius: 15px;
 	box-shadow: none;
 	transition: transform 0.2s cubic-bezier(0.2, 0.7, 0.3, 1), border-color 0.15s ease,
@@ -825,11 +828,9 @@
 }
 
 .qbd-quiz-card.qbd-quiz-card--folder:hover {
-	background: linear-gradient(135deg,
-		color-mix(in srgb, var(--accent) 12%, transparent),
-		color-mix(in srgb, var(--accent) 4%, transparent));
-	border-color: color-mix(in srgb, var(--accent) 50%, transparent);
-	box-shadow: 0 6px 20px color-mix(in srgb, var(--accent) 18%, transparent);
+	background: var(--card-bg);
+	border-color: var(--border-c);
+	box-shadow: 0 14px 30px -12px var(--glow), 0 0 0 1px var(--border-soft);
 	transform: translateY(-3px);
 }
 
