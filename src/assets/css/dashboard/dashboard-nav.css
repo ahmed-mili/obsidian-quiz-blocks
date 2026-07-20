@@ -120,15 +120,17 @@
 	position: absolute;
 	right: 5px;
 	top: 4px;
-	font-size: 11px;
-	font-weight: 700;
+	font-size: 12.5px;
+	font-weight: 800;
 	font-variant-numeric: tabular-nums;
-	padding: 1px 6px;
-	border-radius: 10px;
-	background: var(--interactive-accent);
-	color: var(--text-on-accent);
-	line-height: 1.45;
-	min-width: 20px;
+	padding: 2px 7px;
+	border-radius: 11px;
+	/* Accent ASSOMBRI + blanc pur : l'accent nu (bleu pâle sur ce thème)
+	   se fondait dans la tuile active claire (retour Ahmed 2026-07-21). */
+	background: color-mix(in srgb, var(--interactive-accent) 72%, #101728);
+	color: #fff;
+	line-height: 1.4;
+	min-width: 23px;
 	text-align: center;
 	box-sizing: border-box;
 	box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
