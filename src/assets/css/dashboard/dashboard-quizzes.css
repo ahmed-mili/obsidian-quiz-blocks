@@ -525,16 +525,21 @@
    version à deux ellipses faisait une tache unique derrière le début du
    titre) : cœur derrière l'icône, nappe qui court le long du titre et
    s'estompe vers la droite, traînée basse qui prolonge le soulignement. */
+/* CONTRAINTE anti-coupure (retour Ahmed 2026-07-21) : la boîte ne déborde
+   jamais en négatif (un ancêtre scrollable clippait le débordement en une
+   ligne nette) et chaque ellipse reste ENTIÈREMENT dans la boîte
+   (centre ± rayon ∈ [0,100%]) — l'alpha atteint 0 avant tout bord, une
+   arête de coupe est impossible par construction. */
 .qbd-quizzes-folder-halo {
 	position: absolute;
-	left: -30px;
-	top: -24px;
-	width: min(860px, calc(100% + 30px));
-	height: 200px;
+	left: 0;
+	top: 0;
+	width: min(860px, 100%);
+	height: 210px;
 	background:
-		radial-gradient(ellipse 20% 40% at 9% 50%, color-mix(in srgb, var(--accent) 18%, transparent), transparent 100%),
-		radial-gradient(ellipse 60% 42% at 32% 48%, color-mix(in srgb, var(--accent) 8%, transparent), transparent 100%),
-		radial-gradient(ellipse 38% 20% at 20% 76%, color-mix(in srgb, var(--accent) 11%, transparent), transparent 100%);
+		radial-gradient(ellipse 16% 30% at 16% 40%, color-mix(in srgb, var(--accent) 18%, transparent), transparent 100%),
+		radial-gradient(ellipse 34% 34% at 40% 42%, color-mix(in srgb, var(--accent) 8%, transparent), transparent 100%),
+		radial-gradient(ellipse 26% 18% at 26% 62%, color-mix(in srgb, var(--accent) 11%, transparent), transparent 100%);
 	pointer-events: none;
 }
 
