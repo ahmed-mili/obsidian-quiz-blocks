@@ -99,6 +99,10 @@
 	align-items: center;
 	justify-content: space-between;
 	gap: 12px;
+	/* 61px : cale le centre de la pilule « Nouveau dossier » exactement sur
+	   celui de « Nouveau quiz » du drill (breadcrumb + hero), mesuré in-app
+	   2026-07-20 — à re-mesurer si la hauteur du hero du drill change. */
+	margin-top: 61px;
 	margin-bottom: 24px;
 }
 
