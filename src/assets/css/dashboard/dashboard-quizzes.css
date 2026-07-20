@@ -536,10 +536,14 @@
 	top: 0;
 	width: min(860px, 100%);
 	height: 210px;
+	/* Source lumineuse = l'ICÔNE (demande Ahmed 2026-07-21) : cœur intense
+	   calé sur elle (~8% de la boîte), les couches suivantes de moins en
+	   moins denses vers la droite — le néon semble émaner de l'icône. */
 	background:
-		radial-gradient(ellipse 16% 30% at 16% 40%, color-mix(in srgb, var(--accent) 18%, transparent), transparent 100%),
-		radial-gradient(ellipse 34% 34% at 40% 42%, color-mix(in srgb, var(--accent) 8%, transparent), transparent 100%),
-		radial-gradient(ellipse 26% 18% at 26% 62%, color-mix(in srgb, var(--accent) 11%, transparent), transparent 100%);
+		radial-gradient(ellipse 8% 26% at 8% 40%, color-mix(in srgb, var(--accent) 30%, transparent), transparent 100%),
+		radial-gradient(ellipse 18% 32% at 12% 42%, color-mix(in srgb, var(--accent) 14%, transparent), transparent 100%),
+		radial-gradient(ellipse 32% 32% at 32% 42%, color-mix(in srgb, var(--accent) 7%, transparent), transparent 100%),
+		radial-gradient(ellipse 18% 16% at 18% 62%, color-mix(in srgb, var(--accent) 10%, transparent), transparent 100%);
 	pointer-events: none;
 }
 
