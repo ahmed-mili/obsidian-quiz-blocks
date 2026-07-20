@@ -73,7 +73,12 @@ export class QuizDashboardView extends ItemView implements DashboardView {
 	private captureNav(): NavSnapshot {
 		return {
 			view: this.currentView,
-			drillFolder: this.quizzes ? this.quizzes.getOpenFolder() : null,
+			// Le drill n'est un état restaurable QUE vu depuis « quizzes » ; hors
+			// de cette vue openModuleFolder peut rester en résidu dans quizzes.ts
+			// (resetDrilldown ne le referme qu'à l'arrivée sur "quizzes") — on ne
+			// doit jamais le capturer, sous peine de faux "état différent" au
+			// re-clic d'une autre page du rail (finding Critical review Task 1).
+			drillFolder: this.currentView === "quizzes" && this.quizzes ? this.quizzes.getOpenFolder() : null,
 			quiz: this.currentView === "detail" ? this.selectedQuiz : null,
 		};
 	}
@@ -90,6 +95,9 @@ export class QuizDashboardView extends ItemView implements DashboardView {
 		const snap = this.captureNav();
 		// Dédoublonnage défensif : deux enregistrements consécutifs du même
 		// état (ex. drill in juste après une navigation) ne créent qu'une entrée.
+		// Actuellement inatteignable en usage réel — les chemins doublons sont
+		// déjà bloqués en amont par isRestoringNav et la garde de navigate() —
+		// ce garde-fou protège de futurs appelants de recordNav().
 		const top = this.navBackStack[this.navBackStack.length - 1];
 		if (top && this.sameNav(top, snap)) return;
 		this.navBackStack.push(snap);
@@ -111,6 +119,10 @@ export class QuizDashboardView extends ItemView implements DashboardView {
 		}
 	}
 
+	// NAV_HISTORY_MAX n'est PAS appliqué ici : ces deux méthodes déplacent un
+	// élément d'une pile à l'autre sans jamais en ajouter net (pop d'un côté,
+	// push de l'autre) — le total des deux piles reste borné par le plafond
+	// déjà imposé par recordNav().
 	goNavBack(): void {
 		const snap = this.navBackStack.pop();
 		if (!snap) return;
@@ -243,7 +255,10 @@ export class QuizDashboardView extends ItemView implements DashboardView {
 		// (re-clic du rail sur la page courante : rien à restaurer).
 		const arriving: NavSnapshot = {
 			view,
-			drillFolder: null, // naviguer referme toujours le drill (resetDrilldown)
+			// Jamais de drill à l'arrivée : soit resetDrilldown le referme (view
+			// "quizzes"), soit il n'est pas pertinent pour la vue cible — et
+			// captureNav() ne le capture de toute façon que depuis "quizzes".
+			drillFolder: null,
 			quiz: view === "detail" ? (data?.quiz ?? this.selectedQuiz) : null,
 		};
 		if (!this.isRestoringNav && !this.sameNav(this.captureNav(), arriving)) {
