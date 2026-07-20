@@ -93,7 +93,12 @@
 .qbd-quizzes-group {
 	/* 24px : espace chip → en-tête de section élargi (annotation Ahmed
 	   2026-07-18 « augmente l'espace ») — la ligne séparatrice est retirée,
-	   c'est l'air qui structure. */
+	   c'est l'air qui structure. Ligne partagée : chip UE/Recent à gauche,
+	   pilule « Nouveau dossier » à droite (demande Ahmed 2026-07-20). */
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 12px;
 	margin-bottom: 24px;
 }
 
@@ -679,7 +684,10 @@
 	white-space: nowrap;
 }
 
-.qbd-quizzes-folder-hero .qbd-btn--create {
+/* Même pilule pour « Nouveau dossier » (ligne du regroupement, racine)
+   que pour « Nouveau quiz » (hero du drill) — demande Ahmed 2026-07-20. */
+.qbd-quizzes-folder-hero .qbd-btn--create,
+.qbd-quizzes-group .qbd-btn--create {
 	margin-left: 8px;
 	height: auto;
 	padding: 11px 18px !important;

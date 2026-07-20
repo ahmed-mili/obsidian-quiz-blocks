@@ -258,11 +258,11 @@ export function createQuizzesHandlers(ctx: DashboardCtx): QuizzesHandlers {
 		}
 
 		// ── Header ──
-		// Racine : AUCUN titre — l'icône library vit désormais dans le rail
-		// (demande Ahmed 2026-07-20), le header ne porte que la pilule « + New »
-		// (calée à droite par margin-left:auto, cf. dashboard-quizzes.css).
-		const header = headerParent.createDiv({ cls: "qbd-quizzes-header" });
+		// Racine : AUCUN header — le titre vit dans le rail et la pilule
+		// « + New folder » sur la ligne du regroupement (demande Ahmed
+		// 2026-07-20), même ligne que le chip UE/Recent.
 		if (openModuleFolder !== null) {
+			const header = headerParent.createDiv({ cls: "qbd-quizzes-header" });
 			// Dans un dossier : le header EST le titre du dossier — icône + nom du
 			// module, teinte à l'accent du dossier (comme sa carte). Le nom n'est
 			// donc plus répété dans le fil d'Ariane (cf. quizzes-render.ts).
@@ -273,12 +273,10 @@ export function createQuizzesHandlers(ctx: DashboardCtx): QuizzesHandlers {
 			setIcon(titleIcon, openModuleInfo?.icon || DEFAULT_MODULE_ICON);
 			titleEl.createSpan({ cls: "qbd-quizzes-title-text", text: openModuleInfo?.name || openModuleFolder });
 			titleBlock.createDiv({ cls: "qbd-quizzes-title-underline" });
-		}
 
-		// ── Actions du header : stats (drill-down) + bouton pilule ── (groupées
-		// pour rester alignées à droite, comme la référence).
-		const headerActions = header.createDiv({ cls: "qbd-quizzes-header-actions" });
-		if (openModuleFolder !== null) {
+			// ── Actions du header : stats + pilule « Nouveau quiz » ── (groupées
+			// pour rester alignées à droite, comme la référence).
+			const headerActions = header.createDiv({ cls: "qbd-quizzes-header-actions" });
 			const masteredCount = inModule.filter(q => isMastered(q, stats)).length;
 			const statsWrap = headerActions.createDiv({ cls: "qbd-quizzes-header-stats" });
 			const addStat = (n: number, key: TransKey, modifier?: string): void => {
@@ -290,19 +288,7 @@ export function createQuizzesHandlers(ctx: DashboardCtx): QuizzesHandlers {
 			addStat(inModule.length, "dashboard.quizzes.statQuizzes");
 			statsWrap.createDiv({ cls: "qbd-quizzes-header-divider" });
 			addStat(masteredCount, "dashboard.card.mastered", "qbd-quizzes-header-stat--mastered");
-		}
 
-		if (openModuleFolder === null) {
-			// Grille : « Nouveau dossier » — même bouton pilule blanc que « Create
-			// Study Set » de StudySmarter (capture 2026-07-18), libellé adapté.
-			const newBtn = headerActions.createEl("button", { cls: "qbd-btn--create" });
-			const newIcon = newBtn.createSpan({ cls: "qbd-btn-icon" });
-			setIcon(newIcon, "plus");
-			newBtn.createSpan({ text: t("dashboard.quizzes.new") });
-			newBtn.addEventListener("click", () => {
-				new CreateFolderModal(ctx, effectiveMap(), quizzes, () => { if (containerRef) render(containerRef); }).open();
-			});
-		} else {
 			// Drill-down : créer un dossier ICI n'a pas de sens (demande Ahmed
 			// 2026-07-19) → une seule pilule « Nouveau quiz », qui ouvre le MÊME
 			// modal à trois options que « Nouveau dossier » (IA / vierge /
@@ -338,6 +324,17 @@ export function createQuizzesHandlers(ctx: DashboardCtx): QuizzesHandlers {
 				onChange: (v) => { setGrouping(v as GroupingKey); render(container); }
 			});
 			groupSelect.el.classList.add("qbd-quizzes-group-select");
+
+			// « Nouveau dossier » sur la MÊME ligne que le chip UE/Recent, calé à
+			// droite, même pilule que « Nouveau quiz » du drill (demande Ahmed
+			// 2026-07-20 — le header racine a disparu avec lui).
+			const newBtn = groupWrap.createEl("button", { cls: "qbd-btn--create" });
+			const newIcon = newBtn.createSpan({ cls: "qbd-btn-icon" });
+			setIcon(newIcon, "plus");
+			newBtn.createSpan({ text: t("dashboard.quizzes.new") });
+			newBtn.addEventListener("click", () => {
+				new CreateFolderModal(ctx, effectiveMap(), quizzes, () => { if (containerRef) render(containerRef); }).open();
+			});
 		}
 
 		// ── Contenu : grille (UE/Récent) ou drill-down d'un module ──
