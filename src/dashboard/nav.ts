@@ -28,7 +28,9 @@ export function createNavHandlers(ctx: DashboardCtx): NavHandlers {
 
 	const NAV_ITEMS: NavItem[] = [
 		{ key: "home", labelKey: "dashboard.nav.home", icon: "home" },
-		{ key: "quizzes", labelKey: "dashboard.nav.quizzes", icon: "layers" },
+		// Même icône « library » que le titre de la page Mes quiz (quizzes.ts) :
+		// le rail et la page désignent la même chose (demande Ahmed 2026-07-20).
+		{ key: "quizzes", labelKey: "dashboard.nav.quizzes", icon: "library" },
 		{ key: "ai", labelKey: "dashboard.nav.generate", icon: "sparkles" }
 	];
 
