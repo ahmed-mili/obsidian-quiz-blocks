@@ -194,6 +194,21 @@ export function createQuizzesHandlers(ctx: DashboardCtx): QuizzesHandlers {
 		const entering = viewKey !== lastPaintedView;
 		lastPaintedView = viewKey;
 		container.classList.toggle("qbd-quizzes-enter", entering);
+		// La classe DOIT tomber une fois l'entrée jouée : une CSSAnimation en
+		// fill both dont un keyframe contient `transform` reste propriétaire de
+		// la propriété même finie → les transitions de transform (hover-lift des
+		// cartes) ne se déclenchent plus et la surélévation saute sans animation.
+		if (entering) {
+			const onEnd = (ev: AnimationEvent): void => {
+				if (!ev.animationName.startsWith("qbd-")) return;
+				const stillRunning = container.getAnimations({ subtree: true })
+					.some(a => a instanceof CSSAnimation && a.playState === "running");
+				if (stillRunning) return;
+				container.classList.remove("qbd-quizzes-enter");
+				container.removeEventListener("animationend", onEnd);
+			};
+			container.addEventListener("animationend", onEnd);
+		}
 
 		const quizzes: QuizIndexEntry[] = ctx.scanner ? ctx.scanner.getQuizzes() : [];
 		const stats: Record<string, QuizStatRecord> = ctx.statsStore ? ctx.statsStore.getAll() : {};
