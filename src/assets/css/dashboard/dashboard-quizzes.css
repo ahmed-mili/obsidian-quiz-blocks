@@ -119,12 +119,16 @@
 	gap: 11px;
 	font-size: 15px;
 	font-weight: 600;
-	/* Même verre que le panneau « Progress »/les cartes (choix Ahmed
-	   2026-07-21). !important : la base .qbd-select pose son fond en
-	   !important contre le chrome bouton d'Obsidian — même arme requise. */
-	background-color: rgba(16, 22, 40, 0.5) !important;
-	backdrop-filter: blur(20px) saturate(140%);
-	-webkit-backdrop-filter: blur(20px) saturate(140%);
+	/* Verre ADAPTÉ à un petit contrôle (retour Ahmed 2026-07-21 : la recette
+	   du panneau, à 50 % d'alpha, rend délavé sur un bouton) : fond plus
+	   dense, blur plus serré, liseré + reflet haut subtils qui « font
+	   verre » à cette échelle. !important : la base .qbd-select pose fond
+	   et box-shadow en !important contre le chrome bouton d'Obsidian. */
+	background-color: rgba(16, 22, 40, 0.72) !important;
+	backdrop-filter: blur(14px) saturate(130%);
+	-webkit-backdrop-filter: blur(14px) saturate(130%);
+	border-color: rgba(255, 255, 255, 0.12);
+	box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.09) !important;
 }
 
 .qbd-quizzes-group-select .qbd-select-chevron svg {
