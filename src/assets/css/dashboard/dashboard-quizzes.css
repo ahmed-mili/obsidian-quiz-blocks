@@ -539,15 +539,24 @@
 	top: -28px;
 	width: min(1200px, calc(100% + 64px));
 	height: 280px;
-	/* Source lumineuse = l'ICÔNE (demande Ahmed 2026-07-21) : cœur intense
-	   calé sur elle (~5% de la boîte), les couches suivantes de moins en
-	   moins denses vers la droite — le néon semble émaner de l'icône.
+	/* Source lumineuse = l'ICÔNE (demande Ahmed 2026-07-21) : toutes les
+	   ellipses partagent le MÊME centre (l'icône, ~5.5%/32% de la boîte) —
+	   l'intensité décroît donc de façon monotone en s'éloignant d'elle,
+	   les stops intermédiaires adoucissent le falloff (sinon la pente
+	   linéaire des radial-gradients se voit à faible alpha sur fond sombre).
 	   Chaque ellipse garde ≥ 1% de marge aux bords de la boîte. */
 	background:
-		radial-gradient(ellipse 5% 20% at 5.5% 32%, color-mix(in srgb, var(--accent) 30%, transparent), transparent 100%),
-		radial-gradient(ellipse 12% 28% at 12.5% 33%, color-mix(in srgb, var(--accent) 14%, transparent), transparent 100%),
-		radial-gradient(ellipse 26% 30% at 27% 36%, color-mix(in srgb, var(--accent) 7%, transparent), transparent 100%),
-		radial-gradient(ellipse 13% 12% at 15% 44%, color-mix(in srgb, var(--accent) 10%, transparent), transparent 100%);
+		radial-gradient(ellipse 5% 18% at 5.5% 32%, color-mix(in srgb, var(--accent) 34%, transparent), transparent 100%),
+		radial-gradient(ellipse 14% 26% at 6% 32%,
+			color-mix(in srgb, var(--accent) 16%, transparent) 0%,
+			color-mix(in srgb, var(--accent) 10%, transparent) 40%,
+			transparent 100%),
+		radial-gradient(ellipse 58% 30% at 6% 33%,
+			color-mix(in srgb, var(--accent) 12%, transparent) 0%,
+			color-mix(in srgb, var(--accent) 7%, transparent) 30%,
+			color-mix(in srgb, var(--accent) 3.5%, transparent) 60%,
+			color-mix(in srgb, var(--accent) 1.5%, transparent) 80%,
+			transparent 100%);
 	pointer-events: none;
 }
 
