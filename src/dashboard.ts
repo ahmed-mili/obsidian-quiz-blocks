@@ -190,6 +190,24 @@ export class QuizDashboardView extends ItemView implements DashboardView {
 		this.detail = createDetailHandlers(ctx);
 		this.ai = createAiHandlers(ctx);
 
+		// ── Boutons latéraux souris (3 = précédent, 4 = suivant) : historique
+		// interne du dashboard (spec 2026-07-20-mouse-nav-history). En CAPTURE
+		// et sur les DEUX phases : la navigation d'onglet native d'Obsidian
+		// écoute aussi ces boutons — on la neutralise DANS le dashboard,
+		// l'action ne part que du mouseup. Pile vide = clic consommé sans
+		// effet (comportement d'app, on ne sort jamais de la vue). Mobile :
+		// aucun bouton 3/4 n'existe, listeners inertes. registerDomEvent
+		// détache au unload de la vue.
+		const swallowNavButtons = (e: MouseEvent, act: boolean): void => {
+			if (e.button !== 3 && e.button !== 4) return;
+			e.preventDefault();
+			e.stopPropagation();
+			if (!act) return;
+			if (e.button === 3) this.goNavBack(); else this.goNavForward();
+		};
+		this.registerDomEvent(this.contentEl, "mousedown", (e: MouseEvent) => swallowNavButtons(e, false), { capture: true });
+		this.registerDomEvent(this.contentEl, "mouseup", (e: MouseEvent) => swallowNavButtons(e, true), { capture: true });
+
 		// Raccourcis du composer (menu « + ») : Scope de vue Obsidian —
 		// actif quand la vue est focalisée, même caret dans le textarea.
 		this.bindComposerHotkeys();

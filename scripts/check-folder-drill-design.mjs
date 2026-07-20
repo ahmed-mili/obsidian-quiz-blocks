@@ -46,6 +46,8 @@ const checks = [
 	["entrer dans un dossier enregistre l'état quitté", /function openModule\(folder: string\): void \{\s*\n[\s\S]{0,220}?ctx\.recordNav\(\);/, quizzes],
 	["le retour « All quizzes » enregistre l'état quitté", /back\.addEventListener\("click", \(\) => \{\s*\n\s*ctx\.recordNav\(\);\s*\n\s*openModuleFolder = null;/, quizzes],
 	["la restauration d'un drill repasse par openModule", /openFolder\(folder: string\) \{ openModule\(folder\); \}/, quizzes],
+	["les boutons souris 3/4 sont neutralisés dans le dashboard (capture, deux phases)", /const swallowNavButtons = \(e: MouseEvent, act: boolean\): void => \{\s*\n\s*if \(e\.button !== 3 && e\.button !== 4\) return;\s*\n\s*e\.preventDefault\(\);\s*\n\s*e\.stopPropagation\(\);/, dashboard],
+	["l'action d'historique ne part que du mouseup", /registerDomEvent\(this\.contentEl, "mousedown", \(e: MouseEvent\) => swallowNavButtons\(e, false\), \{ capture: true \}\);\s*\n\s*this\.registerDomEvent\(this\.contentEl, "mouseup", \(e: MouseEvent\) => swallowNavButtons\(e, true\), \{ capture: true \}\);/, dashboard],
 ];
 
 const failed = checks.filter(([, pattern, source]) => !pattern.test(source));
