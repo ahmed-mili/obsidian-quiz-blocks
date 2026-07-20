@@ -2,6 +2,29 @@
    0) TOKENS
    ========================================================= */
 
+/* ── Système VERRE du dashboard (harmonisation Ahmed 2026-07-21) ──
+   Une seule source pour toutes les surfaces glassmorphism. Posé AUSSI sur
+   .qbd-select-menu : portalé au <body>, il sort du sous-arbre .qbd-root et
+   des tokens nus y résoudraient au vide (piège obsidian:plugin-design §3).
+   Échelle de profondeur : surface posée (cartes, panneau) = --qbd-glass-bg ;
+   surface flottante ou petit contrôle (menu, chip) = --qbd-glass-bg-dense,
+   plus opaque pour la lisibilité. Le reflet haut (sheen) est la signature
+   commune du verre ; l'ombre décolle la surface du wallpaper. */
+.qbd-root, .qbd-select-menu {
+  /* THEME-AWARE (demande Ahmed 2026-07-21) : aucune teinte figée — le verre
+     dérive du thème actif. --background-secondary est la surface assombrie
+     du thème (sur celui d'Ahmed, rgb(24,24,37) ≈ l'ancien rgba(16,22,40)
+     mesuré) ; liseré et reflet dérivent de --text-normal, donc clairs sur
+     thème sombre et sombres sur thème clair. */
+  --qbd-glass-bg: color-mix(in srgb, var(--background-secondary) 55%, transparent);
+  --qbd-glass-bg-dense: color-mix(in srgb, var(--background-secondary) 82%, transparent);
+  --qbd-glass-blur: blur(20px) saturate(140%);
+  --qbd-glass-blur-dense: blur(14px) saturate(130%);
+  --qbd-glass-edge: color-mix(in srgb, var(--text-normal) 14%, transparent);
+  --qbd-glass-sheen: inset 0 1px 0 color-mix(in srgb, var(--text-normal) 10%, transparent);
+  --qbd-glass-shadow: 0 12px 32px -12px rgba(0, 0, 0, 0.45);
+}
+
 body{
   --quiz-primary: #0ea5e9;
   --quiz-primary-hover: #0284c7;

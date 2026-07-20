@@ -120,15 +120,14 @@
 	font-size: 15px;
 	font-weight: 600;
 	/* Verre ADAPTÉ à un petit contrôle (retour Ahmed 2026-07-21 : la recette
-	   du panneau, à 50 % d'alpha, rend délavé sur un bouton) : fond plus
-	   dense, blur plus serré, liseré + reflet haut subtils qui « font
-	   verre » à cette échelle. !important : la base .qbd-select pose fond
+	   du panneau, à 50 % d'alpha, rend délavé sur un bouton) : variantes
+	   denses des tokens verre. !important : la base .qbd-select pose fond
 	   et box-shadow en !important contre le chrome bouton d'Obsidian. */
-	background-color: rgba(16, 22, 40, 0.72) !important;
-	backdrop-filter: blur(14px) saturate(130%);
-	-webkit-backdrop-filter: blur(14px) saturate(130%);
-	border-color: rgba(255, 255, 255, 0.12);
-	box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.09) !important;
+	background-color: var(--qbd-glass-bg-dense) !important;
+	backdrop-filter: var(--qbd-glass-blur-dense);
+	-webkit-backdrop-filter: var(--qbd-glass-blur-dense);
+	border-color: var(--qbd-glass-edge);
+	box-shadow: var(--qbd-glass-sheen) !important;
 }
 
 .qbd-quizzes-group-select .qbd-select-chevron svg {
@@ -323,7 +322,7 @@
 	/* Base = fond du panneau « Progress » (choix Ahmed 2026-07-21) ; le halo
 	   d'angle haut-gauche est recomposé PAR-DESSUS en couche translucide
 	   (l'ancien --tile-bg opaque rendrait le coin opaque sur ce fond verre). */
-	--card-bg: rgba(16, 22, 40, 0.5);
+	--card-bg: var(--qbd-glass-bg);
 	--card-mix-base: #181d2b;
 	--tile-bg:     color-mix(in oklab, var(--accent) 12%, transparent);
 	--icon-bg:     color-mix(in oklab, var(--accent) 22%, var(--card-mix-base));
@@ -340,8 +339,9 @@
 	background:
 		radial-gradient(360px 150px at 0% 0%, var(--tile-bg) 0%, transparent 68%),
 		var(--card-bg);
-	backdrop-filter: blur(20px) saturate(140%);
-	-webkit-backdrop-filter: blur(20px) saturate(140%);
+	backdrop-filter: var(--qbd-glass-blur);
+	-webkit-backdrop-filter: var(--qbd-glass-blur);
+	box-shadow: var(--qbd-glass-sheen), var(--qbd-glass-shadow);
 	cursor: pointer;
 	transition: border-color .2s cubic-bezier(0.2, 0.7, 0.3, 1),
 		box-shadow .2s cubic-bezier(0.2, 0.7, 0.3, 1),
@@ -350,7 +350,7 @@
 .qbd-module-card:hover {
 	transform: translateY(-3px);
 	border-color: var(--border-c);
-	box-shadow: 0 14px 30px -12px var(--glow), 0 0 0 1px var(--border-soft);
+	box-shadow: var(--qbd-glass-sheen), 0 14px 30px -12px var(--glow), 0 0 0 1px var(--border-soft);
 }
 /* Press : retombée quasi immédiate, cohérente avec les quiz cards. */
 .qbd-module-card:active {
@@ -786,11 +786,11 @@
 	flex-direction: column;
 	gap: 16px;
 	border-radius: 18px;
-	border: 1px solid rgba(255, 255, 255, 0.14);
-	background: rgba(16, 22, 40, 0.5);
-	backdrop-filter: blur(20px) saturate(140%);
-	-webkit-backdrop-filter: blur(20px) saturate(140%);
-	box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.16);
+	border: 1px solid var(--qbd-glass-edge);
+	background: var(--qbd-glass-bg);
+	backdrop-filter: var(--qbd-glass-blur);
+	-webkit-backdrop-filter: var(--qbd-glass-blur);
+	box-shadow: var(--qbd-glass-sheen), var(--qbd-glass-shadow);
 }
 
 @media (min-width: 1200px) {

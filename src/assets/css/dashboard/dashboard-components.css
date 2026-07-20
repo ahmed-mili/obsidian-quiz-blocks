@@ -811,19 +811,19 @@
 	min-width: 0;
 	max-width: 100%;
 	padding: 15px 17px 11px;
-	/* Fond = celui du panneau « Progress » (.qbd-progress-panel — choix
-	   Ahmed 2026-07-21) ; contours teintés à l'accent du dossier conservés
-	   (formule des cartes de module). */
-	--card-bg: rgba(16, 22, 40, 0.5);
+	/* Système verre commun (tokens.css — harmonisation 2026-07-21) ;
+	   contours teintés à l'accent du dossier conservés (formule des cartes
+	   de module). */
+	--card-bg: var(--qbd-glass-bg);
 	--border-c: color-mix(in oklab, var(--accent) 55%, #232939);
 	--border-soft: color-mix(in oklab, var(--accent) 25%, #262d3f);
 	--glow: color-mix(in oklab, var(--accent) 45%, transparent);
 	background: var(--card-bg);
-	backdrop-filter: blur(20px) saturate(140%);
-	-webkit-backdrop-filter: blur(20px) saturate(140%);
+	backdrop-filter: var(--qbd-glass-blur);
+	-webkit-backdrop-filter: var(--qbd-glass-blur);
 	border: 1px solid var(--border-soft);
 	border-radius: 15px;
-	box-shadow: none;
+	box-shadow: var(--qbd-glass-sheen), var(--qbd-glass-shadow);
 	transition: transform 0.2s cubic-bezier(0.2, 0.7, 0.3, 1), border-color 0.15s ease,
 		box-shadow 0.2s cubic-bezier(0.2, 0.7, 0.3, 1);
 }
@@ -831,7 +831,7 @@
 .qbd-quiz-card.qbd-quiz-card--folder:hover {
 	background: var(--card-bg);
 	border-color: var(--border-c);
-	box-shadow: 0 14px 30px -12px var(--glow), 0 0 0 1px var(--border-soft);
+	box-shadow: var(--qbd-glass-sheen), 0 14px 30px -12px var(--glow), 0 0 0 1px var(--border-soft);
 	transform: translateY(-3px);
 }
 
