@@ -71,7 +71,7 @@ export function renderQuizCard(
 	if (opts?.accent) { card.style.setProperty("--accent", opts.accent); card.addClass("qbd-quiz-card--tinted"); }
 	if (isFolderDrill) {
 		card.addClass("qbd-quiz-card--folder");
-		card.style.setProperty("--qbd-card-delay", `${120 + (opts.entryIndex ?? 0) * 60}ms`);
+		card.style.setProperty("--qbd-card-delay", `${100 + (opts.entryIndex ?? 0) * 45}ms`);
 	}
 
 	// ── État du quiz (calcul partagé quiz-mastery.ts) ──

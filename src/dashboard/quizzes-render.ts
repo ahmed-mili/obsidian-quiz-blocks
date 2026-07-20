@@ -180,7 +180,7 @@ export function renderQuizGrid(
 	// du drill (quiz-card.ts). Les délais sont posés à chaque rendu mais
 	// restent inertes hors .qbd-quizzes-enter (aucune animation à consommer).
 	let entryIndex = 0;
-	const entryDelay = (): string => `${120 + entryIndex++ * 60}ms`;
+	const entryDelay = (): string => `${100 + entryIndex++ * 45}ms`;
 	const archivedFolders = deps.ctx.plugin.settings.quizzesArchivedFolders || [];
 	if (filtered.length === 0 && archivedQuizzes.length === 0 && archivedFolders.length === 0) {
 		treeEl.createDiv({ cls: "qbd-empty-state" }, el => { el.createEl("p", { text: t("dashboard.quizzes.empty") }); });
