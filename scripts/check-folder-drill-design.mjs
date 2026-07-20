@@ -41,6 +41,11 @@ const checks = [
 	["les cartes quiz du drill n'animent qu'à l'entrée", /\.qbd-quizzes-enter \.qbd-quiz-card\.qbd-quiz-card--folder\s*\{[^}]*animation:\s*qbd-folder-card-in[^}]*animation-delay:\s*var\(--qbd-card-delay, 100ms\);/s, components],
 	["hors entrée la carte dossier n'a plus d'animation propre", /\.qbd-quiz-card\.qbd-quiz-card--folder\s*\{(?=[^}]*backdrop-filter)(?![^}]*animation)[^}]*\}/s, components],
 	["reduced-motion neutralise toute la transition d'entrée", /prefers-reduced-motion[\s\S]*\.qbd-quizzes-enter \.qbd-module-card,[\s\S]*animation:\s*none/, css],
+	["l'historique souris empile l'état quitté et vide la pile avant", /recordNav\(\): void \{[\s\S]*?this\.navBackStack\.push\(snap\);[\s\S]*?this\.navForwardStack\.length = 0;/, dashboard],
+	["une restauration n'empile jamais (garde isRestoringNav)", /recordNav\(\): void \{\s*\n\s*if \(this\.isRestoringNav\) return;/, dashboard],
+	["entrer dans un dossier enregistre l'état quitté", /function openModule\(folder: string\): void \{\s*\n[\s\S]{0,220}?ctx\.recordNav\(\);/, quizzes],
+	["le retour « All quizzes » enregistre l'état quitté", /back\.addEventListener\("click", \(\) => \{\s*\n\s*ctx\.recordNav\(\);\s*\n\s*openModuleFolder = null;/, quizzes],
+	["la restauration d'un drill repasse par openModule", /openFolder\(folder: string\) \{ openModule\(folder\); \}/, quizzes],
 ];
 
 const failed = checks.filter(([, pattern, source]) => !pattern.test(source));

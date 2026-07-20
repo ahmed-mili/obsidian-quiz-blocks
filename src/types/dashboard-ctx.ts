@@ -147,6 +147,10 @@ export interface DashboardView extends ItemView {
 	navigate(view: DashboardViewName, data?: { quiz?: QuizIndexEntry }): void;
 	renderSidebar(): void;
 	renderCurrentView(): void;
+	/** Historique boutons souris — cf. QuizDashboardView (dashboard.ts). */
+	recordNav(): void;
+	goNavBack(): void;
+	goNavForward(): void;
 }
 
 /* ════════════════════════════════════════════════════════
@@ -176,6 +180,11 @@ export interface DashboardCtx {
 	contentEl: HTMLElement;
 	/** dashboard.js:62, délègue à `view.navigate(view, data)` (dashboard.js:127-139). `data.quiz` est le seul champ lu. */
 	navigate: (view: DashboardViewName, data?: { quiz?: QuizIndexEntry }) => void;
+	/** Historique boutons souris (spec 2026-07-20-mouse-nav-history) : empile
+	    l'état de navigation COURANT avant un changement — appelé par quizzes.ts
+	    juste avant drill in/out. Délègue à `view.recordNav()` (no-op pendant
+	    une restauration, garde isRestoringNav côté vue). */
+	recordNav: () => void;
 	/** dashboard.js:63, `() => this.app.workspace.getActiveFile()`. */
 	getActiveFile: () => TFile | null;
 }

@@ -30,6 +30,13 @@ export interface QuizzesHandlers {
 	    rail : sans ça, entrer dans un module puis revenir par le rail rouvrirait
 	    le module au lieu de la grille (le fil d'Ariane, lui, le remet déjà). */
 	resetDrilldown(): void;
+	/** Dossier ouvert du drill-down (null = grille) — lu par captureNav()
+	    (historique boutons souris, dashboard.ts). */
+	getOpenFolder(): string | null;
+	/** Restauration d'historique : rouvre un dossier par le MÊME chemin de
+	    code qu'un clic de carte (openModule) — le recordNav interne est
+	    neutralisé par la garde isRestoringNav de la vue. */
+	openFolder(folder: string): void;
 }
 
 export function createQuizzesHandlers(ctx: DashboardCtx): QuizzesHandlers {
@@ -132,6 +139,9 @@ export function createQuizzesHandlers(ctx: DashboardCtx): QuizzesHandlers {
 	}
 
 	function openModule(folder: string): void {
+		// Historique boutons souris : l'état quitté (grille ou autre dossier)
+		// doit rester restaurable (spec 2026-07-20-mouse-nav-history).
+		ctx.recordNav();
 		openModuleFolder = folder;
 		if (containerRef) render(containerRef);
 	}
@@ -226,6 +236,7 @@ export function createQuizzesHandlers(ctx: DashboardCtx): QuizzesHandlers {
 			setIcon(backIcon, "chevron-left");
 			back.createSpan({ text: t("dashboard.quizzes.backToModules") });
 			back.addEventListener("click", () => {
+				ctx.recordNav();
 				openModuleFolder = null;
 				if (containerRef) render(containerRef);
 			});
@@ -322,5 +333,7 @@ export function createQuizzesHandlers(ctx: DashboardCtx): QuizzesHandlers {
 	return {
 		render,
 		resetDrilldown() { openModuleFolder = null; lastPaintedView = null; },
+		getOpenFolder() { return openModuleFolder; },
+		openFolder(folder: string) { openModule(folder); },
 	};
 }

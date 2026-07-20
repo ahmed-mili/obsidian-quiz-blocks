@@ -18,6 +18,21 @@ import type { Scanner, QuizIndexEntry } from "./dashboard/scanner";
 import type { StatsStore } from "./dashboard/stats-store";
 import type { Hotkey } from "./hotkey-format";
 
+/** Photo d'un état de navigation pour l'historique boutons souris (spec
+    2026-07-20-mouse-nav-history) : page + dossier ouvert + quiz du détail.
+    État d'interface, jamais persisté. */
+interface NavSnapshot {
+	view: DashboardViewName;
+	/** Dossier du drill-down — pertinent seulement si view === "quizzes". */
+	drillFolder: string | null;
+	/** Quiz affiché — pertinent seulement si view === "detail". */
+	quiz: QuizIndexEntry | null;
+}
+
+/** Plafond des piles d'historique (shift au-delà) : borne la mémoire sans
+    jamais gêner un usage réel. */
+const NAV_HISTORY_MAX = 50;
+
 /* ══════════════════════════════════════════════════════════
    QUIZ DASHBOARD VIEW — ItemView Obsidian
    Layout 2 colonnes (sidebar + contenu) avec navigation
@@ -47,6 +62,68 @@ export class QuizDashboardView extends ItemView implements DashboardView {
 	private _unregisterScanner: (() => void) | null = null;
 	private _unregisterLeafChange: (() => void) | null = null;
 	private _hkHandlers?: KeymapEventHandler[];
+
+	// ── Historique boutons souris (spec 2026-07-20-mouse-nav-history) ──
+	private navBackStack: NavSnapshot[] = [];
+	private navForwardStack: NavSnapshot[] = [];
+	/* Vrai pendant l'application d'un snapshot : navigate()/recordNav() ne
+	   doivent alors PAS empiler — une restauration n'est pas une navigation. */
+	private isRestoringNav = false;
+
+	private captureNav(): NavSnapshot {
+		return {
+			view: this.currentView,
+			drillFolder: this.quizzes ? this.quizzes.getOpenFolder() : null,
+			quiz: this.currentView === "detail" ? this.selectedQuiz : null,
+		};
+	}
+
+	private sameNav(a: NavSnapshot, b: NavSnapshot): boolean {
+		return a.view === b.view && a.drillFolder === b.drillFolder
+			&& (a.quiz?.path ?? null) === (b.quiz?.path ?? null);
+	}
+
+	/** Empile l'état COURANT sur back et vide forward. Appelé par navigate()
+	    et, via ctx.recordNav, par les transitions de drill (quizzes.ts). */
+	recordNav(): void {
+		if (this.isRestoringNav) return;
+		const snap = this.captureNav();
+		// Dédoublonnage défensif : deux enregistrements consécutifs du même
+		// état (ex. drill in juste après une navigation) ne créent qu'une entrée.
+		const top = this.navBackStack[this.navBackStack.length - 1];
+		if (top && this.sameNav(top, snap)) return;
+		this.navBackStack.push(snap);
+		if (this.navBackStack.length > NAV_HISTORY_MAX) this.navBackStack.shift();
+		this.navForwardStack.length = 0;
+	}
+
+	private applyNavSnapshot(s: NavSnapshot): void {
+		this.isRestoringNav = true;
+		try {
+			this.navigate(s.view, s.quiz ? { quiz: s.quiz } : undefined);
+			if (s.view === "quizzes" && s.drillFolder !== null && this.quizzes) {
+				// navigate() vient de refermer le drill (resetDrilldown) : rouvrir
+				// le dossier restauré — c'est une ENTRÉE, la transition rejoue.
+				this.quizzes.openFolder(s.drillFolder);
+			}
+		} finally {
+			this.isRestoringNav = false;
+		}
+	}
+
+	goNavBack(): void {
+		const snap = this.navBackStack.pop();
+		if (!snap) return;
+		this.navForwardStack.push(this.captureNav());
+		this.applyNavSnapshot(snap);
+	}
+
+	goNavForward(): void {
+		const snap = this.navForwardStack.pop();
+		if (!snap) return;
+		this.navBackStack.push(this.captureNav());
+		this.applyNavSnapshot(snap);
+	}
 
 	constructor(leaf: WorkspaceLeaf, plugin: DashboardPlugin) {
 		super(leaf);
@@ -88,6 +165,7 @@ export class QuizDashboardView extends ItemView implements DashboardView {
 			navEl,
 			contentEl,
 			navigate: (view, data) => this.navigate(view, data),
+			recordNav: () => this.recordNav(),
 			getActiveFile: () => this.app.workspace.getActiveFile()
 		};
 
@@ -160,6 +238,17 @@ export class QuizDashboardView extends ItemView implements DashboardView {
 	}
 
 	navigate(view: DashboardViewName, data?: { quiz?: QuizIndexEntry }): void {
+		// Historique boutons souris : empiler l'état QUITTÉ — sauf restauration
+		// (goNavBack/Forward gèrent leurs piles) et sauf navigation immobile
+		// (re-clic du rail sur la page courante : rien à restaurer).
+		const arriving: NavSnapshot = {
+			view,
+			drillFolder: null, // naviguer referme toujours le drill (resetDrilldown)
+			quiz: view === "detail" ? (data?.quiz ?? this.selectedQuiz) : null,
+		};
+		if (!this.isRestoringNav && !this.sameNav(this.captureNav(), arriving)) {
+			this.recordNav();
+		}
 		if (data) {
 			if (data.quiz) this.selectedQuiz = data.quiz;
 		}
