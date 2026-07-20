@@ -5,12 +5,15 @@ import type { DashboardCtx } from "../types/dashboard-ctx";
 import type { QuizIndexEntry } from "./scanner";
 import type { QuizStatRecord } from "./stats-store";
 import { parseModuleMap, applyModuleOverrides, moduleForQuiz } from "./quiz-modules";
+import { isMastered } from "./quiz-mastery";
 import type { ModuleMap } from "./quiz-modules";
 import { createSelect, openActionMenu } from "./ui-select";
 import { isFolderArchived } from "./quiz-menu";
 import { CreateFolderModal, CreateQuizModal } from "./folder-create";
 import { renderQuizGrid, renderModuleDrill } from "./quizzes-render";
 import type { GroupingKey } from "./quizzes-render";
+import { moduleAccent } from "./module-color";
+import { DEFAULT_MODULE_ICON } from "./icon-picker";
 
 /* ══════════════════════════════════════════════════════════
    QUIZZES VIEW — Dashboard
@@ -127,16 +130,14 @@ export function createQuizzesHandlers(ctx: DashboardCtx): QuizzesHandlers {
 		return quizzes.filter(q => !isFolderArchived(ctx, moduleForQuiz(q.path, map).folder));
 	}
 
-	/* Bascule entre la grille et le drill-down d'un module ouvert. */
-	function renderContent(treeEl: HTMLElement, quizzes: QuizIndexEntry[], stats: Record<string, QuizStatRecord>): void {
+	/* Bascule entre la grille et le drill-down d'un module ouvert. `inModule`
+	   (déjà filtré, PAS d'applyFilters au drill : on entre aussi dans un
+	   dossier ARCHIVÉ depuis sa carte de la section « Archivés » et on y voit
+	   son contenu) est calculé UNE fois par render() — mêmes quiz que les
+	   stats du header. */
+	function renderContent(treeEl: HTMLElement, quizzes: QuizIndexEntry[], inModule: QuizIndexEntry[], stats: Record<string, QuizStatRecord>): void {
 		if (openModuleFolder !== null) {
-			// PAS d'applyFilters au drill : on entre aussi dans un dossier
-			// ARCHIVÉ (depuis sa carte de la section « Archivés ») et on y voit
-			// son contenu.
-			renderModuleDrill(treeEl, ctx, quizzes, stats, effectiveMap(), openModuleFolder, (q) => q, () => {
-				openModuleFolder = null;
-				if (containerRef) render(containerRef);
-			}, () => { if (containerRef) render(containerRef); });
+			renderModuleDrill(treeEl, ctx, inModule, stats, effectiveMap(), openModuleFolder, () => { if (containerRef) render(containerRef); });
 		} else {
 			const map = effectiveMap();
 			const archivedQuizzes = quizzes.filter(q => isFolderArchived(ctx, moduleForQuiz(q.path, map).folder));
@@ -170,17 +171,85 @@ export function createQuizzesHandlers(ctx: DashboardCtx): QuizzesHandlers {
 		// rendu se fait donc sans UE/noms résolus, puis loadModuleMap() re-rend.
 		if (!moduleMapLoaded) { void loadModuleMap(); }
 
+		const map = effectiveMap();
+		// Quiz du dossier ouvert : calculé UNE fois, réutilisé par les stats du
+		// header ET le panneau Progrès (renderModuleDrill) — les deux comptent
+		// alors exactement les mêmes quiz, jamais deux totaux qui divergent.
+		const inModule: QuizIndexEntry[] = openModuleFolder !== null
+			? quizzes.filter(q => moduleForQuiz(q.path, map).folder === openModuleFolder)
+			: [];
+		const openModuleInfo = openModuleFolder !== null ? map.byFolder.get(openModuleFolder) : undefined;
+		const openModuleAccent = openModuleFolder !== null
+			? moduleAccent(openModuleInfo ?? { folder: openModuleFolder })
+			: null;
+
+		// Le dossier ouvert possède sa propre bannière : le halo doit rester
+		// derrière le breadcrumb et le header, sans affecter la vue racine.
+		let headerParent = container;
+		if (openModuleAccent !== null) {
+			const hero = container.createDiv({ cls: "qbd-quizzes-folder-hero" });
+			hero.style.setProperty("--accent", openModuleAccent);
+			hero.createDiv({ cls: "qbd-quizzes-folder-halo" });
+			headerParent = hero.createDiv({ cls: "qbd-quizzes-folder-hero-inner" });
+		}
+
+		// ── Fil d'Ariane (drill-down uniquement) — remonté AU-DESSUS du header
+		// (design claude.ai, capture 2026-07-20) : « ← All quizzes » en petit,
+		// le header devient le vrai titre du dossier. ──
+		if (openModuleFolder !== null) {
+			const crumb = headerParent.createDiv({ cls: "qbd-quizzes-breadcrumb" });
+			const back = crumb.createEl("button", { cls: "qbd-quizzes-crumb-back" });
+			back.type = "button";
+			const backIcon = back.createSpan({ cls: "qbd-quizzes-crumb-icon" });
+			setIcon(backIcon, "chevron-left");
+			back.createSpan({ text: t("dashboard.quizzes.backToModules") });
+			back.addEventListener("click", () => {
+				openModuleFolder = null;
+				if (containerRef) render(containerRef);
+			});
+		}
+
 		// ── Header ──
-		const header = container.createDiv({ cls: "qbd-quizzes-header" });
-		const titleEl = header.createEl("h2", { cls: "qbd-quizzes-title" });
+		const header = headerParent.createDiv({ cls: "qbd-quizzes-header" });
+		const titleBlock = openModuleFolder === null
+			? header
+			: header.createDiv({ cls: "qbd-quizzes-title-block" });
+		const titleEl = titleBlock.createEl("h2", { cls: "qbd-quizzes-title" });
 		const titleIcon = titleEl.createSpan({ cls: "qbd-quizzes-title-icon" });
-		setIcon(titleIcon, "library");
-		titleEl.createSpan({ text: t("dashboard.quizzes.title") });
+		if (openModuleFolder === null) {
+			// Racine « Mes quiz » : icône générique seule (libellé retiré).
+			setIcon(titleIcon, "library");
+		} else {
+			// Dans un dossier : le header EST le titre du dossier — icône + nom du
+			// module, teinte à l'accent du dossier (comme sa carte). Le nom n'est
+			// donc plus répété dans le fil d'Ariane (cf. quizzes-render.ts).
+			// Colonne texte + soulignement dégradé (référence claude.ai) sous le nom.
+			setIcon(titleIcon, openModuleInfo?.icon || DEFAULT_MODULE_ICON);
+			titleEl.createSpan({ cls: "qbd-quizzes-title-text", text: openModuleInfo?.name || openModuleFolder });
+			titleBlock.createDiv({ cls: "qbd-quizzes-title-underline" });
+		}
+
+		// ── Actions du header : stats (drill-down) + bouton pilule ── (groupées
+		// pour rester alignées à droite, comme la référence).
+		const headerActions = header.createDiv({ cls: "qbd-quizzes-header-actions" });
+		if (openModuleFolder !== null) {
+			const masteredCount = inModule.filter(q => isMastered(q, stats)).length;
+			const statsWrap = headerActions.createDiv({ cls: "qbd-quizzes-header-stats" });
+			const addStat = (n: number, key: TransKey, modifier?: string): void => {
+				const item = statsWrap.createDiv({ cls: "qbd-quizzes-header-stat" });
+				if (modifier) item.addClass(modifier);
+				item.createDiv({ cls: "qbd-quizzes-header-stat-num", text: String(n) });
+				item.createDiv({ cls: "qbd-quizzes-header-stat-label", text: t(key) });
+			};
+			addStat(inModule.length, "dashboard.quizzes.statQuizzes");
+			statsWrap.createDiv({ cls: "qbd-quizzes-header-divider" });
+			addStat(masteredCount, "dashboard.card.mastered", "qbd-quizzes-header-stat--mastered");
+		}
 
 		if (openModuleFolder === null) {
 			// Grille : « Nouveau dossier » — même bouton pilule blanc que « Create
 			// Study Set » de StudySmarter (capture 2026-07-18), libellé adapté.
-			const newBtn = header.createEl("button", { cls: "qbd-btn--create" });
+			const newBtn = headerActions.createEl("button", { cls: "qbd-btn--create" });
 			const newIcon = newBtn.createSpan({ cls: "qbd-btn-icon" });
 			setIcon(newIcon, "plus");
 			newBtn.createSpan({ text: t("dashboard.quizzes.new") });
@@ -193,7 +262,7 @@ export function createQuizzesHandlers(ctx: DashboardCtx): QuizzesHandlers {
 			// modal à trois options que « Nouveau dossier » (IA / vierge /
 			// import), décliné pour le dossier OUVERT — homogénéité demandée.
 			const folder = openModuleFolder;
-			const newQuizBtn = header.createEl("button", { cls: "qbd-btn--create" });
+			const newQuizBtn = headerActions.createEl("button", { cls: "qbd-btn--create" });
 			const newQuizIcon = newQuizBtn.createSpan({ cls: "qbd-btn-icon" });
 			setIcon(newQuizIcon, "plus");
 			newQuizBtn.createSpan({ text: t("dashboard.quizzes.newQuiz") });
@@ -227,7 +296,7 @@ export function createQuizzesHandlers(ctx: DashboardCtx): QuizzesHandlers {
 
 		// ── Contenu : grille (UE/Récent) ou drill-down d'un module ──
 		const treeEl = container.createDiv({ cls: "qbd-quizzes-tree" });
-		renderContent(treeEl, quizzes, stats);
+		renderContent(treeEl, quizzes, inModule, stats);
 	}
 
 	return {

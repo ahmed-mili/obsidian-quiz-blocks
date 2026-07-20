@@ -92,6 +92,15 @@ export const EN_DASHBOARD = {
 	"dashboard.quizzes.moduleQuizzesOne": "{count} quiz",
 	"dashboard.quizzes.moduleQuizzesOther": "{count} quizzes",
 	"dashboard.quizzes.backToModules": "All quizzes",
+	/* ── Header d'un dossier ouvert (icône + nom + stats + panneau Progrès,
+	   design claude.ai capture 2026-07-20) ── */
+	"dashboard.quizzes.statQuizzes": "Quizzes",
+	"dashboard.quizzes.progressTitle": "Progress",
+	"dashboard.quizzes.progressCount": "{done}/{total} quiz",
+	/* "Mastered"/"To review" du donut réutilisent dashboard.card.mastered/review
+	   (même mot que la pastille d'état d'une carte) ; "To learn" agrège fresh
+	   ET progress (rien de tel n'existe pour une carte individuelle). */
+	"dashboard.quizzes.progressToLearn": "To learn",
 	"dashboard.quizzes.groupByActivity": "Recent",
 	"dashboard.quizzes.recentWeek": "Last 7 days",
 	"dashboard.quizzes.recentMonth": "Last 30 days",

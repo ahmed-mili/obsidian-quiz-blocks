@@ -10,6 +10,7 @@ import { buildQuizCardMenu, buildModuleCardMenu } from "./quiz-menu";
 import { renderModuleCard } from "./module-card";
 import { moduleForQuiz, buildModuleGroups, buildUeGroups } from "./quiz-modules";
 import type { ModuleMap, ModuleGroup, UeGroup } from "./quiz-modules";
+import { computeQuizState } from "./quiz-mastery";
 import { buildRecentModuleGroups } from "./quiz-recent";
 import type { RecentGroupKey } from "./quiz-recent";
 import { moduleAccent } from "./module-color";
@@ -206,52 +207,103 @@ export function renderQuizGrid(
 	}
 }
 
-/** Filtre partagé (exclusion des archivés) — grille ET drill-down. */
-export type ApplyFilters = (quizzes: QuizIndexEntry[]) => QuizIndexEntry[];
-
-/* Drill-down : fil d'Ariane (« Tous les quiz » › nom du module) + les quiz de
-   CE module, filtrés (recherche + pilule) comme la grille. moduleForQuiz (pas
-   buildModuleGroups par quiz) : O(1) par quiz au lieu de reconstruire un
-   groupe entier à chaque itération. */
+/** Drill-down d'un module ouvert : grille de ses quiz + panneau « Progrès »
+    (design claude.ai, capture 2026-07-20). Le fil d'Ariane et le titre vivent
+    désormais dans quizzes.ts (le header EST le titre du dossier) ; `inModule`
+    arrive déjà filtré par module — mêmes quiz que les stats du header
+    (calculés UNE fois par render(), cf. quizzes.ts). */
 export function renderModuleDrill(
 	treeEl: HTMLElement,
 	ctx: DashboardCtx,
-	quizzes: QuizIndexEntry[],
+	inModule: QuizIndexEntry[],
 	stats: Record<string, QuizStatRecord>,
 	map: ModuleMap,
 	openModuleFolder: string,
-	applyFilters: ApplyFilters,
-	onBack: () => void,
 	/* Re-rendu SANS refermer le drill-down (reset de stats depuis le menu ⋯). */
 	rerender: () => void
 ): void {
 	treeEl.empty();
 
-	const crumb = treeEl.createDiv({ cls: "qbd-quizzes-breadcrumb" });
-	const back = crumb.createEl("button", { cls: "qbd-quizzes-crumb-back" });
-	back.type = "button";
-	const backIcon = back.createSpan({ cls: "qbd-quizzes-crumb-icon" });
-	setIcon(backIcon, "chevron-left");
-	back.createSpan({ text: t("dashboard.quizzes.backToModules") });
-	back.addEventListener("click", onBack);
-
-	// Nom du module ouvert (depuis la table ; fallback = le dossier).
-	const info = map.byFolder.get(openModuleFolder);
-	crumb.createSpan({ cls: "qbd-quizzes-crumb-current", text: info ? info.name : openModuleFolder });
-
-	const inModule = applyFilters(quizzes).filter(q => moduleForQuiz(q.path, map).folder === openModuleFolder);
 	if (inModule.length === 0) {
 		treeEl.createDiv({ cls: "qbd-empty-state" }, el => { el.createEl("p", { text: t("dashboard.quizzes.empty") }); });
 		return;
 	}
-	// Tous les quiz du module ouvert partagent l'accent de CE dossier.
+
+	// Module ouvert : sert à l'accent des cartes (le nom est déjà porté par le
+	// titre du header, quizzes.ts).
+	const info = map.byFolder.get(openModuleFolder);
 	const accent = moduleAccent(info ?? { folder: openModuleFolder });
-	const grid = treeEl.createDiv({ cls: "qbd-home-grid" });
-	for (const quiz of inModule) {
+
+	// ── Layout 2 colonnes : grille de cartes + panneau « Progrès » (repli 1
+	// colonne sous une largeur seuil, cf. dashboard-quizzes.css). ──
+	const layout = treeEl.createDiv({ cls: "qbd-quizzes-drill-layout" });
+	layout.style.setProperty("--accent", accent);
+	const grid = layout.createDiv({ cls: "qbd-home-grid qbd-quizzes-drill-grid" });
+	for (const [index, quiz] of inModule.entries()) {
 		renderQuizCard(grid, quiz, stats[quiz.path], (q) => ctx.navigate("detail", { quiz: q }), {
 			onPlay: (q) => openQuizForPlay(ctx.app, q),
 			menu: buildQuizCardMenu(ctx, rerender),
 			accent,
+			variant: "folder",
+			entryIndex: index,
 		});
 	}
+
+	renderProgressPanel(layout, inModule, stats);
+}
+
+/** Donut structurel du handoff 7a : un anneau conique de 150 px et un disque
+    central opaque. Le centre fait partie du donut, le pourcentage ne peut donc
+    plus dériver hors du trou selon les métriques de police. */
+function renderDonut(container: HTMLElement, mastered: number, review: number, total: number, centerPct: number): void {
+	const masteredEnd = total > 0 ? mastered / total * 100 : 0;
+	const reviewEnd = total > 0 ? (mastered + review) / total * 100 : 0;
+	const donut = container.createDiv({ cls: "qbd-progress-donut" });
+	donut.style.setProperty("--qbd-donut-mastered-end", `${masteredEnd}%`);
+	donut.style.setProperty("--qbd-donut-review-end", `${reviewEnd}%`);
+	donut.setAttribute("role", "img");
+	donut.setAttribute("aria-label", `${centerPct}%`);
+
+	const centerLabel = donut.createDiv({ cls: "qbd-progress-donut-center" });
+	centerLabel.createEl("b", { cls: "qbd-progress-donut-pct", text: String(centerPct) });
+	centerLabel.createSpan({ cls: "qbd-progress-donut-pct-sign", text: "%" });
+}
+
+/** Panneau « Progrès » : donut (mastered/review/à-apprendre) + légende, à
+    côté de la grille du module ouvert. `inModule` = TOUS les quiz du dossier
+    (pas juste ceux filtrés par une recherche) : c'est un statut du dossier
+    entier. Regroupement des 4 états de computeQuizState en 3 catégories —
+    "review" (quiz raté, seuil déjà atteint) reste seul (correspondance
+    directe avec « à réviser ») ; "progress" (en cours, pas fini) ET "fresh"
+    (jamais commencé) fusionnent dans « à apprendre » : aucun des deux n'est
+    encore acquis, et le triplé de la référence ne laisse pas de 4e case. */
+function renderProgressPanel(parent: HTMLElement, inModule: QuizIndexEntry[], stats: Record<string, QuizStatRecord>): void {
+	const total = inModule.length;
+	let masteredN = 0, reviewN = 0, learnN = 0;
+	for (const quiz of inModule) {
+		const { state } = computeQuizState(quiz, stats[quiz.path]);
+		if (state === "mastered") masteredN++;
+		else if (state === "review") reviewN++;
+		else learnN++;
+	}
+	const pctOf = (n: number): number => total > 0 ? Math.round(n / total * 100) : 0;
+
+	const panel = parent.createDiv({ cls: "qbd-progress-panel" });
+	const head = panel.createDiv({ cls: "qbd-progress-panel-head" });
+	head.createDiv({ cls: "qbd-progress-panel-title", text: t("dashboard.quizzes.progressTitle") });
+	head.createDiv({ cls: "qbd-progress-panel-count", text: t("dashboard.quizzes.progressCount", { done: masteredN, total }) });
+
+	const donutWrap = panel.createDiv({ cls: "qbd-progress-donut-wrap" });
+	renderDonut(donutWrap, masteredN, reviewN, total, pctOf(masteredN));
+
+	const legend = panel.createDiv({ cls: "qbd-progress-legend" });
+	const addRow = (dotMod: string, label: string, n: number): void => {
+		const row = legend.createDiv({ cls: "qbd-progress-legend-row" });
+		row.createDiv({ cls: `qbd-progress-legend-dot qbd-progress-legend-dot--${dotMod}` });
+		row.createDiv({ cls: "qbd-progress-legend-label", text: label });
+		row.createDiv({ cls: "qbd-progress-legend-pct", text: `${pctOf(n)}%` });
+	};
+	addRow("mastered", t("dashboard.card.mastered"), masteredN);
+	addRow("review", t("dashboard.card.review"), reviewN);
+	addRow("learn", t("dashboard.quizzes.progressToLearn"), learnN);
 }

@@ -23,19 +23,20 @@
 	gap: 10px;
 }
 
-/* Icône bleue (accent) à gauche du titre « My quizzes ». */
+/* Icône à gauche du titre : accent du dossier ouvert (--accent posé sur le
+   titre par quizzes.ts), sinon l'accent d'interface (racine « Mes quiz »). */
 .qbd-quizzes-title-icon {
 	display: inline-flex;
 	align-items: center;
-	color: var(--interactive-accent);
+	color: var(--accent, var(--interactive-accent));
 	flex: 0 0 auto;
 }
 
 .qbd-quizzes-title-icon svg {
 	width: 28px;
 	height: 28px;
-	stroke: var(--interactive-accent);
-	color: var(--interactive-accent);
+	stroke: var(--accent, var(--interactive-accent));
+	color: var(--accent, var(--interactive-accent));
 }
 
 /* ── Search ── */
@@ -451,13 +452,52 @@
 	margin-top: 12px;
 }
 
+@keyframes qbd-folder-hero-in {
+	from { opacity: 0; transform: translateY(-10px); }
+	to { opacity: 1; transform: none; }
+}
+
+@keyframes qbd-folder-card-in {
+	from { opacity: 0; transform: translateY(16px) scale(0.98); }
+	to { opacity: 1; transform: none; }
+}
+
+/* Bannière autonome du dossier ouvert. Son accent est posé sur le wrapper :
+   titre, icône, halo, stats et contenu héritent tous de la même source. */
+.qbd-quizzes-folder-hero {
+	position: relative;
+	margin-bottom: 26px;
+	animation: qbd-folder-hero-in 0.45s ease both;
+}
+
+.qbd-quizzes-folder-halo {
+	position: absolute;
+	left: 0;
+	top: 0;
+	width: min(620px, 100%);
+	height: 160px;
+	background:
+		radial-gradient(ellipse 30% 42% at 34% 52%, color-mix(in srgb, var(--accent) 16%, transparent), transparent 100%),
+		radial-gradient(ellipse 44% 50% at 44% 50%, color-mix(in srgb, var(--accent) 10%, transparent), transparent 100%);
+	pointer-events: none;
+}
+
+.qbd-quizzes-folder-hero-inner {
+	position: relative;
+}
+
+.qbd-quizzes-folder-hero + .qbd-quizzes-tree {
+	margin-top: 0;
+}
+
 /* ── Fil d'Ariane du drill-down (« Tous les quiz » › nom du module) ── */
 .qbd-quizzes-breadcrumb {
 	display: flex;
 	align-items: center;
 	gap: 8px;
-	margin-bottom: 12px;
-	font-size: 13px;
+	margin-bottom: 10px;
+	font-family: var(--font-monospace, monospace);
+	font-size: 12px;
 }
 
 /* `.qbd-root` préfixe : c'est un `button`, sinon `button:not(.clickable-icon)`
@@ -476,12 +516,360 @@
 	cursor: pointer;
 }
 
-.qbd-root .qbd-quizzes-crumb-back:hover {
-	background: var(--background-modifier-hover);
+.qbd-quizzes-folder-hero .qbd-quizzes-crumb-back {
+	padding: 0;
+}
+
+/* ══════════════════════════════════════════════════════════
+   HEADER D'UN DOSSIER OUVERT — design claude.ai (capture 2026-07-20) :
+   nom en serif + soulignement dégradé lumineux (accent du dossier),
+   stats QUIZZES/MASTERED + bouton pilule alignés à droite.
+   ═════════════════════════════════════════════════════════ */
+
+/* Le bloc gauche reproduit la structure 7a : ligne icône + titre, puis trait
+   séparé. La vue racine conserve son header historique. */
+.qbd-quizzes-title-block {
+	flex: 1 1 auto;
+	min-width: 0;
+}
+
+.qbd-quizzes-title-text {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+/* Trait 7a : les 61 px correspondent exactement à l'icône 46 px + gap 15 px. */
+.qbd-quizzes-title-underline {
+	margin-top: 13px;
+	margin-left: 61px;
+	width: 200px;
+	height: 3px;
+	border-radius: 2px;
+	background: linear-gradient(90deg, var(--accent), color-mix(in srgb, var(--accent) 5%, transparent));
+	box-shadow: 0 0 16px color-mix(in srgb, var(--accent) 55%, transparent);
+}
+
+.qbd-quizzes-folder-hero .qbd-quizzes-header {
+	align-items: flex-end;
+	gap: 24px;
+	margin-bottom: 0;
+}
+
+.qbd-quizzes-folder-hero .qbd-quizzes-title {
+	gap: 15px;
+	font-family: Constantia, "Iowan Old Style", "Palatino Linotype", Georgia, serif;
+	font-size: 34px;
+	font-weight: 700;
+	font-variant-numeric: lining-nums;
+	color: var(--accent);
+	letter-spacing: -0.01em;
+	text-shadow: 0 2px 22px rgba(0, 0, 0, 0.65), 0 0 30px color-mix(in srgb, var(--accent) 30%, transparent);
+}
+
+.qbd-quizzes-folder-hero .qbd-quizzes-title-icon svg {
+	width: 46px;
+	height: 46px;
+	color: var(--accent);
+	stroke: var(--accent);
+	stroke-width: 1.5;
+	filter: drop-shadow(0 0 16px color-mix(in srgb, var(--accent) 55%, transparent));
+}
+
+.qbd-quizzes-folder-hero .qbd-quizzes-title-icon svg > :first-child {
+	fill: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+
+.qbd-quizzes-folder-hero .qbd-quizzes-title-icon svg > :not(:first-child) {
+	fill: none;
+}
+
+/* Stats + bouton pilule, groupés à droite du header. */
+.qbd-quizzes-header-actions {
+	display: flex;
+	align-items: center;
+	gap: 20px;
+	flex-shrink: 0;
+}
+
+.qbd-quizzes-header-stats {
+	display: flex;
+	align-items: center;
+	gap: 22px;
+}
+
+.qbd-quizzes-header-divider {
+	width: 1px;
+	height: 32px;
+	background: rgba(255, 255, 255, 0.18);
+}
+
+.qbd-quizzes-header-stat {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+}
+
+.qbd-quizzes-header-stat-num {
+	font-size: 20px;
+	font-weight: 700;
+	line-height: 1.15;
+	color: var(--text-normal);
+	font-variant-numeric: tabular-nums;
+}
+
+.qbd-quizzes-header-stat--mastered .qbd-quizzes-header-stat-num {
+	color: var(--accent);
+	text-shadow: 0 0 12px color-mix(in srgb, var(--accent) 50%, transparent);
+}
+
+.qbd-quizzes-header-stat-label {
+	margin-top: 2px;
+	font-size: 9.5px;
+	font-weight: 600;
+	color: var(--text-faint);
+	text-transform: uppercase;
+	letter-spacing: 0.06em;
+	white-space: nowrap;
+}
+
+.qbd-quizzes-folder-hero .qbd-btn--create {
+	margin-left: 8px;
+	height: auto;
+	padding: 11px 18px !important;
+	border-radius: 11px;
+	background: rgba(231, 235, 247, 0.92) !important;
+	color: #141a2c !important;
+	font-size: 14px;
+}
+
+/* ══════════════════════════════════════════════════════════
+   DRILL-DOWN — layout 2 colonnes : grille de cartes + panneau « Progrès »
+   (design claude.ai, capture 2026-07-20). Repli 1 colonne sous une largeur
+   de panneau insuffisante (fenêtre Obsidian étroite, desktop) ET sous
+   .is-mobile (mobile réel/émulé, cf. dashboard-base.css — l'émulation garde
+   un viewport large, les media queries seules n'y suffisent pas).
+   ═════════════════════════════════════════════════════════ */
+.qbd-quizzes-drill-layout {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) 300px;
+	gap: 20px;
+	align-items: start;
+	min-width: 0;
+}
+
+.qbd-quizzes-drill-grid {
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: 14px;
+	min-width: 0;
+}
+
+.qbd-progress-panel {
+	--qbd-progress-neutral: rgba(255, 255, 255, 0.12);
+	--qbd-progress-review: #fbbf24;
+	width: 300px;
+	box-sizing: border-box;
+	padding: 22px 24px;
+	display: flex;
+	flex-direction: column;
+	gap: 16px;
+	border-radius: 18px;
+	border: 1px solid rgba(255, 255, 255, 0.14);
+	background: rgba(16, 22, 40, 0.5);
+	backdrop-filter: blur(20px) saturate(140%);
+	-webkit-backdrop-filter: blur(20px) saturate(140%);
+	box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.16);
+	animation: qbd-folder-card-in 0.5s cubic-bezier(0.2, 0.7, 0.3, 1) both;
+	animation-delay: 220ms;
+}
+
+@media (min-width: 1200px) {
+	.qbd-quizzes-drill-grid {
+		grid-template-columns: repeat(3, minmax(0, 1fr));
+	}
+}
+
+@media (max-width: 860px) {
+	.qbd-quizzes-drill-layout { grid-template-columns: minmax(0, 1fr); }
+	.qbd-progress-panel { width: 100%; }
+}
+
+@media (max-width: 620px) {
+	.qbd-quizzes-drill-grid { grid-template-columns: minmax(0, 1fr); }
+}
+
+.is-mobile .qbd-quizzes-drill-layout,
+.is-mobile .qbd-quizzes-drill-grid {
+	grid-template-columns: minmax(0, 1fr);
+}
+
+.is-mobile .qbd-progress-panel {
+	width: 100%;
+}
+
+.qbd-progress-panel-head {
+	display: flex;
+	align-items: baseline;
+	justify-content: space-between;
+	gap: 8px;
+}
+
+.qbd-progress-panel-title {
+	font-size: 15px;
+	font-weight: 700;
 	color: var(--text-normal);
 }
 
-.qbd-quizzes-crumb-current {
+.qbd-progress-panel-count {
+	font-family: var(--font-monospace, monospace);
+	font-size: 11px;
+	color: var(--text-faint);
+	font-variant-numeric: tabular-nums;
+	white-space: nowrap;
+}
+
+/* ── Donut (anneau SVG à 3 segments statut : mastered/review/à-apprendre —
+   cf. skill dataviz, couleurs de statut jamais une palette catégorielle). ── */
+.qbd-progress-donut-wrap {
+	display: flex;
+	justify-content: center;
+	padding: 4px 0;
+}
+
+.qbd-progress-donut {
+	width: 150px;
+	height: 150px;
+	border-radius: 50%;
+	background: conic-gradient(
+		var(--accent) 0 var(--qbd-donut-mastered-end),
+		var(--qbd-progress-review) var(--qbd-donut-mastered-end) var(--qbd-donut-review-end),
+		rgba(255, 255, 255, 0.12) var(--qbd-donut-review-end) 100%
+	);
+	display: flex;
+	align-items: center;
+	justify-content: center;
+}
+
+.qbd-progress-donut-center {
+	width: 112px;
+	height: 112px;
+	border-radius: 50%;
+	background: #0d1222;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: 2px;
+}
+
+.qbd-progress-donut-pct {
+	font-size: 32px;
+	font-weight: 700;
+	color: #f2f4fb;
+	font-variant-numeric: tabular-nums;
+}
+
+.qbd-progress-donut-pct-sign {
+	align-self: center;
+	margin-top: 8px;
+	font-size: 14px;
 	font-weight: 600;
+	color: var(--text-muted);
+}
+
+/* ── Légende : puce couleur + libellé + % (identité JAMAIS portée par la
+   couleur seule — le libellé texte est toujours visible, cf. dataviz). ── */
+.qbd-progress-legend {
+	display: flex;
+	flex-direction: column;
+	gap: 11px;
+}
+
+.qbd-progress-legend-row {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	padding-bottom: 10px;
+	border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.qbd-progress-legend-dot {
+	width: 11px;
+	height: 11px;
+	border-radius: 50%;
+	flex-shrink: 0;
+}
+
+.qbd-progress-legend-dot--mastered { background: var(--accent); }
+.qbd-progress-legend-dot--review { background: var(--qbd-progress-review); }
+.qbd-progress-legend-dot--learn { background: var(--qbd-progress-neutral); }
+
+.qbd-progress-legend-label {
+	flex: 1;
+	min-width: 0;
+	font-size: 13.5px;
+	font-weight: 600;
+	color: #d3dae9;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.qbd-progress-legend-pct {
+	font-size: 13.5px;
+	font-weight: 400;
+	color: #9aa2b8;
+	font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 900px) {
+	.qbd-quizzes-folder-hero .qbd-quizzes-header {
+		align-items: flex-start;
+		flex-wrap: wrap;
+	}
+
+	.qbd-quizzes-folder-hero .qbd-quizzes-header-actions {
+		width: 100%;
+		justify-content: flex-end;
+	}
+}
+
+@media (max-width: 620px) {
+	.qbd-quizzes-folder-hero .qbd-quizzes-title {
+		font-size: 28px;
+	}
+
+	.qbd-quizzes-title-underline {
+		max-width: calc(100% - 61px);
+	}
+
+	.qbd-quizzes-folder-hero .qbd-quizzes-header-actions {
+		justify-content: flex-start;
+		gap: 12px;
+		flex-wrap: wrap;
+	}
+
+	.qbd-quizzes-folder-hero .qbd-quizzes-header-stats {
+		gap: 14px;
+	}
+
+	.qbd-quizzes-folder-hero .qbd-btn--create {
+		margin-left: 0;
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.qbd-quizzes-folder-hero,
+	.qbd-quiz-card.qbd-quiz-card--folder,
+	.qbd-progress-panel {
+		animation: none;
+	}
+
+	.qbd-quiz-card.qbd-quiz-card--folder {
+		transition: none;
+	}
+}
+
+.qbd-root .qbd-quizzes-crumb-back:hover {
+	background: var(--background-modifier-hover);
 	color: var(--text-normal);
 }

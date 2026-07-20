@@ -289,6 +289,15 @@
 	grid-template-columns: 1fr;
 }
 
+/* Panneau « Progrès » du drill-down : sous la grille plutôt qu'à côté. */
+.is-mobile .qbd-quizzes-drill-layout {
+	flex-direction: column;
+}
+.is-mobile .qbd-progress-panel {
+	width: 100%;
+	flex: 1 1 auto;
+}
+
 .is-mobile .qbd-detail-body {
 	flex-direction: column;
 }

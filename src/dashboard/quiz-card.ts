@@ -3,6 +3,7 @@ import { t } from "../i18n";
 import type { TransKey } from "../i18n";
 import type { QuizIndexEntry, QuizTypeTag } from "./scanner";
 import type { QuizStatRecord } from "./stats-store";
+import { computeQuizState } from "./quiz-mastery";
 import { openActionMenu } from "./ui-select";
 import type { ActionMenuItem } from "./ui-select";
 
@@ -52,35 +53,45 @@ export function renderQuizCard(
 	/* menu (opt-in, même patron que onPlay) : items du menu ⋯ façon
 	   StudySmarter, bâtis par l'appelant AU CLIC (les stats peuvent avoir
 	   changé depuis le rendu de la carte). Non fourni = pas de bouton ⋯. */
-	/* accent : couleur du DOSSIER PARENT (handoff « cartes quiz teintées »
-	   2026-07-18) — posée en --accent ; barre supérieure, bouton play et badge
-	   de type s'y teintent en CSS. Absente = repli sur l'accent Obsidian. */
-	opts?: { showPath?: boolean; onPlay?: (quiz: QuizIndexEntry) => void; menu?: (quiz: QuizIndexEntry) => ActionMenuItem[]; accent?: string }
+	/* accent : couleur du DOSSIER PARENT. `variant: "folder"` active l'anatomie
+	   du handoff 7a uniquement dans le drill-down, sans modifier les cartes de
+	   l'accueil. `entryIndex` pilote la cascade d'entrée de cette variante. */
+	opts?: {
+		showPath?: boolean;
+		onPlay?: (quiz: QuizIndexEntry) => void;
+		menu?: (quiz: QuizIndexEntry) => ActionMenuItem[];
+		accent?: string;
+		variant?: "folder";
+		entryIndex?: number;
+	}
 ): HTMLDivElement {
 	const card = container.createDiv({ cls: "qbd-quiz-card" });
+	const isFolderDrill = opts?.variant === "folder";
 	card.dataset.path = quiz.path;
 	if (opts?.accent) { card.style.setProperty("--accent", opts.accent); card.addClass("qbd-quiz-card--tinted"); }
-
-	// ── État du quiz (source unique de vérité pour pastille + couleurs) ──
-	const total = quiz.questions || (stats && stats.totalQuestions) || 0;
-	const done = stats ? stats.questionsDone : 0;
-	const best = stats ? stats.bestScore : 0;
-	const pct = total > 0 ? Math.round(done / total * 100) : 0;
-
-	// `state` reste un identifiant (suffixe de classe CSS) ; seul `stateLabel`
-	// est traduit — et il l'est ici, à chaque rendu de carte.
-	let state: string, stateLabel: string, stateIcon: string;
-	if (stats && total > 0 && done >= total) {
-		if (best >= 80) { state = "mastered"; stateLabel = t("dashboard.card.mastered"); stateIcon = "circle-check"; }
-		else { state = "review"; stateLabel = t("dashboard.card.review"); stateIcon = "rotate-ccw"; }
-	} else if (done > 0) {
-		state = "progress"; stateLabel = t("dashboard.card.progress", { pct }); stateIcon = "rotate-cw";
-	} else {
-		state = "fresh"; stateLabel = t("dashboard.card.fresh"); stateIcon = "circle-play";
+	if (isFolderDrill) {
+		card.addClass("qbd-quiz-card--folder");
+		card.style.setProperty("--qbd-card-delay", `${120 + (opts.entryIndex ?? 0) * 60}ms`);
 	}
 
-	// Barre d'accent colorée par état
-	card.createDiv({ cls: `qbd-quiz-card-accent qbd-quiz-card-accent--${state}` });
+	// ── État du quiz (calcul partagé quiz-mastery.ts) ──
+	// `state` reste un identifiant (suffixe de classe CSS) ; seul `stateLabel`
+	// est traduit — et il l'est ici, à chaque rendu de carte.
+	const { state, pct } = computeQuizState(quiz, stats);
+	const best = stats ? stats.bestScore : 0;
+	let stateLabel: string, stateIcon: string;
+	switch (state) {
+		case "mastered": stateLabel = t("dashboard.card.mastered"); stateIcon = "circle-check"; break;
+		case "review": stateLabel = t("dashboard.card.review"); stateIcon = "rotate-ccw"; break;
+		case "progress": stateLabel = t("dashboard.card.progress", { pct }); stateIcon = "rotate-cw"; break;
+		default: stateLabel = t("dashboard.card.fresh"); stateIcon = "circle-play";
+	}
+
+	// La barre historique reste utile ailleurs ; le handoff du dossier ouvert
+	// n'en possède aucune, donc elle n'existe pas dans cette variante.
+	if (!isFolderDrill) {
+		card.createDiv({ cls: `qbd-quiz-card-accent qbd-quiz-card-accent--${state}` });
+	}
 
 	const body = card.createDiv({ cls: "qbd-quiz-card-body" });
 
@@ -104,7 +115,7 @@ export function renderQuizCard(
 		const playBtn = head.createEl("button", { cls: "qbd-quiz-card-play" });
 		playBtn.type = "button";
 		playBtn.title = t("dashboard.detail.play");
-		setIcon(playBtn, "play");
+		setIcon(playBtn, isFolderDrill ? "circle-play" : "play");
 		playBtn.addEventListener("click", (e) => {
 			// Empêche le clic de remonter à la carte : sinon on lancerait le
 			// quiz ET on ouvrirait la fiche (deux actions pour un seul clic).
@@ -137,7 +148,7 @@ export function renderQuizCard(
 	}
 
 	// Barre de progression — seulement quand c'est en cours (sinon bruit)
-	if (state === "progress") {
+	if (state === "progress" && !isFolderDrill) {
 		const progressWrapper = body.createDiv({ cls: "qbd-quiz-card-progress-wrap" });
 		const progressBg = progressWrapper.createDiv({ cls: "qbd-quiz-card-progress-bg" });
 		const progressFill = progressBg.createDiv({ cls: "qbd-quiz-card-progress-fill" });
@@ -153,7 +164,7 @@ export function renderQuizCard(
 	const badge = meta.createEl("span", { cls: "qbd-quiz-card-badge" });
 	badge.textContent = quizTypeLabel(quiz.quizType);
 
-	if (stats && best > 0) {
+	if (stats && best > 0 && !isFolderDrill) {
 		const scoreColor = best >= 80 ? "var(--color-green, #4ade80)"
 			: best >= 60 ? "var(--color-yellow, #facc15)"
 			: "var(--color-red, #f87171)";
